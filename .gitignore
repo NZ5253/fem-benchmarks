@@ -1,0 +1,22 @@
+# Fortran build artifacts
+*.o
+*.obj
+*.mod
+*.a
+*.so
+*.dll
+*.exe
+
+# Typical FEM outputs (adjust as needed)
+*.res
+*.msh
+*.vec
+*.dis
+*.con
+*.out
+*.log
+
+# MATLAB junk
+*.asv
+*.m~
+slprj/
