@@ -1,0 +1,42 @@
+id: pfem5_ch05_p56_p56
+title: "PFEM Program 5.6 (p56) — 3D strain of elastic solid dataset p56"
+purpose: >
+  3D analysis of elastic solids using hexahedral (brick) isoparametric elements.
+source:
+  book: "Programming the Finite Element Method (5th ed.)"
+  chapter: 5
+  program: "p56"
+code:
+  language: "Fortran (F2003)"
+  source_file: "source/chap05/p56.f03"
+  uses_modules: ["main", "geom"]
+fem:
+  dimension: 2
+  formulation: "20"
+  element_family: "hexahedron"
+  element_nodes: 8
+analysis:
+  physics: "linear elasticity"
+  type: "linear"
+  regime: "steady-state"
+inputs:
+  working_directory: "executable/chap05"
+  basename: "p56"
+  dat_file: "executable/chap05/p56.dat"
+outputs:
+  files_expected:
+    - "p56.res"
+    - "p56.msh"
+    - "p56.vec"
+    - "p56.dis"
+how_to_run:
+  linux_build:
+    notes: "Build PFEM library modules (main, geom, etc.) then compile p56."
+    executable: "build/bin/p56"
+  linux_run:
+    commands:
+      - "cd ~/Downloads/pfem5/5th_ed/executable/chap05"
+      - 'printf "p56\n" | ~/Downloads/pfem5/5th_ed/build/bin/p56'
+notes:
+  - "Program prompts for the base name of the .dat file (do not type the .dat extension)."
+  - "Generated using automated YAML generator for PFEM benchmarks."

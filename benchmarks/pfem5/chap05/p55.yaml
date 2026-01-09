@@ -1,0 +1,42 @@
+id: pfem5_ch05_p55_p55
+title: "PFEM Program 5.5 (p55) — Plane strain consolidation dataset p55"
+purpose: >
+  Plane strain consolidation analysis (coupled flow-deformation) using Biot theory.
+source:
+  book: "Programming the Finite Element Method (5th ed.)"
+  chapter: 5
+  program: "p55"
+code:
+  language: "Fortran (F2003)"
+  source_file: "source/chap05/p55.f03"
+  uses_modules: ["main", "geom"]
+fem:
+  dimension: 2
+  formulation: "plane"
+  element_family: "quadrilateral"
+  element_nodes: 8
+analysis:
+  physics: "consolidation"
+  type: "linear"
+  regime: "steady-state"
+inputs:
+  working_directory: "executable/chap05"
+  basename: "p55"
+  dat_file: "executable/chap05/p55.dat"
+outputs:
+  files_expected:
+    - "p55.res"
+    - "p55.msh"
+    - "p55.vec"
+    - "p55.dis"
+how_to_run:
+  linux_build:
+    notes: "Build PFEM library modules (main, geom, etc.) then compile p55."
+    executable: "build/bin/p55"
+  linux_run:
+    commands:
+      - "cd ~/Downloads/pfem5/5th_ed/executable/chap05"
+      - 'printf "p55\n" | ~/Downloads/pfem5/5th_ed/build/bin/p55'
+notes:
+  - "Program prompts for the base name of the .dat file (do not type the .dat extension)."
+  - "Generated using automated YAML generator for PFEM benchmarks."

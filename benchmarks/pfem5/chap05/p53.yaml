@@ -1,0 +1,42 @@
+id: pfem5_ch05_p53_p53
+title: "PFEM Program 5.3 (p53) — Slope stability analysis dataset p53"
+purpose: >
+  Slope stability analysis using gravity loading and elastic-plastic material with strength reduction.
+source:
+  book: "Programming the Finite Element Method (5th ed.)"
+  chapter: 5
+  program: "p53"
+code:
+  language: "Fortran (F2003)"
+  source_file: "source/chap05/p53.f03"
+  uses_modules: ["main", "geom"]
+fem:
+  dimension: 2
+  formulation: "20"
+  element_family: "hexahedron"
+  element_nodes: 8
+analysis:
+  physics: "slope stability"
+  type: "nonlinear"
+  regime: "steady-state"
+inputs:
+  working_directory: "executable/chap05"
+  basename: "p53"
+  dat_file: "executable/chap05/p53.dat"
+outputs:
+  files_expected:
+    - "p53.res"
+    - "p53.msh"
+    - "p53.vec"
+    - "p53.dis"
+how_to_run:
+  linux_build:
+    notes: "Build PFEM library modules (main, geom, etc.) then compile p53."
+    executable: "build/bin/p53"
+  linux_run:
+    commands:
+      - "cd ~/Downloads/pfem5/5th_ed/executable/chap05"
+      - 'printf "p53\n" | ~/Downloads/pfem5/5th_ed/build/bin/p53'
+notes:
+  - "Program prompts for the base name of the .dat file (do not type the .dat extension)."
+  - "Generated using automated YAML generator for PFEM benchmarks."

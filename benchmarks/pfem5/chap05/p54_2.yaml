@@ -1,0 +1,42 @@
+id: pfem5_ch05_p54_p54_2
+title: "PFEM Program 5.4 (p54) — Axisymmetric strain of elastic solid dataset p54_2"
+purpose: >
+  Axisymmetric strain analysis of elastic solids using triangular or quadrilateral isoparametric elements.
+source:
+  book: "Programming the Finite Element Method (5th ed.)"
+  chapter: 5
+  program: "p54"
+code:
+  language: "Fortran (F2003)"
+  source_file: "source/chap05/p54.f03"
+  uses_modules: ["main", "geom"]
+fem:
+  dimension: 2
+  formulation: "tetrahedron'  4"
+  element_family: "hexahedron"
+  element_nodes: 8
+analysis:
+  physics: "linear elasticity"
+  type: "linear"
+  regime: "steady-state"
+inputs:
+  working_directory: "executable/chap05"
+  basename: "p54_2"
+  dat_file: "executable/chap05/p54_2.dat"
+outputs:
+  files_expected:
+    - "p54_2.res"
+    - "p54_2.msh"
+    - "p54_2.vec"
+    - "p54_2.dis"
+how_to_run:
+  linux_build:
+    notes: "Build PFEM library modules (main, geom, etc.) then compile p54."
+    executable: "build/bin/p54"
+  linux_run:
+    commands:
+      - "cd ~/Downloads/pfem5/5th_ed/executable/chap05"
+      - 'printf "p54_2\n" | ~/Downloads/pfem5/5th_ed/build/bin/p54'
+notes:
+  - "Program prompts for the base name of the .dat file (do not type the .dat extension)."
+  - "Generated using automated YAML generator for PFEM benchmarks."

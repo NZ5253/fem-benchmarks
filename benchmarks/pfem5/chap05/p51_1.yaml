@@ -1,0 +1,42 @@
+id: pfem5_ch05_p51_p51_1
+title: "PFEM Program 5.1 (p51) — Plane strain linear elasticity dataset p51_1"
+purpose: >
+  Plane (or axisymmetric) strain analysis of an elastic solid using triangular or quadrilateral isoparametric elements.
+source:
+  book: "Programming the Finite Element Method (5th ed.)"
+  chapter: 5
+  program: "p51"
+code:
+  language: "Fortran (F2003)"
+  source_file: "source/chap05/p51.f03"
+  uses_modules: ["main", "geom"]
+fem:
+  dimension: 2
+  formulation: "plane"
+  element_family: "triangle"
+  element_nodes: 3
+analysis:
+  physics: "linear elasticity"
+  type: "linear"
+  regime: "steady-state"
+inputs:
+  working_directory: "executable/chap05"
+  basename: "p51_1"
+  dat_file: "executable/chap05/p51_1.dat"
+outputs:
+  files_expected:
+    - "p51_1.res"
+    - "p51_1.msh"
+    - "p51_1.vec"
+    - "p51_1.dis"
+how_to_run:
+  linux_build:
+    notes: "Build PFEM library modules (main, geom, etc.) then compile p51."
+    executable: "build/bin/p51"
+  linux_run:
+    commands:
+      - "cd ~/Downloads/pfem5/5th_ed/executable/chap05"
+      - 'printf "p51_1\n" | ~/Downloads/pfem5/5th_ed/build/bin/p51'
+notes:
+  - "Program prompts for the base name of the .dat file (do not type the .dat extension)."
+  - "Generated using automated YAML generator for PFEM benchmarks."

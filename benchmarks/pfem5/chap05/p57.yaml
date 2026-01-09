@@ -1,0 +1,42 @@
+id: pfem5_ch05_p57_p57
+title: "PFEM Program 5.7 (p57) — 3D elastic-plastic analysis dataset p57"
+purpose: >
+  3D elastic-plastic analysis using hexahedral elements with von Mises yield criterion.
+source:
+  book: "Programming the Finite Element Method (5th ed.)"
+  chapter: 5
+  program: "p57"
+code:
+  language: "Fortran (F2003)"
+  source_file: "source/chap05/p57.f03"
+  uses_modules: ["main", "geom"]
+fem:
+  dimension: 2
+  formulation: "20"
+  element_family: "hexahedron"
+  element_nodes: 8
+analysis:
+  physics: "elastic-plastic mechanics"
+  type: "nonlinear"
+  regime: "steady-state"
+inputs:
+  working_directory: "executable/chap05"
+  basename: "p57"
+  dat_file: "executable/chap05/p57.dat"
+outputs:
+  files_expected:
+    - "p57.res"
+    - "p57.msh"
+    - "p57.vec"
+    - "p57.dis"
+how_to_run:
+  linux_build:
+    notes: "Build PFEM library modules (main, geom, etc.) then compile p57."
+    executable: "build/bin/p57"
+  linux_run:
+    commands:
+      - "cd ~/Downloads/pfem5/5th_ed/executable/chap05"
+      - 'printf "p57\n" | ~/Downloads/pfem5/5th_ed/build/bin/p57'
+notes:
+  - "Program prompts for the base name of the .dat file (do not type the .dat extension)."
+  - "Generated using automated YAML generator for PFEM benchmarks."
