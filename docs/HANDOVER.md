@@ -303,7 +303,7 @@ NOT in `build/bin/` and not in the source folder.
 
 ---
 
-## 7) YAML generation for every dataset (automation plan)
+## 7) YAML generation for every dataset (generation plan)
 
 ### 7.1 What "perfect YAML" means here
 
@@ -364,7 +364,7 @@ This is done by `scripts/verify_yamls.py` (PyYAML required).
 
 ---
 
-## 9) Git automation (add/commit/push)
+## 9) Git workflow (add/commit/push)
 
 Git flow for generated YAMLs:
 ```bash

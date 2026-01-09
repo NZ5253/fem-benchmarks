@@ -106,7 +106,7 @@ To use parametric sweeps with a specific program:
 - Generic .dat parser based on YAML input schema
 - Result parsers for different output formats
 - Visualization utilities (mesh plots, deformation, stress)
-- Automated result comparison against reference values
+- Result comparison against reference values
 
 ## References
 

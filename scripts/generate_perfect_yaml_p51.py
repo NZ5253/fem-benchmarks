@@ -157,7 +157,7 @@ def generate_perfect_yaml_p51(case_dir, output_dir):
     yaml_lines.append(f'    program: "{program}"')
     yaml_lines.append(f'    dataset: "{case_name}"')
     yaml_lines.append("  entry:")
-    yaml_lines.append('    created_by: "Automated YAML Generator"')
+    yaml_lines.append('    created_by: "Naeem"')
     yaml_lines.append('    created_on: "2026-01-09"')
     yaml_lines.append('    verified_platform: "Linux (gfortran)"')
     yaml_lines.append("")
