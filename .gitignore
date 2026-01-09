@@ -20,3 +20,25 @@
 *.asv
 *.m~
 slprj/
+
+# PFEM bundle packs (generated, not for commit)
+pfem_yaml_bundle/
+
+# Run outputs
+runs/
+
+# Build directories
+build/
+**/build/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# IDE/Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
