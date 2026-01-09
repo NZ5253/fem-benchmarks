@@ -1,0 +1,228 @@
+id: pfem5_ch05_p51_p51_3
+title: "PFEM Program 5.1 (p51) — Plane linear elasticity (Q4 structured mesh) — case p51_3"
+
+purpose: >
+  Plane (or axisymmetric) strain analysis of an elastic solid using right-angled triangles
+  (3/6/10/15-node) or rectangular quadrilaterals (4/8/9-node). This benchmark uses plane
+  analysis with 4-node quadrilateral (Q4) elements on a structured grid.
+
+authors:
+  source:
+    book: "Programming the Finite Element Method"
+    edition: "5th"
+    chapter: 5
+    program: "p51"
+    dataset: "p51_3"
+  entry:
+    created_by: "Automated YAML Generator"
+    created_on: "2026-01-09"
+    verified_platform: "Linux (gfortran)"
+
+code:
+  language: "Fortran (F2003)"
+  source_file: "source/chap05/p51.f03"
+  uses_modules: ["main", "geom"]
+  io_reads_from_unit10:
+    - {line: 27, stmt: "READ(10,*) type_2d, element, nod, dir, nxe, nye, nip, np_types"}
+    - {line: 36, stmt: "READ(10,*) prop"}
+    - {line: 39, stmt: "READ(10,*) x_coords, y_coords"}
+    - {line: 41, stmt: "READ(10,*) nr,(k,nf(:,k),i=1,nr)"}
+    - {line: 89, stmt: "READ(10,*) loaded_nodes,(k,loads(nf(:,k)),i=1,loaded_nodes)"}
+    - {line: 90, stmt: "READ(10,*) fixed_freedoms"}
+    - {line: 94, stmt: "READ(10,*)(node(i),sense(i),value(i),i=1,fixed_freedoms)"}
+
+fem:
+  dimension: 2
+  formulation:
+    code_supports: ["plane", "axisymmetric"]
+    this_case: "plane"
+  dof:
+    per_node: 2
+    names: ["x-disp", "y-disp"]
+    dof_indexing: {1: "x-disp", 2: "y-disp"}
+  element:
+    family: "quadrilateral"
+    nodes_per_element: 4
+    supported:
+      triangles_right_angled_nodes: [3, 6, 10, 15]
+      quads_rectangular_nodes: [4, 8, 9]
+
+analysis:
+  physics: "linear elasticity"
+  type: "linear"
+  regime: "steady-state"
+
+units:
+  system: "consistent"
+  notes: >
+    PFEM assumes consistent units (not enforced). Pick a unit system and keep geometry,
+    E, and loads consistent.
+
+tunable_parameters:
+  - name: youngs_modulus_E
+    path: "inputs.record2.material.E.value"
+    type: "real"
+    unit_category: "stress"
+    notes: "Material stiffness. Very common sweep parameter."
+    suggested_range: [1.0e4, 1.0e9]
+
+  - name: poisson_ratio_nu
+    path: "inputs.record2.material.nu.value"
+    type: "real"
+    unit_category: "dimensionless"
+    notes: "Material parameter, often kept fixed unless studying sensitivity."
+    suggested_range: [0.0, 0.49]
+
+  - name: prescribed_displacements_values
+    path: "inputs.record7.prescribed_displacements[*].value"
+    type: "real"
+    unit_category: "length"
+    notes: "Boundary displacements enforced via penalty method."
+
+  - name: mesh_density
+    path: "inputs.record1.(nxe,nye)"
+    type: "int"
+    unit_category: "-"
+    notes: >
+      Structural knob: changes mesh resolution. If you change nxe/nye, x_coords and y_coords
+      must also match lengths (nxe+1) and (nye+1).
+
+input_schema:
+  file_type: ".dat"
+  reads_in_order:
+    - record: 1
+      fortran_read: "READ(10,*) type_2d, element, nod, dir, nxe, nye, nip, np_types"
+      fields:
+        - {name: type_2d, type: string, allowed: ["plane", "axisymmetric"]}
+        - {name: element, type: string, allowed: ["triangle", "quadrilateral"]}
+        - {name: nod, type: int}
+        - {name: dir, type: string}
+        - {name: nxe, type: int}
+        - {name: nye, type: int}
+        - {name: nip, type: int}
+        - {name: np_types, type: int}
+
+    - record: 2
+      fortran_read: "READ(10,*) prop"
+      fields:
+        - name: prop
+          type: "real_matrix"
+          shape: "(nprops=2, np_types)"
+          description: "[E, nu] per material type"
+
+    - record: 3
+      fortran_read: "READ(10,*) x_coords, y_coords"
+      fields:
+        - {name: x_coords, type: "real_array", shape: "(nxe+1)"}
+        - {name: y_coords, type: "real_array", shape: "(nye+1)"}
+
+    - record: 4
+      fortran_read: "READ(10,*) nr,(k,nf(:,k),i=1,nr)"
+      fields:
+        - {name: nr, type: int}
+        - name: bc_table
+          type: "table"
+          columns:
+            - {name: node, type: int}
+            - {name: nf_flag_dof1, type: int, allowed: [0, 1]}
+            - {name: nf_flag_dof2, type: int, allowed: [0, 1]}
+          notes: "Typically 0=fixed, 1=free before numbering by formnf()."
+
+    - record: 5
+      fortran_read: "READ(10,*) loaded_nodes,(k,loads(nf(:,k)),i=1,loaded_nodes)"
+      fields:
+        - {name: loaded_nodes, type: int}
+        - name: nodal_loads
+          type: "table"
+          columns:
+            - {name: node, type: int}
+            - {name: load_dof1, type: real}
+            - {name: load_dof2, type: real}
+
+    - record: 6
+      fortran_read: "READ(10,*) fixed_freedoms"
+      fields:
+        - {name: fixed_freedoms, type: int}
+
+    - record: 7
+      fortran_read: "READ(10,*)(node(i),sense(i),value(i),i=1,fixed_freedoms)"
+      condition: "only if fixed_freedoms > 0"
+      fields:
+        - name: prescribed_displacements
+          type: "table"
+          columns:
+            - {name: node, type: int}
+            - {name: sense_dof, type: int, allowed: [1, 2]}
+            - {name: value, type: real}
+
+inputs:
+  working_directory: "executable/chap05"
+  basename: "p51_3"
+  dat_file: "executable/chap05/p51_3.dat"
+
+  record1:
+    type_2d: "plane"
+    element: "quadrilateral"
+    nod: 4
+    dir: "y"
+    nxe: 3
+    nye: 2
+    nip: 4
+    np_types: 1
+
+  record2:
+    material:
+      E: {value: 1.0e6, unit_category: "stress"}
+      nu: {value: 0.3, unit_category: "dimensionless"}
+
+  record3:
+    x_coords: {values: [0.0, 10.0, 20.0, 30.0], unit_category: "length"}
+    y_coords: {values: [0.0, -5.0, -10.0], unit_category: "length"}
+
+  record4:
+    nr: 8
+    bc_table:
+      - {node: 1,  nf_flag_dof1: 0, nf_flag_dof2: 1}
+      - {node: 2,  nf_flag_dof1: 0, nf_flag_dof2: 1}
+      - {node: 3,  nf_flag_dof1: 0, nf_flag_dof2: 0}
+      - {node: 6,  nf_flag_dof1: 0, nf_flag_dof2: 0}
+      - {node: 9,  nf_flag_dof1: 0, nf_flag_dof2: 0}
+      - {node: 10, nf_flag_dof1: 0, nf_flag_dof2: 1}
+      - {node: 11, nf_flag_dof1: 0, nf_flag_dof2: 1}
+      - {node: 12, nf_flag_dof1: 0, nf_flag_dof2: 0}
+
+  record5:
+    loaded_nodes: 0
+    nodal_loads: []
+
+  record6:
+    fixed_freedoms: 2
+
+  record7:
+    prescribed_displacements:
+      - {node: 1, sense_dof: 2, value: -1.0e-5}
+      - {node: 4, sense_dof: 2, value: -1.0e-5}
+
+outputs:
+  output_directory: "executable/chap05"
+  files_created_confirmed:
+    - "p51_3.res"
+    - "p51_3.msh"
+    - "p51_3.vec"
+    - "p51_3.dis"
+  res_summary:
+    equations_neq: 12
+    skyline_storage: 58
+
+how_to_run:
+  linux:
+    - "cd ~/Downloads/pfem5/5th_ed/executable/chap05"
+    - 'printf "p51_3\n" | ~/Downloads/pfem5/5th_ed/build/bin/p51'
+  matlab:
+    - "pfem_root = '~/Downloads/pfem5/5th_ed';"
+    - "[status, outputs] = pfem_runner(pfem_root, 'chap05', 'p51', 'p51_3');"
+
+notes:
+  - "Program prompts for the base name of the .dat file (do not type the .dat extension)."
+  - "This YAML follows the 'perfect YAML' specification with complete input schema and tunable parameters."
+  - "For parametric studies in MATLAB, use the paths in tunable_parameters to modify specific values."
