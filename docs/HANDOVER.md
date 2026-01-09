@@ -464,9 +464,9 @@ cd ~/projects/fem-benchmarks
 scripts/pfem_collect_all.sh --pfem-root ~/Downloads/pfem5/5th_ed --all-chaps --run --rebuild-first
 ```
 
-### Step B — Generate YAMLs from all bundles (LLM)
+### Step B — Generate YAMLs from all bundles
 
-Run your LLM YAML generator script:
+Run the YAML generator script:
 ```bash
 # Set your API key
 export ANTHROPIC_API_KEY="your-api-key-here"
