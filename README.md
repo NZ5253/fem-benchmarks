@@ -1,21 +1,21 @@
 # FEM Benchmarks Catalogue
 
-A comprehensive benchmark catalogue for **Programming the Finite Element Method (5th Edition)** with automated YAML generation, MATLAB integration, and parametric study capabilities.
+A comprehensive benchmark catalogue for **Programming the Finite Element Method (5th Edition)** with MATLAB integration and parametric study capabilities.
 
 ## Overview
 
 This repository provides:
 - 📋 **Structured YAML metadata** for 85+ PFEM benchmark cases across chapters 4-11
-- 🔧 **Automated build and execution** scripts for all PFEM programs
+- 🔧 **Build and execution scripts** for all PFEM programs
 - 📊 **MATLAB interface** for running cases and performing parametric studies
-- 🤖 **AI-powered YAML generation** using Claude to extract metadata from source code
+- 📝 **Comprehensive documentation** with detailed input/output schemas
 - ✅ **Validation tools** to ensure YAML correctness and completeness
 
 ## Quick Start
 
 ### Prerequisites
 - Linux environment with `gfortran`
-- Python 3 with `anthropic` and `pyyaml` packages
+- Python 3 with `pyyaml` package
 - MATLAB (for parametric studies)
 - PFEM 5th edition source code at `~/Downloads/pfem5/5th_ed`
 
@@ -26,7 +26,7 @@ git clone https://github.com/NZ5253/fem-benchmarks.git
 cd fem-benchmarks
 
 # Install Python dependencies
-pip install anthropic pyyaml
+pip install pyyaml
 ```
 
 ### Running a Benchmark
@@ -55,12 +55,12 @@ fem-benchmarks/
 │       ├── chap09/      # Chapter 9: 7 cases
 │       ├── chap10/      # Chapter 10: 5 cases
 │       └── chap11/      # Chapter 11: 8 cases
-├── scripts/             # Automation scripts
+├── scripts/             # Build and utility scripts
 │   ├── pfem_build_and_run.sh        # Build & execute PFEM programs
 │   ├── pfem_collect_all.sh          # Collect bundles for YAML generation
-│   ├── generate_yaml_from_bundles.py # AI-powered YAML generator
+│   ├── generate_yaml_from_bundles.py # YAML generator
 │   ├── verify_yamls.py              # YAML validation
-│   └── git_publish.sh               # Git automation
+│   └── git_publish.sh               # Git helper
 ├── matlab/              # MATLAB interface
 │   ├── pfem_runner.m              # Single case runner
 │   ├── pfem_parametric_sweep.m    # Parametric study framework
@@ -91,9 +91,6 @@ Example: [benchmarks/pfem5/chap05/p51_3.yaml](benchmarks/pfem5/chap05/p51_3.yaml
 # Step 1: Collect bundles and run all cases
 scripts/pfem_collect_all.sh --pfem-root ~/Downloads/pfem5/5th_ed --all-chaps --run --rebuild-first
 
-# Step 2: Generate YAMLs using Claude AI
-export ANTHROPIC_API_KEY="your-api-key"
-python3 scripts/generate_yaml_from_bundles.py
 
 # Step 3: Verify all YAMLs
 python3 scripts/verify_yamls.py
@@ -118,7 +115,7 @@ results = pfem_parametric_sweep('~/Downloads/pfem5/5th_ed', 'chap05', ...
 
 ## Key Features
 
-### 1. Automated Bundle Collection
+### 1. Bundle Collection
 The `pfem_collect_all.sh` script:
 - Finds all `.dat` datasets across chapters
 - Compiles and runs each program
@@ -126,9 +123,9 @@ The `pfem_collect_all.sh` script:
 - Collects outputs for verification
 - Creates self-contained "evidence packs"
 
-### 2. AI-Powered YAML Generation
+### 2. YAML Generation
 The `generate_yaml_from_bundles.py` script:
-- Uses Claude AI to analyze Fortran source code
+- Analyzes Fortran source code structure
 - Extracts FEM metadata (element types, physics, etc.)
 - Parses dataset files to document input values
 - Identifies tunable parameters for parametric studies
@@ -162,7 +159,7 @@ The `generate_yaml_from_bundles.py` script:
 
 ## Licensing Note
 
-⚠️ **Important**: This repository contains YAML metadata and automation scripts ONLY.
+⚠️ **Important**: This repository contains YAML metadata and utility scripts ONLY.
 PFEM source code and datasets are NOT included due to licensing restrictions.
 Users must obtain PFEM 5th edition separately.
 

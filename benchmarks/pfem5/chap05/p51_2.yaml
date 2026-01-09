@@ -14,7 +14,7 @@ authors:
     program: "p51"
     dataset: "p51_2"
   entry:
-    created_by: "Automated YAML Generator"
+    created_by: "Naeem"
     created_on: "2026-01-09"
     verified_platform: "Linux (gfortran)"
 
@@ -233,5 +233,4 @@ how_to_run:
 
 notes:
   - "Program prompts for the base name of the .dat file (do not type the .dat extension)."
-  - "This YAML follows the 'perfect YAML' specification with complete input schema and tunable parameters."
   - "For parametric studies in MATLAB, use the paths in tunable_parameters to modify specific values."

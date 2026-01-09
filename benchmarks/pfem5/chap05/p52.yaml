@@ -14,7 +14,7 @@ authors:
     program: "p52"
     dataset: "p52"
   entry:
-    created_by: "Automated YAML Generator"
+    created_by: "Naeem"
     created_on: "2026-01-09"
     verified_platform: "Linux (gfortran)"
 
@@ -213,5 +213,4 @@ notes:
   - "Program prompts for the base name of the .dat file (do not type the .dat extension)."
   - "This program handles non-axisymmetric problems using Fourier decomposition."
   - "Each node has 3 DOF: radial, axial, and circumferential displacements."
-  - "This YAML follows the 'perfect YAML' specification with complete input schema and tunable parameters."
   - "For parametric studies in MATLAB, use the paths in tunable_parameters to modify specific values."

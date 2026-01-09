@@ -20,7 +20,7 @@ function [status, outputs] = pfem_runner(pfem_root, chapter, program, case_name)
 %   - PFEM must be compiled (binary exists at pfem_root/build/bin/<program>)
 %   - Dataset file must exist at pfem_root/executable/<chapter>/<case_name>.dat
 %
-% Author: Generated for PFEM Benchmark Catalogue
+% Author: Naeem
 % Date: 2026-01-09
 
     % Initialize outputs

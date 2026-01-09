@@ -50,7 +50,7 @@ how_to_run:
       - 'printf "{case}\\n" | ~/Downloads/pfem5/5th_ed/build/bin/{program}'
 notes:
   - "Program prompts for the base name of the .dat file (do not type the .dat extension)."
-  - "Generated using automated YAML generator for PFEM benchmarks."
+  - "Created with YAML generator for PFEM benchmarks."
 """
 
 # Program descriptions

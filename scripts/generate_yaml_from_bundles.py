@@ -1,28 +1,18 @@
 #!/usr/bin/env python3
 """
-Generate YAML benchmark files from PFEM bundle folders using Claude AI.
+Generate YAML benchmark files from PFEM bundle folders.
 
-This script:
-1. Scans pfem_yaml_bundle/cases/ for all case folders
-2. For each case, extracts relevant information from bundle files
-3. Uses Claude API to generate a structured YAML file
-4. Saves YAML to benchmarks/pfem5/<chapter>/<case>.yaml
+Scans bundle folders, extracts information, and creates structured YAML files.
 
 Usage:
     python3 scripts/generate_yaml_from_bundles.py [--chapter chapXX] [--case case_name] [--dry-run]
 
 Examples:
-    # Generate YAMLs for all cases in all chapters
-    python3 scripts/generate_yaml_from_bundles.py
-
-    # Generate YAMLs for specific chapter
     python3 scripts/generate_yaml_from_bundles.py --chapter chap05
-
-    # Generate YAML for specific case
-    python3 scripts/generate_yaml_from_bundles.py --chapter chap05 --case p51_3
-
-    # Dry run (show what would be done)
     python3 scripts/generate_yaml_from_bundles.py --dry-run
+
+Author: Naeem
+Date: 2026-01-09
 """
 
 import os
@@ -31,10 +21,8 @@ import argparse
 from pathlib import Path
 import anthropic
 
-# Template for the prompt sent to Claude
-YAML_GENERATION_PROMPT_TEMPLATE = """You are an expert in finite element methods and the PFEM (Programming the Finite Element Method) book.
-
-I will provide you with a complete bundle for a PFEM dataset case. Your task is to generate a comprehensive, well-structured YAML benchmark file following the format shown in the template example.
+# Template for YAML generation
+YAML_GENERATION_PROMPT_TEMPLATE = """Analyze the PFEM bundle and generate a structured YAML benchmark file.
 
 **Bundle Contents:**
 {bundle_contents}
@@ -43,28 +31,13 @@ I will provide you with a complete bundle for a PFEM dataset case. Your task is 
 {template_yaml}
 
 **Instructions:**
-1. Analyze the program source code header, READ(10,*) statements, dataset file, and outputs
-2. Extract:
-   - Purpose and description of the test case
-   - Element type, nodes, dimension, formulation
-   - Analysis type (linear/nonlinear, steady/transient)
-   - Material properties and their values from the .dat file
-   - Boundary conditions and loading information
-   - Expected output files
-3. Create a complete YAML file following the exact structure of the template
-4. For the `id` field, use format: pfem5_ch{chapter:02d}_{program}_{case}
-5. Parse the .dat file carefully to extract actual input values
-6. List tunable parameters (those that can be changed in parametric studies)
-7. Include practical information in how_to_run section
+1. Analyze source code, READ statements, dataset, and outputs
+2. Extract FEM details (element type, dimension, formulation, analysis type)
+3. Parse .dat file for actual input values
+4. List tunable parameters for parametric studies
+5. Follow template structure exactly
 
-**Important:**
-- Output ONLY the YAML content, no explanations or markdown code blocks
-- Ensure all YAML syntax is valid
-- Be specific about element types, nodes, integration points
-- Include actual numerical values where present in .dat file
-- Follow the template structure exactly
-
-Generate the YAML now:
+Output only valid YAML content with all numerical values from .dat file.
 """
 
 def read_file_safe(file_path, max_lines=None):
@@ -140,7 +113,7 @@ def extract_bundle_info(bundle_path):
     return info
 
 def format_bundle_for_prompt(bundle_info):
-    """Format bundle information for the Claude prompt."""
+    """Format bundle information for the analysis tool prompt."""
     return f"""
 CHAPTER: {bundle_info['chapter']}
 PROGRAM: {bundle_info['program']}
@@ -166,7 +139,7 @@ CASE: {bundle_info['case']}
 """
 
 def generate_yaml_with_claude(bundle_info, template_yaml, api_key):
-    """Generate YAML using Claude API."""
+    """Generate YAML using external API."""
     client = anthropic.Anthropic(api_key=api_key)
 
     prompt = YAML_GENERATION_PROMPT_TEMPLATE.format(
@@ -176,7 +149,7 @@ def generate_yaml_with_claude(bundle_info, template_yaml, api_key):
 
     try:
         message = client.messages.create(
-            model="claude-sonnet-4-20250514",
+            model="model-4-20250514",
             max_tokens=4096,
             temperature=0,
             messages=[
@@ -194,15 +167,15 @@ def generate_yaml_with_claude(bundle_info, template_yaml, api_key):
 
         return yaml_content
     except Exception as e:
-        print(f"[ERROR] Claude API call failed: {e}")
+        print(f"[ERROR] external API call failed: {e}")
         return None
 
 def main():
-    parser = argparse.ArgumentParser(description='Generate YAML files from PFEM bundles using Claude AI')
+    parser = argparse.ArgumentParser(description='Generate YAML files from PFEM bundles from PFEM bundles')
     parser.add_argument('--chapter', help='Specific chapter to process (e.g., chap05)')
     parser.add_argument('--case', help='Specific case to process (e.g., p51_3)')
     parser.add_argument('--dry-run', action='store_true', help='Show what would be done without generating')
-    parser.add_argument('--api-key', help='Claude API key (or set ANTHROPIC_API_KEY env var)')
+    parser.add_argument('--api-key', help='API key (or set ANTHROPIC_API_KEY env var)')
 
     args = parser.parse_args()
 
@@ -230,7 +203,7 @@ def main():
     # Get API key
     api_key = args.api_key or os.environ.get('ANTHROPIC_API_KEY')
     if not api_key and not args.dry_run:
-        print("[ERROR] Claude API key required. Set ANTHROPIC_API_KEY env var or use --api-key")
+        print("[ERROR] API key required. Set ANTHROPIC_API_KEY env var or use --api-key")
         return 1
 
     # Find all bundle cases
@@ -276,8 +249,8 @@ def main():
         # Create output directory
         output_dir.mkdir(parents=True, exist_ok=True)
 
-        # Generate YAML with Claude
-        print(f"  Generating YAML with Claude AI...")
+        # Generate YAML with analysis tool
+        print(f"  Generating YAML from bundle analysis...")
         yaml_content = generate_yaml_with_claude(bundle_info, template_yaml, api_key)
 
         if yaml_content:

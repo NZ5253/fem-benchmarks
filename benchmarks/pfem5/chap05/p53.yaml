@@ -14,7 +14,7 @@ authors:
     program: "p53"
     dataset: "p53"
   entry:
-    created_by: "Automated YAML Generator"
+    created_by: "Naeem"
     created_on: "2026-01-09"
     verified_platform: "Linux (gfortran)"
 
@@ -299,5 +299,4 @@ notes:
   - "Program prompts for the base name of the .dat file (do not type the .dat extension)."
   - "This is a 3D analysis program using hexahedral elements."
   - "This case uses two material types with different properties."
-  - "This YAML follows the 'perfect YAML' specification with complete input schema and tunable parameters."
   - "For parametric studies in MATLAB, use the paths in tunable_parameters to modify specific values."

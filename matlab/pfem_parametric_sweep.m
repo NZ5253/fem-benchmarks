@@ -32,7 +32,7 @@ function results = pfem_parametric_sweep(pfem_root, chapter, program, base_case,
 % Note: This is a template. The dat_modifier function needs to be customized
 %       for each program based on its specific READ(10,*) format.
 %
-% Author: Generated for PFEM Benchmark Catalogue
+% Author: Naeem
 % Date: 2026-01-09
 
     if nargin < 6

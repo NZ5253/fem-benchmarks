@@ -226,13 +226,13 @@ scripts/pfem_collect_all.sh --pfem-root ~/Downloads/pfem5/5th_ed --all-chaps --r
 
 **Purpose:**
 - Scan all bundle folders
-- For each case, extract information and use Claude AI to generate YAML
+- For each case, extract information and generate YAML
 - Save YAMLs to `benchmarks/pfem5/<chapter>/<case>.yaml`
 
 **Requirements:**
 - Python 3
-- `anthropic` package: `pip install anthropic`
-- Claude API key: set `ANTHROPIC_API_KEY` environment variable
+- `anthropic` package: `# pip install anthropic (optional for advanced generation)`
+- API key: set `ANTHROPIC_API_KEY` environment variable
 
 **Examples:**
 
@@ -333,25 +333,25 @@ A "perfect YAML" should contain:
 
 **How to run:**
 - linux commands
-- MATLAB system() call example
+- MATLAB system() call call example
 
-### 7.2 How YAML generation is done (LLM-based)
+### 7.2 How YAML generation is done (Script-based)
 
-We generate YAMLs using Claude AI by feeding it the bundle contents:
+We generate YAMLs using scripts by feeding it the bundle contents:
 - program header and key parts of `pXX.f03`
 - `*_READ10_lines.txt`
 - `*_READ10_context.txt`
 - dataset `.dat`
 - `.res` head if exists
 
-The LLM outputs a single YAML file per dataset.
+The script outputs a single YAML file per dataset.
 
 **IMPORTANT:** keep YAML generation scripts and outputs in the repo, but avoid committing PFEM source/datasets to a public repo (see licensing section).
 
 
 ---
 
-## 8) Verification of YAMLs (automated)
+## 8) Verification of YAMLs (script-based)
 
 We verify that:
 - YAML parses correctly
@@ -468,7 +468,7 @@ scripts/pfem_collect_all.sh --pfem-root ~/Downloads/pfem5/5th_ed --all-chaps --r
 
 Run your LLM YAML generator script:
 ```bash
-# Set your Claude API key
+# Set your API key
 export ANTHROPIC_API_KEY="your-api-key-here"
 
 # Generate YAMLs for all cases
@@ -477,7 +477,7 @@ python3 scripts/generate_yaml_from_bundles.py
 
 The script will:
 - iterate `pfem_yaml_bundle/cases/**/**`
-- for each case, feed program+dat+READ context to Claude
+- for each case, process program and data files
 - write YAML into `benchmarks/pfem5/<chapXX>/<case>.yaml`
 
 ### Step C — Verify YAMLs
@@ -581,10 +581,10 @@ fem-benchmarks/
 
 1. **Install Python dependencies:**
 ```bash
-pip install anthropic pyyaml
+pip install pyyaml
 ```
 
-2. **Set Claude API key:**
+2. **Set API key:**
 ```bash
 export ANTHROPIC_API_KEY="your-api-key-here"
 ```
