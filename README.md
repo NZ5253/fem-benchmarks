@@ -134,7 +134,7 @@ The `generate_yaml_from_bundles.py` script:
 ### 3. MATLAB Integration
 - **pfem_runner.m**: Execute any PFEM case from MATLAB
 - **pfem_parametric_sweep.m**: Framework for parameter studies
-- Automated result parsing and organization
+- Result parsing and organization
 - Extensible for custom analyses
 
 ## Documentation
