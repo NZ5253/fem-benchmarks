@@ -1,42 +1,217 @@
 id: pfem5_ch05_p52_p52
-title: "PFEM Program 5.2 (p52) — Plane strain elastic-plastic analysis dataset p52"
+title: "PFEM Program 5.2 (p52) — Non-axisymmetric analysis of axisymmetric elastic solid — case p52"
+
 purpose: >
-  Plane strain elastic-plastic analysis using von Mises yield criterion with triangular or quadrilateral elements.
-source:
-  book: "Programming the Finite Element Method (5th ed.)"
-  chapter: 5
-  program: "p52"
+  Non-axisymmetric analysis of an axisymmetric elastic solid using 8-node rectangular
+  quadrilaterals. This program handles 3D problems with cylindrical symmetry where loads
+  vary circumferentially (e.g., pressure vessels with non-uniform loading).
+
+authors:
+  source:
+    book: "Programming the Finite Element Method"
+    edition: "5th"
+    chapter: 5
+    program: "p52"
+    dataset: "p52"
+  entry:
+    created_by: "Automated YAML Generator"
+    created_on: "2026-01-09"
+    verified_platform: "Linux (gfortran)"
+
 code:
   language: "Fortran (F2003)"
   source_file: "source/chap05/p52.f03"
   uses_modules: ["main", "geom"]
+  io_reads_from_unit10:
+    - {line: 25, stmt: "READ(10,*) nre, nze, lth, iflag, chi, np_types"}
+    - {line: 32, stmt: "READ(10,*) prop"}
+    - {line: 35, stmt: "READ(10,*) r_coords, z_coords"}
+    - {line: 37, stmt: "READ(10,*) nr,(k,nf(:,k),i=1,nr)"}
+    - {line: 84, stmt: "READ(10,*) loaded_nodes,(k,loads(nf(:,k)),i=1,loaded_nodes)"}
+
 fem:
-  dimension: 2
-  formulation: "1  5"
-  element_family: "hexahedron"
-  element_nodes: 8
+  dimension: "2.5D"
+  formulation:
+    description: "non-axisymmetric (Fourier)"
+    notes: "Axisymmetric geometry with circumferentially varying loads via Fourier expansion"
+  dof:
+    per_node: 3
+    names: ["r-disp", "z-disp", "theta-disp"]
+    dof_indexing: {1: "r-disp", 2: "z-disp", 3: "theta-disp"}
+  element:
+    family: "quadrilateral"
+    nodes_per_element: 8
+    supported:
+      quads_rectangular_nodes: [8]
+
 analysis:
-  physics: "elastic-plastic mechanics"
-  type: "nonlinear"
+  physics: "linear elasticity"
+  type: "linear"
   regime: "steady-state"
+  special_features: "Fourier decomposition for circumferential variation"
+
+units:
+  system: "consistent"
+  notes: >
+    PFEM assumes consistent units (not enforced). Pick a unit system and keep geometry,
+    E, and loads consistent.
+
+tunable_parameters:
+  - name: youngs_modulus_E
+    path: "inputs.record2.material.E.value"
+    type: "real"
+    unit_category: "stress"
+    notes: "Material stiffness. Very common sweep parameter."
+    suggested_range: [1.0e4, 1.0e9]
+
+  - name: poisson_ratio_nu
+    path: "inputs.record2.material.nu.value"
+    type: "real"
+    unit_category: "dimensionless"
+    notes: "Material parameter, often kept fixed unless studying sensitivity."
+    suggested_range: [0.0, 0.49]
+
+  - name: harmonic_number_lth
+    path: "inputs.record1.lth"
+    type: "int"
+    unit_category: "-"
+    notes: "Harmonic number for Fourier expansion (circumferential mode)."
+
+  - name: angle_chi
+    path: "inputs.record1.chi"
+    type: "real"
+    unit_category: "degrees"
+    notes: "Angle in degrees for non-axisymmetric loading."
+
+  - name: nodal_loads_values
+    path: "inputs.record5.nodal_loads[*].(load_dof1,load_dof2,load_dof3)"
+    type: "real"
+    unit_category: "force"
+    notes: "Applied nodal forces in r, z, theta directions."
+
+  - name: mesh_density
+    path: "inputs.record1.(nre,nze)"
+    type: "int"
+    unit_category: "-"
+    notes: >
+      Structural knob: changes mesh resolution. If you change nre/nze, r_coords and z_coords
+      must also match lengths (nre+1) and (nze+1).
+
+input_schema:
+  file_type: ".dat"
+  reads_in_order:
+    - record: 1
+      fortran_read: "READ(10,*) nre, nze, lth, iflag, chi, np_types"
+      fields:
+        - {name: nre, type: int, description: "Number of elements in radial direction"}
+        - {name: nze, type: int, description: "Number of elements in axial (z) direction"}
+        - {name: lth, type: int, description: "Harmonic number for Fourier expansion"}
+        - {name: iflag, type: int, description: "Flag for analysis type"}
+        - {name: chi, type: real, description: "Angle in degrees"}
+        - {name: np_types, type: int}
+
+    - record: 2
+      fortran_read: "READ(10,*) prop"
+      fields:
+        - name: prop
+          type: "real_matrix"
+          shape: "(nprops=2, np_types)"
+          description: "[E, nu] per material type"
+
+    - record: 3
+      fortran_read: "READ(10,*) r_coords, z_coords"
+      fields:
+        - {name: r_coords, type: "real_array", shape: "(nre+1)"}
+        - {name: z_coords, type: "real_array", shape: "(nze+1)"}
+
+    - record: 4
+      fortran_read: "READ(10,*) nr,(k,nf(:,k),i=1,nr)"
+      fields:
+        - {name: nr, type: int}
+        - name: bc_table
+          type: "table"
+          columns:
+            - {name: node, type: int}
+            - {name: nf_flag_dof1, type: int, allowed: [0, 1]}
+            - {name: nf_flag_dof2, type: int, allowed: [0, 1]}
+            - {name: nf_flag_dof3, type: int, allowed: [0, 1]}
+          notes: "Typically 0=fixed, 1=free before numbering by formnf()."
+
+    - record: 5
+      fortran_read: "READ(10,*) loaded_nodes,(k,loads(nf(:,k)),i=1,loaded_nodes)"
+      fields:
+        - {name: loaded_nodes, type: int}
+        - name: nodal_loads
+          type: "table"
+          columns:
+            - {name: node, type: int}
+            - {name: load_dof1, type: real}
+            - {name: load_dof2, type: real}
+            - {name: load_dof3, type: real}
+
 inputs:
   working_directory: "executable/chap05"
   basename: "p52"
   dat_file: "executable/chap05/p52.dat"
+
+  record1:
+    nre: 1
+    nze: 5
+    lth: 1
+    iflag: 1
+    chi: 0.0
+    np_types: 1
+
+  record2:
+    material:
+      E: {value: 1.0e5, unit_category: "stress"}
+      nu: {value: 0.3, unit_category: "dimensionless"}
+
+  record3:
+    r_coords: {values: [0.0, 0.5], unit_category: "length"}
+    z_coords: {values: [10.0, 8.0, 6.0, 4.0, 2.0, 0.0], unit_category: "length"}
+
+  record4:
+    nr: 13
+    bc_table:
+      - {node: 1, nf_flag_dof1: 1, nf_flag_dof2: 0, nf_flag_dof3: 1}
+      - {node: 4, nf_flag_dof1: 1, nf_flag_dof2: 0, nf_flag_dof3: 1}
+      - {node: 6, nf_flag_dof1: 1, nf_flag_dof2: 0, nf_flag_dof3: 1}
+      - {node: 9, nf_flag_dof1: 1, nf_flag_dof2: 0, nf_flag_dof3: 1}
+      - {node: 11, nf_flag_dof1: 1, nf_flag_dof2: 0, nf_flag_dof3: 1}
+      - {node: 14, nf_flag_dof1: 1, nf_flag_dof2: 0, nf_flag_dof3: 1}
+      - {node: 16, nf_flag_dof1: 1, nf_flag_dof2: 0, nf_flag_dof3: 1}
+      - {node: 19, nf_flag_dof1: 1, nf_flag_dof2: 0, nf_flag_dof3: 1}
+      - {node: 21, nf_flag_dof1: 1, nf_flag_dof2: 0, nf_flag_dof3: 1}
+      - {node: 24, nf_flag_dof1: 1, nf_flag_dof2: 0, nf_flag_dof3: 1}
+      - {node: 26, nf_flag_dof1: 0, nf_flag_dof2: 0, nf_flag_dof3: 0}
+      - {node: 27, nf_flag_dof1: 0, nf_flag_dof2: 0, nf_flag_dof3: 0}
+      - {node: 28, nf_flag_dof1: 0, nf_flag_dof2: 0, nf_flag_dof3: 0}
+
+  record5:
+    loaded_nodes: 1
+    nodal_loads:
+      - {node: 3, load_dof1: 0.3183, load_dof2: 0.0, load_dof3: 0.0}
+
 outputs:
-  files_expected:
+  output_directory: "executable/chap05"
+  files_created_confirmed:
     - "p52.res"
     - "p52.msh"
     - "p52.vec"
     - "p52.dis"
+
 how_to_run:
-  linux_build:
-    notes: "Build PFEM library modules (main, geom, etc.) then compile p52."
-    executable: "build/bin/p52"
-  linux_run:
-    commands:
-      - "cd ~/Downloads/pfem5/5th_ed/executable/chap05"
-      - 'printf "p52\n" | ~/Downloads/pfem5/5th_ed/build/bin/p52'
+  linux:
+    - "cd ~/Downloads/pfem5/5th_ed/executable/chap05"
+    - 'printf "p52\n" | ~/Downloads/pfem5/5th_ed/build/bin/p52'
+  matlab:
+    - "pfem_root = '~/Downloads/pfem5/5th_ed';"
+    - "[status, outputs] = pfem_runner(pfem_root, 'chap05', 'p52', 'p52');"
+
 notes:
   - "Program prompts for the base name of the .dat file (do not type the .dat extension)."
-  - "Generated using automated YAML generator for PFEM benchmarks."
+  - "This program handles non-axisymmetric problems using Fourier decomposition."
+  - "Each node has 3 DOF: radial, axial, and circumferential displacements."
+  - "This YAML follows the 'perfect YAML' specification with complete input schema and tunable parameters."
+  - "For parametric studies in MATLAB, use the paths in tunable_parameters to modify specific values."

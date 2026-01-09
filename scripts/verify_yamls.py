@@ -15,7 +15,8 @@ from pathlib import Path
 from collections import defaultdict
 
 # Required top-level keys for a valid benchmark YAML
-REQUIRED_KEYS = ['id', 'title', 'source', 'code', 'fem', 'analysis', 'inputs', 'outputs']
+# Note: 'source' can be either top-level or under 'authors.source' (perfect YAML format)
+REQUIRED_KEYS = ['id', 'title', 'code', 'fem', 'analysis', 'inputs', 'outputs']
 
 def verify_yaml_file(yaml_path):
     """Verify a single YAML file. Returns (is_valid, errors, data)."""
@@ -36,6 +37,12 @@ def verify_yaml_file(yaml_path):
     missing_keys = [k for k in REQUIRED_KEYS if k not in data]
     if missing_keys:
         errors.append(f"Missing required keys: {', '.join(missing_keys)}")
+
+    # Check for source information (either 'source' or 'authors.source')
+    if 'source' not in data and 'authors' not in data:
+        errors.append("Missing source information: need either 'source' or 'authors'")
+    elif 'authors' in data and 'source' not in data.get('authors', {}):
+        errors.append("'authors' present but missing 'authors.source'")
 
     # Validate ID format
     if 'id' in data:

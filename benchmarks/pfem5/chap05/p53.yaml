@@ -1,42 +1,303 @@
 id: pfem5_ch05_p53_p53
-title: "PFEM Program 5.3 (p53) — Slope stability analysis dataset p53"
+title: "PFEM Program 5.3 (p53) — 3D linear elasticity (8-node hexahedra) — case p53"
+
 purpose: >
-  Slope stability analysis using gravity loading and elastic-plastic material with strength reduction.
-source:
-  book: "Programming the Finite Element Method (5th ed.)"
-  chapter: 5
-  program: "p53"
+  Three-dimensional analysis of an elastic solid using 8-, 14- or 20-node brick hexahedra.
+  Mesh numbered in x-y planes then in the z-direction. This case uses 8-node hexahedra with
+  multiple material types.
+
+authors:
+  source:
+    book: "Programming the Finite Element Method"
+    edition: "5th"
+    chapter: 5
+    program: "p53"
+    dataset: "p53"
+  entry:
+    created_by: "Automated YAML Generator"
+    created_on: "2026-01-09"
+    verified_platform: "Linux (gfortran)"
+
 code:
   language: "Fortran (F2003)"
   source_file: "source/chap05/p53.f03"
   uses_modules: ["main", "geom"]
+  io_reads_from_unit10:
+    - {line: 26, stmt: "READ(10,*) nod, nxe, nye, nze, nip, np_types"}
+    - {line: 35, stmt: "READ(10,*) prop"}
+    - {line: 37, stmt: "IF(np_types>1)READ(10,*)etype"}
+    - {line: 38, stmt: "READ(10,*) x_coords, y_coords, z_coords"}
+    - {line: 40, stmt: "READ(10,*) nr,(k,nf(:,k),i=1,nr)"}
+    - {line: 81, stmt: "READ(10,*) loaded_nodes"}
+    - {line: 82, stmt: "IF(loaded_nodes/=0)READ(10,*)(k,loads(nf(:,k)),i=1,loaded_nodes)"}
+    - {line: 83, stmt: "READ(10,*) fixed_freedoms"}
+    - {line: 87, stmt: "READ(10,*)(node(i),sense(i),value(i),i=1,fixed_freedoms)"}
+
 fem:
-  dimension: 2
-  formulation: "20"
-  element_family: "hexahedron"
-  element_nodes: 8
+  dimension: 3
+  formulation:
+    description: "3D linear elasticity"
+  dof:
+    per_node: 3
+    names: ["x-disp", "y-disp", "z-disp"]
+    dof_indexing: {1: "x-disp", 2: "y-disp", 3: "z-disp"}
+  element:
+    family: "hexahedron"
+    nodes_per_element: 8
+    supported:
+      hex_nodes: [8, 14, 20]
+
 analysis:
-  physics: "slope stability"
-  type: "nonlinear"
+  physics: "linear elasticity"
+  type: "linear"
   regime: "steady-state"
+
+units:
+  system: "consistent"
+  notes: >
+    PFEM assumes consistent units (not enforced). Pick a unit system and keep geometry,
+    E, and loads consistent.
+
+tunable_parameters:
+  - name: youngs_modulus_E_material1
+    path: "inputs.record2.materials[0].E.value"
+    type: "real"
+    unit_category: "stress"
+    notes: "Material 1 stiffness."
+    suggested_range: [1.0e4, 1.0e9]
+
+  - name: youngs_modulus_E_material2
+    path: "inputs.record2.materials[1].E.value"
+    type: "real"
+    unit_category: "stress"
+    notes: "Material 2 stiffness."
+    suggested_range: [1.0e4, 1.0e9]
+
+  - name: poisson_ratio_nu_material1
+    path: "inputs.record2.materials[0].nu.value"
+    type: "real"
+    unit_category: "dimensionless"
+    notes: "Material 1 Poisson's ratio."
+    suggested_range: [0.0, 0.49]
+
+  - name: poisson_ratio_nu_material2
+    path: "inputs.record2.materials[1].nu.value"
+    type: "real"
+    unit_category: "dimensionless"
+    notes: "Material 2 Poisson's ratio."
+    suggested_range: [0.0, 0.49]
+
+  - name: nodal_loads_values
+    path: "inputs.record6.nodal_loads[*].(load_dof1,load_dof2,load_dof3)"
+    type: "real"
+    unit_category: "force"
+    notes: "Applied nodal forces in x, y, z directions."
+
+  - name: mesh_density
+    path: "inputs.record1.(nxe,nye,nze)"
+    type: "int"
+    unit_category: "-"
+    notes: >
+      Structural knob: changes 3D mesh resolution.
+
+input_schema:
+  file_type: ".dat"
+  reads_in_order:
+    - record: 1
+      fortran_read: "READ(10,*) nod, nxe, nye, nze, nip, np_types"
+      fields:
+        - {name: nod, type: int}
+        - {name: nxe, type: int}
+        - {name: nye, type: int}
+        - {name: nze, type: int}
+        - {name: nip, type: int}
+        - {name: np_types, type: int}
+
+    - record: 2
+      fortran_read: "READ(10,*) prop"
+      fields:
+        - name: prop
+          type: "real_matrix"
+          shape: "(nprops=2, np_types)"
+          description: "[E, nu] per material type"
+
+    - record: 2b
+      fortran_read: "IF(np_types>1)READ(10,*)etype"
+      condition: "only if np_types > 1"
+      fields:
+        - name: etype
+          type: "int_array"
+          shape: "(nels)"
+          description: "Material type ID for each element"
+
+    - record: 3
+      fortran_read: "READ(10,*) x_coords, y_coords, z_coords"
+      fields:
+        - {name: x_coords, type: "real_array", shape: "(nxe+1)"}
+        - {name: y_coords, type: "real_array", shape: "(nye+1)"}
+        - {name: z_coords, type: "real_array", shape: "(nze+1)"}
+
+    - record: 4
+      fortran_read: "READ(10,*) nr,(k,nf(:,k),i=1,nr)"
+      fields:
+        - {name: nr, type: int}
+        - name: bc_table
+          type: "table"
+          columns:
+            - {name: node, type: int}
+            - {name: nf_flag_dof1, type: int, allowed: [0, 1]}
+            - {name: nf_flag_dof2, type: int, allowed: [0, 1]}
+            - {name: nf_flag_dof3, type: int, allowed: [0, 1]}
+          notes: "Typically 0=fixed, 1=free before numbering by formnf()."
+
+    - record: 5
+      fortran_read: "READ(10,*) loaded_nodes"
+      fields:
+        - {name: loaded_nodes, type: int}
+
+    - record: 6
+      fortran_read: "IF(loaded_nodes/=0)READ(10,*)(k,loads(nf(:,k)),i=1,loaded_nodes)"
+      condition: "only if loaded_nodes > 0"
+      fields:
+        - name: nodal_loads
+          type: "table"
+          columns:
+            - {name: node, type: int}
+            - {name: load_dof1, type: real}
+            - {name: load_dof2, type: real}
+            - {name: load_dof3, type: real}
+
+    - record: 7
+      fortran_read: "READ(10,*) fixed_freedoms"
+      fields:
+        - {name: fixed_freedoms, type: int}
+
+    - record: 8
+      fortran_read: "READ(10,*)(node(i),sense(i),value(i),i=1,fixed_freedoms)"
+      condition: "only if fixed_freedoms > 0"
+      fields:
+        - name: prescribed_displacements
+          type: "table"
+          columns:
+            - {name: node, type: int}
+            - {name: sense_dof, type: int, allowed: [1, 2, 3]}
+            - {name: value, type: real}
+
 inputs:
   working_directory: "executable/chap05"
   basename: "p53"
   dat_file: "executable/chap05/p53.dat"
+
+  record1:
+    nod: 20
+    nxe: 1
+    nye: 3
+    nze: 2
+    nip: 8
+    np_types: 2
+
+  record2:
+    materials:
+      - {E: {value: 100.0, unit_category: "stress"}, nu: {value: 0.3, unit_category: "dimensionless"}}
+      - {E: {value: 50.0, unit_category: "stress"}, nu: {value: 0.3, unit_category: "dimensionless"}}
+
+  record2b:
+    etype: [1, 2, 1, 2, 1, 2]
+
+  record3:
+    x_coords: {values: [0.0, 0.5], unit_category: "length"}
+    y_coords: {values: [0.0, 1.0, 2.0, 3.0], unit_category: "length"}
+    z_coords: {values: [0.0, -1.0, -2.0], unit_category: "length"}
+
+  record4:
+    nr: 46
+    bc_table:
+      - {node: 1, nf_flag_dof1: 0, nf_flag_dof2: 0, nf_flag_dof3: 1}
+      - {node: 2, nf_flag_dof1: 1, nf_flag_dof2: 0, nf_flag_dof3: 1}
+      - {node: 3, nf_flag_dof1: 1, nf_flag_dof2: 0, nf_flag_dof3: 1}
+      - {node: 4, nf_flag_dof1: 0, nf_flag_dof2: 0, nf_flag_dof3: 1}
+      - {node: 5, nf_flag_dof1: 1, nf_flag_dof2: 0, nf_flag_dof3: 1}
+      - {node: 6, nf_flag_dof1: 0, nf_flag_dof2: 0, nf_flag_dof3: 1}
+      - {node: 7, nf_flag_dof1: 1, nf_flag_dof2: 0, nf_flag_dof3: 1}
+      - {node: 8, nf_flag_dof1: 1, nf_flag_dof2: 0, nf_flag_dof3: 1}
+      - {node: 9, nf_flag_dof1: 0, nf_flag_dof2: 0, nf_flag_dof3: 1}
+      - {node: 10, nf_flag_dof1: 1, nf_flag_dof2: 0, nf_flag_dof3: 1}
+      - {node: 11, nf_flag_dof1: 0, nf_flag_dof2: 0, nf_flag_dof3: 0}
+      - {node: 12, nf_flag_dof1: 0, nf_flag_dof2: 0, nf_flag_dof3: 0}
+      - {node: 13, nf_flag_dof1: 0, nf_flag_dof2: 0, nf_flag_dof3: 0}
+      - {node: 14, nf_flag_dof1: 0, nf_flag_dof2: 1, nf_flag_dof3: 1}
+      - {node: 16, nf_flag_dof1: 0, nf_flag_dof2: 1, nf_flag_dof3: 1}
+      - {node: 18, nf_flag_dof1: 0, nf_flag_dof2: 0, nf_flag_dof3: 0}
+      - {node: 19, nf_flag_dof1: 0, nf_flag_dof2: 0, nf_flag_dof3: 0}
+      - {node: 20, nf_flag_dof1: 0, nf_flag_dof2: 1, nf_flag_dof3: 1}
+      - {node: 23, nf_flag_dof1: 0, nf_flag_dof2: 1, nf_flag_dof3: 1}
+      - {node: 25, nf_flag_dof1: 0, nf_flag_dof2: 1, nf_flag_dof3: 1}
+      - {node: 28, nf_flag_dof1: 0, nf_flag_dof2: 1, nf_flag_dof3: 1}
+      - {node: 30, nf_flag_dof1: 0, nf_flag_dof2: 0, nf_flag_dof3: 0}
+      - {node: 31, nf_flag_dof1: 0, nf_flag_dof2: 0, nf_flag_dof3: 0}
+      - {node: 32, nf_flag_dof1: 0, nf_flag_dof2: 0, nf_flag_dof3: 0}
+      - {node: 33, nf_flag_dof1: 0, nf_flag_dof2: 1, nf_flag_dof3: 1}
+      - {node: 35, nf_flag_dof1: 0, nf_flag_dof2: 1, nf_flag_dof3: 1}
+      - {node: 37, nf_flag_dof1: 0, nf_flag_dof2: 0, nf_flag_dof3: 0}
+      - {node: 38, nf_flag_dof1: 0, nf_flag_dof2: 0, nf_flag_dof3: 0}
+      - {node: 39, nf_flag_dof1: 0, nf_flag_dof2: 1, nf_flag_dof3: 1}
+      - {node: 42, nf_flag_dof1: 0, nf_flag_dof2: 1, nf_flag_dof3: 1}
+      - {node: 44, nf_flag_dof1: 0, nf_flag_dof2: 1, nf_flag_dof3: 1}
+      - {node: 47, nf_flag_dof1: 0, nf_flag_dof2: 1, nf_flag_dof3: 1}
+      - {node: 49, nf_flag_dof1: 0, nf_flag_dof2: 0, nf_flag_dof3: 0}
+      - {node: 50, nf_flag_dof1: 0, nf_flag_dof2: 0, nf_flag_dof3: 0}
+      - {node: 51, nf_flag_dof1: 0, nf_flag_dof2: 0, nf_flag_dof3: 0}
+      - {node: 52, nf_flag_dof1: 0, nf_flag_dof2: 1, nf_flag_dof3: 1}
+      - {node: 54, nf_flag_dof1: 0, nf_flag_dof2: 1, nf_flag_dof3: 1}
+      - {node: 56, nf_flag_dof1: 0, nf_flag_dof2: 0, nf_flag_dof3: 0}
+      - {node: 57, nf_flag_dof1: 0, nf_flag_dof2: 0, nf_flag_dof3: 0}
+      - {node: 58, nf_flag_dof1: 0, nf_flag_dof2: 1, nf_flag_dof3: 1}
+      - {node: 61, nf_flag_dof1: 0, nf_flag_dof2: 1, nf_flag_dof3: 1}
+      - {node: 63, nf_flag_dof1: 0, nf_flag_dof2: 1, nf_flag_dof3: 1}
+      - {node: 66, nf_flag_dof1: 0, nf_flag_dof2: 1, nf_flag_dof3: 1}
+      - {node: 68, nf_flag_dof1: 0, nf_flag_dof2: 0, nf_flag_dof3: 0}
+      - {node: 69, nf_flag_dof1: 0, nf_flag_dof2: 0, nf_flag_dof3: 0}
+      - {node: 70, nf_flag_dof1: 0, nf_flag_dof2: 0, nf_flag_dof3: 0}
+
+  record5:
+    loaded_nodes: 8
+
+  record6:
+    nodal_loads:
+      - {node: 1, load_dof1: 0.0, load_dof2: 0.0, load_dof3: 0.0417}
+      - {node: 2, load_dof1: 0.0, load_dof2: 0.0, load_dof3: -0.1667}
+      - {node: 3, load_dof1: 0.0, load_dof2: 0.0, load_dof3: 0.0417}
+      - {node: 14, load_dof1: 0.0, load_dof2: 0.0, load_dof3: -0.1667}
+      - {node: 15, load_dof1: 0.0, load_dof2: 0.0, load_dof3: -0.1667}
+      - {node: 20, load_dof1: 0.0, load_dof2: 0.0, load_dof3: 0.0417}
+      - {node: 21, load_dof1: 0.0, load_dof2: 0.0, load_dof3: -0.1667}
+      - {node: 22, load_dof1: 0.0, load_dof2: 0.0, load_dof3: 0.0417}
+
+  record7:
+    fixed_freedoms: 0
+
+  record8:
+    prescribed_displacements: []
+
 outputs:
-  files_expected:
+  output_directory: "executable/chap05"
+  files_created_confirmed:
     - "p53.res"
     - "p53.msh"
     - "p53.vec"
     - "p53.dis"
+
 how_to_run:
-  linux_build:
-    notes: "Build PFEM library modules (main, geom, etc.) then compile p53."
-    executable: "build/bin/p53"
-  linux_run:
-    commands:
-      - "cd ~/Downloads/pfem5/5th_ed/executable/chap05"
-      - 'printf "p53\n" | ~/Downloads/pfem5/5th_ed/build/bin/p53'
+  linux:
+    - "cd ~/Downloads/pfem5/5th_ed/executable/chap05"
+    - 'printf "p53\n" | ~/Downloads/pfem5/5th_ed/build/bin/p53'
+  matlab:
+    - "pfem_root = '~/Downloads/pfem5/5th_ed';"
+    - "[status, outputs] = pfem_runner(pfem_root, 'chap05', 'p53', 'p53');"
+
 notes:
   - "Program prompts for the base name of the .dat file (do not type the .dat extension)."
-  - "Generated using automated YAML generator for PFEM benchmarks."
+  - "This is a 3D analysis program using hexahedral elements."
+  - "This case uses two material types with different properties."
+  - "This YAML follows the 'perfect YAML' specification with complete input schema and tunable parameters."
+  - "For parametric studies in MATLAB, use the paths in tunable_parameters to modify specific values."
