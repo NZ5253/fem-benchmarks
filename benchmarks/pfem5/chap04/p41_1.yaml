@@ -1,0 +1,154 @@
+id: pfem5_ch04_p41_p41_1
+title: PFEM Program 4.1 (p41) — 4.1 One dimensional analysis of axially loaded elastic rods — case p41_1
+purpose: Analysis using linear elasticity formulation in 1D.
+authors:
+  source:
+    book: Programming the Finite Element Method
+    edition: 5th
+    chapter: 4
+    program: p41
+    dataset: p41_1
+  entry:
+    created_by: Naeem
+    created_on: '2026-01-10'
+    verified_platform: Linux (gfortran)
+code:
+  language: Fortran (F2003)
+  source_file: source/chap04/p41.f03
+  uses_modules:
+  - main
+  - geom
+  io_reads_from_unit10:
+  - line: 23
+    stmt: READ(10,*)nels,np_types
+  - line: 27
+    stmt: READ(10,*)prop
+  - line: 29
+    stmt: IF(np_types>1)READ(10,*)etype
+  - line: 30
+    stmt: READ(10,*)ell
+  - line: 32
+    stmt: READ(10,*)nr,(k,nf(:,k),i=1,nr)
+  - line: 59
+    stmt: READ(10,*)loaded_nodes,(k,loads(nf(:,k)),i=1,loaded_nodes)
+  - line: 60
+    stmt: READ(10,*)fixed_freedoms
+  - line: 63
+    stmt: READ(10,*)(node(i),value(i),i=1,fixed_freedoms)
+fem:
+  dimension: 1
+  dof:
+    per_node: 1
+analysis:
+  physics: linear elasticity
+  type: linear
+  regime: steady-state
+units:
+  system: consistent
+  notes: PFEM assumes consistent units. Choose a unit system and maintain consistency.
+tunable_parameters:
+- name: mesh_parameters
+  path: inputs.record1
+  type: int
+  notes: Mesh configuration (elements, nodes, divisions)
+- name: material_properties
+  path: inputs.record2.prop
+  type: real
+  notes: Material properties (E, nu, density, etc.)
+- name: applied_loads
+  path: inputs.record6
+  type: real
+  notes: Applied nodal or distributed loads
+input_schema:
+  file_type: .dat
+  reads_in_order:
+  - record: 1
+    fortran_read: READ(10,*)nels,np_types
+    variables:
+    - nels
+    - np_types
+  - record: 2
+    fortran_read: READ(10,*)prop
+    variables:
+    - prop
+  - record: 3
+    fortran_read: IF(np_types>1)READ(10,*)etype
+    variables:
+    - etype
+    condition: only if np_types>1
+  - record: 4
+    fortran_read: READ(10,*)ell
+    variables:
+    - ell
+  - record: 5
+    fortran_read: READ(10,*)nr,(k,nf(:,k),i=1,nr)
+    variables:
+    - nr
+    - (k
+    - 'nf(:'
+    - k)
+    - i=1
+    - nr)
+  - record: 6
+    fortran_read: READ(10,*)loaded_nodes,(k,loads(nf(:,k)),i=1,loaded_nodes)
+    variables:
+    - loaded_nodes
+    - (k
+    - 'loads(nf(:'
+    - k))
+    - i=1
+    - loaded_nodes)
+  - record: 7
+    fortran_read: READ(10,*)fixed_freedoms
+    variables:
+    - fixed_freedoms
+  - record: 8
+    fortran_read: READ(10,*)(node(i),value(i),i=1,fixed_freedoms)
+    variables:
+    - (node(i)
+    - value(i)
+    - i=1
+    - fixed_freedoms)
+inputs:
+  working_directory: executable/chap04
+  basename: p41_1
+  dat_file: executable/chap04/p41_1.dat
+  record1:
+    raw_value: 4  1
+    description: Values for nels, np_types
+  record2:
+    raw_value: '100000.0'
+    description: Values for prop
+  record3:
+    raw_value: 0.25  0.25  0.25  0.25
+    description: Values for etype
+  record4:
+    raw_value: '1'
+    description: Values for ell
+  record5:
+    raw_value: 5 0
+    description: Values for nr, (k, nf(:, k), i=1, nr)
+  record6:
+    raw_value: '5'
+    description: Values for loaded_nodes, (k, loads(nf(:, k)), i=1, loaded_nodes)
+  record7:
+    raw_value: 1 -0.625  2 -1.25  3 -1.25  4 -1.25  5 -0.625
+    description: Values for fixed_freedoms
+  record8:
+    raw_value: '0'
+    description: Values for (node(i), value(i), i=1, fixed_freedoms)
+outputs:
+  output_directory: executable/chap04
+  files_expected:
+  - p41_1.res
+  - p41_1.msh
+how_to_run:
+  linux:
+  - cd ~/Downloads/pfem5/5th_ed/executable/chap04
+  - printf "p41_1\n" | ~/Downloads/pfem5/5th_ed/build/bin/p41
+  matlab:
+  - pfem_root = '~/Downloads/pfem5/5th_ed';
+  - '[status, outputs] = pfem_runner(pfem_root, ''chap04'', ''p41'', ''p41_1'');'
+notes:
+- Program prompts for the base name of the .dat file (do not type the .dat extension).
+- This case has 8 READ(10,*) statements reading from the .dat file.
