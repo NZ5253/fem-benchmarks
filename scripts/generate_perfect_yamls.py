@@ -105,7 +105,7 @@ def read_dat_file(dat_file_path):
         return f"[Error reading .dat file: {e}]"
 
 def generate_perfect_yaml_with_api(case_info, template_yaml, api_key):
-    """Generate perfect YAML using Anthropic API."""
+    """Generate perfect YAML from source analysis."""
     if not HAS_ANTHROPIC:
         print("  Error: anthropic module not installed. Install with: pip install anthropic")
         return None
@@ -275,6 +275,7 @@ def main():
     api_key = args.api_key or os.environ.get('ANTHROPIC_API_KEY')
     if not api_key and not args.dry_run:
         print("Error: API key required. Set ANTHROPIC_API_KEY env var or use --api-key")
+        print("       Get your key from: https://console.anthropic.com/")
         return 1
 
     # Find cases to process
