@@ -65,7 +65,7 @@ fem-benchmarks/
 │   ├── pfem_parametric_sweep.m    # Parametric study framework
 │   └── README.md
 ├── docs/                # Documentation
-│   └── HANDOVER.md                # Complete technical handover
+│   └── GUIDE.md                   # Complete usage guide
 └── README.md            # This file
 ```
 
@@ -99,7 +99,7 @@ git commit -m "Add Chapter 5 perfect YAML benchmarks"
 git push
 ```
 
-See [docs/GENERATING_YAMLS.md](docs/GENERATING_YAMLS.md) for detailed instructions.
+See [docs/GUIDE.md](docs/GUIDE.md) for complete instructions.
 
 ### Parametric Study Example
 
@@ -117,9 +117,9 @@ results = pfem_parametric_sweep('~/Downloads/pfem5/5th_ed', 'chap05', ...
 
 ## Key Features
 
-### 1. Perfect YAML Generation
-The `generate_perfect_yamls.py` script:
-- Analyzes Fortran source code to extract READ(10,*) statements with line numbers
+### 1. YAML Generation
+The `generate_perfect_yamls.py` script creates comprehensive benchmark files:
+- Extracts READ(10,*) statements with line numbers from Fortran source
 - Parses .dat files to document input values organized by record
 - Identifies tunable parameters for parametric studies (E, nu, loads, mesh)
 - Generates complete YAML specifications following p54_1.yaml template
@@ -133,8 +133,7 @@ The `generate_perfect_yamls.py` script:
 
 ## Documentation
 
-- **[docs/GENERATING_YAMLS.md](docs/GENERATING_YAMLS.md)**: Complete guide for generating perfect YAMLs
-- **[docs/HANDOVER.md](docs/HANDOVER.md)**: Complete technical handover with detailed explanations
+- **[docs/GUIDE.md](docs/GUIDE.md)**: Complete usage guide with examples
 - **[matlab/README.md](matlab/README.md)**: MATLAB interface guide
 - **YAML files**: Each benchmark has inline documentation
 
