@@ -1,8 +1,12 @@
 #!/usr/bin/env python3
 """
-Generate YAML benchmark files from PFEM bundle folders.
+[DEPRECATED] Generate YAML benchmark files from PFEM bundle folders.
 
-Scans bundle folders, extracts information, and creates structured YAML files.
+This script is deprecated. Use generate_perfect_yamls.py instead, which works
+directly with PFEM source code and data files without requiring bundle collection.
+
+New script: scripts/generate_perfect_yamls.py
+Documentation: docs/GENERATING_YAMLS.md
 
 Usage:
     python3 scripts/generate_yaml_from_bundles.py [--chapter chapXX] [--case case_name] [--dry-run]

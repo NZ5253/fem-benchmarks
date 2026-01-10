@@ -57,8 +57,7 @@ fem-benchmarks/
 │       └── chap11/      # Chapter 11: 8 cases
 ├── scripts/             # Build and utility scripts
 │   ├── pfem_build_and_run.sh        # Build & execute PFEM programs
-│   ├── pfem_collect_all.sh          # Collect bundles for YAML generation
-│   ├── generate_yaml_from_bundles.py # YAML generator
+│   ├── generate_perfect_yamls.py    # Perfect YAML generator (primary tool)
 │   ├── verify_yamls.py              # YAML validation
 │   └── git_publish.sh               # Git helper
 ├── matlab/              # MATLAB interface
@@ -85,19 +84,28 @@ Example: [benchmarks/pfem5/chap05/p51_3.yaml](benchmarks/pfem5/chap05/p51_3.yaml
 
 ## Workflow
 
-### Complete Pipeline (Generate All YAMLs)
+### Generate Perfect YAMLs
 
 ```bash
-# Step 1: Collect bundles and run all cases
-scripts/pfem_collect_all.sh --pfem-root ~/Downloads/pfem5/5th_ed --all-chaps --run --rebuild-first
+# Install dependencies
+pip install anthropic
 
+# Set API key
+export ANTHROPIC_API_KEY='your-key-here'
 
-# Step 3: Verify all YAMLs
-python3 scripts/verify_yamls.py
+# Generate YAMLs for a chapter
+python3 scripts/generate_perfect_yamls.py --chapter chap05
 
-# Step 4: Commit and push
-scripts/git_publish.sh "Add complete PFEM benchmark catalogue"
+# Verify generated YAMLs
+python3 scripts/verify_yamls.py benchmarks/pfem5/chap05/*.yaml
+
+# Commit changes
+git add benchmarks/pfem5/chap05/
+git commit -m "Add Chapter 5 perfect YAML benchmarks"
+git push
 ```
+
+See [docs/GENERATING_YAMLS.md](docs/GENERATING_YAMLS.md) for detailed instructions.
 
 ### Parametric Study Example
 
@@ -115,23 +123,16 @@ results = pfem_parametric_sweep('~/Downloads/pfem5/5th_ed', 'chap05', ...
 
 ## Key Features
 
-### 1. Bundle Collection
-The `pfem_collect_all.sh` script:
-- Finds all `.dat` datasets across chapters
-- Compiles and runs each program
-- Extracts `READ(10,*)` statements with context
-- Collects outputs for verification
-- Creates self-contained "evidence packs"
+### 1. Perfect YAML Generation
+The `generate_perfect_yamls.py` script:
+- Analyzes Fortran source code to extract READ(10,*) statements with line numbers
+- Parses .dat files to document input values organized by record
+- Identifies tunable parameters for parametric studies (E, nu, loads, mesh)
+- Generates complete YAML specifications following p54_1.yaml template
+- Includes input_schema, tunable_parameters, and parsed inputs sections
+- Uses Anthropic API for intelligent YAML generation
 
-### 2. YAML Generation
-The `generate_yaml_from_bundles.py` script:
-- Analyzes Fortran source code structure
-- Extracts FEM metadata (element types, physics, etc.)
-- Parses dataset files to document input values
-- Identifies tunable parameters for parametric studies
-- Generates structured, validated YAML files
-
-### 3. MATLAB Integration
+### 2. MATLAB Integration
 - **pfem_runner.m**: Execute any PFEM case from MATLAB
 - **pfem_parametric_sweep.m**: Framework for parameter studies
 - Result parsing and organization
@@ -139,6 +140,7 @@ The `generate_yaml_from_bundles.py` script:
 
 ## Documentation
 
+- **[docs/GENERATING_YAMLS.md](docs/GENERATING_YAMLS.md)**: Complete guide for generating perfect YAMLs
 - **[docs/HANDOVER.md](docs/HANDOVER.md)**: Complete technical handover with detailed explanations
 - **[matlab/README.md](matlab/README.md)**: MATLAB interface guide
 - **YAML files**: Each benchmark has inline documentation
