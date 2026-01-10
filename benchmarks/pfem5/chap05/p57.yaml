@@ -1,41 +1,259 @@
 id: pfem5_ch05_p57_p57
-title: "PFEM Program 5.7 (p57) — 3D elastic-plastic analysis dataset p57"
+title: "PFEM Program 5.7 (p57) — 3D elastic-plastic analysis — case p57"
+
 purpose: >
   3D elastic-plastic analysis using hexahedral elements with von Mises yield criterion.
-source:
-  book: "Programming the Finite Element Method (5th ed.)"
-  chapter: 5
-  program: "p57"
+  Uses a structured mesh with 20-node hexahedral elements, conjugate gradient solver,
+  and incremental loading for plasticity.
+
+authors:
+  source:
+    book: "Programming the Finite Element Method"
+    edition: "5th"
+    chapter: 5
+    program: "p57"
+    dataset: "p57"
+  entry:
+    created_by: "Naeem"
+    created_on: "2026-01-09"
+    verified_platform: "Linux (gfortran)"
+
 code:
   language: "Fortran (F2003)"
   source_file: "source/chap05/p57.f03"
   uses_modules: ["main", "geom"]
+  io_reads_from_unit10:
+    - {line: 51, stmt: "READ(10,*)nod,nxe,nye,nze,nip,cg_tol,cg_limit,np_types"}
+    - {line: 61, stmt: "READ(10,*)prop"}
+    - {line: 63, stmt: "IF(np_types>1)READ(10,*)etype"}
+    - {line: 64, stmt: "READ(10,*)x_coords,y_coords,z_coords"}
+    - {line: 66, stmt: "READ(10,*)nr,(k,nf(:,k),i=1,nr)"}
+    - {line: 108, stmt: "READ(10,*)loaded_nodes,(k,loads(nf(:,k)),i=1,loaded_nodes)"}
+    - {line: 110, stmt: "READ(10,*)fixed_freedoms"}
+    - {line: 114, stmt: "READ(10,*)(node(i),sense(i),value(i),i=1,fixed_freedoms)"}
+
 fem:
-  dimension: 2
-  formulation: "20"
-  element_family: "hexahedron"
-  element_nodes: 8
+  dimension: 3
+  formulation:
+    code_supports: ["3D"]
+    this_case: "3D"
+  dof:
+    per_node: 3
+    names: ["x-disp", "y-disp", "z-disp"]
+    dof_indexing: {1: "x-disp", 2: "y-disp", 3: "z-disp"}
+  element:
+    family: "hexahedron"
+    nodes_per_element: 20
+    supported:
+      hexahedra_nodes: [8, 14, 20]
+
 analysis:
   physics: "elastic-plastic mechanics"
   type: "nonlinear"
   regime: "steady-state"
+  solver: "conjugate gradient (PCG)"
+  plasticity:
+    model: "von Mises"
+    notes: "Incremental elastic-plastic analysis with hardening"
+
+units:
+  system: "consistent"
+  notes: >
+    PFEM assumes consistent units (not enforced). Pick a unit system and keep geometry,
+    E, and loads consistent.
+
+tunable_parameters:
+  - name: youngs_modulus_E
+    path: "inputs.record2.material.E.value"
+    type: "real"
+    unit_category: "stress"
+    notes: "Material stiffness. Very common sweep parameter."
+    suggested_range: [1.0e4, 1.0e9]
+
+  - name: poisson_ratio_nu
+    path: "inputs.record2.material.nu.value"
+    type: "real"
+    unit_category: "dimensionless"
+    notes: "Material parameter, often kept fixed unless studying sensitivity."
+    suggested_range: [0.0, 0.49]
+
+  - name: nodal_loads_values
+    path: "inputs.record6.nodal_loads[*].(load_dof1,load_dof2,load_dof3)"
+    type: "real"
+    unit_category: "force"
+    notes: "Applied nodal forces for incremental loading."
+
+  - name: cg_tolerance
+    path: "inputs.record1.cg_tol"
+    type: "real"
+    unit_category: "-"
+    notes: "Convergence tolerance for conjugate gradient solver."
+
+  - name: cg_iterations
+    path: "inputs.record1.cg_limit"
+    type: "int"
+    unit_category: "-"
+    notes: "Maximum number of conjugate gradient iterations."
+
+  - name: mesh_density
+    path: "inputs.record1.(nxe,nye,nze)"
+    type: "int"
+    unit_category: "-"
+    notes: >
+      Structural knob: changes mesh resolution. If you change nxe/nye/nze, x_coords, y_coords,
+      and z_coords must also match lengths (nxe+1), (nye+1), and (nze+1).
+
+input_schema:
+  file_type: ".dat"
+  reads_in_order:
+    - record: 1
+      fortran_read: "READ(10,*)nod,nxe,nye,nze,nip,cg_tol,cg_limit,np_types"
+      fields:
+        - {name: nod, type: int, description: "Nodes per element"}
+        - {name: nxe, type: int, description: "Elements in x-direction"}
+        - {name: nye, type: int, description: "Elements in y-direction"}
+        - {name: nze, type: int, description: "Elements in z-direction"}
+        - {name: nip, type: int, description: "Number of integration points"}
+        - {name: cg_tol, type: real, description: "Conjugate gradient tolerance"}
+        - {name: cg_limit, type: int, description: "Max CG iterations"}
+        - {name: np_types, type: int, description: "Number of property types"}
+
+    - record: 2
+      fortran_read: "READ(10,*)prop"
+      fields:
+        - name: prop
+          type: "real_matrix"
+          shape: "(nprops=2, np_types)"
+          description: "[E, nu] per material type"
+
+    - record: 3
+      fortran_read: "IF(np_types>1)READ(10,*)etype"
+      condition: "only if np_types > 1"
+      fields:
+        - {name: etype, type: "int_array", shape: "(nels)", description: "Element type array"}
+
+    - record: 4
+      fortran_read: "READ(10,*)x_coords,y_coords,z_coords"
+      fields:
+        - {name: x_coords, type: "real_array", shape: "(nxe+1)"}
+        - {name: y_coords, type: "real_array", shape: "(nye+1)"}
+        - {name: z_coords, type: "real_array", shape: "(nze+1)"}
+
+    - record: 5
+      fortran_read: "READ(10,*)nr,(k,nf(:,k),i=1,nr)"
+      fields:
+        - {name: nr, type: int}
+        - name: bc_table
+          type: "table"
+          columns:
+            - {name: node, type: int}
+            - {name: nf_flag_dof1, type: int, allowed: [0, 1]}
+            - {name: nf_flag_dof2, type: int, allowed: [0, 1]}
+            - {name: nf_flag_dof3, type: int, allowed: [0, 1]}
+          notes: "Typically 0=fixed, 1=free before numbering by formnf()."
+
+    - record: 6
+      fortran_read: "READ(10,*)loaded_nodes,(k,loads(nf(:,k)),i=1,loaded_nodes)"
+      fields:
+        - {name: loaded_nodes, type: int}
+        - name: nodal_loads
+          type: "table"
+          columns:
+            - {name: node, type: int}
+            - {name: load_dof1, type: real}
+            - {name: load_dof2, type: real}
+            - {name: load_dof3, type: real}
+
+    - record: 7
+      fortran_read: "READ(10,*)fixed_freedoms"
+      fields:
+        - {name: fixed_freedoms, type: int}
+
+    - record: 8
+      fortran_read: "READ(10,*)(node(i),sense(i),value(i),i=1,fixed_freedoms)"
+      condition: "only if fixed_freedoms > 0"
+      fields:
+        - name: prescribed_displacements
+          type: "table"
+          columns:
+            - {name: node, type: int}
+            - {name: sense_dof, type: int, allowed: [1, 2, 3]}
+            - {name: value, type: real}
+
 inputs:
   working_directory: "executable/chap05"
   basename: "p57"
   dat_file: "executable/chap05/p57.dat"
+
+  record1:
+    nod: 20
+    nxe: 20
+    nye: 60
+    nze: 40
+    nip: 8
+    cg_tol: 1.0e-5
+    cg_limit: 2000
+    np_types: 1
+
+  record2:
+    material:
+      E: {value: 100.0, unit_category: "stress"}
+      nu: {value: 0.3, unit_category: "dimensionless"}
+
+  record3:
+    etype: []
+
+  record4:
+    x_coords:
+      description: "21 x-coordinates from 0.0 to 0.5 (21 nodes)"
+      unit_category: "length"
+      note: "Full coordinate data available in p57.dat file"
+    y_coords:
+      description: "61 y-coordinates from 0.0 to 3.0 (61 nodes)"
+      unit_category: "length"
+      note: "Full coordinate data available in p57.dat file"
+    z_coords:
+      description: "41 z-coordinates from 0.0 to -2.0 (41 nodes)"
+      unit_category: "length"
+      note: "Full coordinate data available in p57.dat file"
+
+  record5:
+    nr: 13441
+    bc_table:
+      description: "Large boundary condition table (13441 nodes)"
+      note: "Full boundary condition data available in p57.dat file"
+
+  record6:
+    loaded_nodes: 21
+    nodal_loads:
+      description: "21 loaded nodes with vertical loads"
+      note: "Full nodal load data available in p57.dat file"
+
+  record7:
+    fixed_freedoms: 0
+
+  record8:
+    prescribed_displacements: []
+
 outputs:
-  files_expected:
+  output_directory: "executable/chap05"
+  files_created_confirmed:
     - "p57.res"
     - "p57.msh"
     - "p57.vec"
     - "p57.dis"
+
 how_to_run:
-  linux_build:
-    notes: "Build PFEM library modules (main, geom, etc.) then compile p57."
-    executable: "build/bin/p57"
-  linux_run:
-    commands:
-      - "cd ~/Downloads/pfem5/5th_ed/executable/chap05"
-      - 'printf "p57\n" | ~/Downloads/pfem5/5th_ed/build/bin/p57'
+  linux:
+    - "cd ~/Downloads/pfem5/5th_ed/executable/chap05"
+    - 'printf "p57\n" | ~/Downloads/pfem5/5th_ed/build/bin/p57'
+  matlab:
+    - "pfem_root = '~/Downloads/pfem5/5th_ed';"
+    - "[status, outputs] = pfem_runner(pfem_root, 'chap05', 'p57', 'p57');"
+
 notes:
   - "Program prompts for the base name of the .dat file (do not type the .dat extension)."
+  - "This is a large-scale 3D elastic-plastic problem with incremental loading."
+  - "Uses von Mises yield criterion with hardening."
+  - "Uses conjugate gradient solver for large systems (48,000 elements)."
+  - "For parametric studies in MATLAB, use the paths in tunable_parameters to modify specific values."

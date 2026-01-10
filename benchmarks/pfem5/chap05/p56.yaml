@@ -1,41 +1,253 @@
 id: pfem5_ch05_p56_p56
-title: "PFEM Program 5.6 (p56) — 3D strain of elastic solid dataset p56"
+title: "PFEM Program 5.6 (p56) — 3D strain of elastic solid — case p56"
+
 purpose: >
   3D analysis of elastic solids using hexahedral (brick) isoparametric elements.
-source:
-  book: "Programming the Finite Element Method (5th ed.)"
-  chapter: 5
-  program: "p56"
+  Uses a structured mesh with 20-node hexahedral elements and conjugate gradient solver.
+
+authors:
+  source:
+    book: "Programming the Finite Element Method"
+    edition: "5th"
+    chapter: 5
+    program: "p56"
+    dataset: "p56"
+  entry:
+    created_by: "Naeem"
+    created_on: "2026-01-09"
+    verified_platform: "Linux (gfortran)"
+
 code:
   language: "Fortran (F2003)"
   source_file: "source/chap05/p56.f03"
   uses_modules: ["main", "geom"]
+  io_reads_from_unit10:
+    - {line: 31, stmt: "READ(10,*)nod,nxe,nye,nze,nip,cg_tol,cg_limit,np_types"}
+    - {line: 40, stmt: "READ(10,*)prop"}
+    - {line: 42, stmt: "IF(np_types>1)READ(10,*)etype"}
+    - {line: 43, stmt: "READ(10,*)x_coords,y_coords,z_coords"}
+    - {line: 45, stmt: "READ(10,*)nr,(k,nf(:,k),i=1,nr)"}
+    - {line: 81, stmt: "READ(10,*)loaded_nodes,(k,loads(nf(:,k)),i=1,loaded_nodes)"}
+    - {line: 82, stmt: "READ(10,*)fixed_freedoms"}
+    - {line: 86, stmt: "READ(10,*)(node(i),sense(i),value(i),i=1,fixed_freedoms)"}
+
 fem:
-  dimension: 2
-  formulation: "20"
-  element_family: "hexahedron"
-  element_nodes: 8
+  dimension: 3
+  formulation:
+    code_supports: ["3D"]
+    this_case: "3D"
+  dof:
+    per_node: 3
+    names: ["x-disp", "y-disp", "z-disp"]
+    dof_indexing: {1: "x-disp", 2: "y-disp", 3: "z-disp"}
+  element:
+    family: "hexahedron"
+    nodes_per_element: 20
+    supported:
+      hexahedra_nodes: [8, 14, 20]
+
 analysis:
   physics: "linear elasticity"
   type: "linear"
   regime: "steady-state"
+  solver: "conjugate gradient (PCG)"
+
+units:
+  system: "consistent"
+  notes: >
+    PFEM assumes consistent units (not enforced). Pick a unit system and keep geometry,
+    E, and loads consistent.
+
+tunable_parameters:
+  - name: youngs_modulus_E
+    path: "inputs.record2.material.E.value"
+    type: "real"
+    unit_category: "stress"
+    notes: "Material stiffness. Very common sweep parameter."
+    suggested_range: [1.0e4, 1.0e9]
+
+  - name: poisson_ratio_nu
+    path: "inputs.record2.material.nu.value"
+    type: "real"
+    unit_category: "dimensionless"
+    notes: "Material parameter, often kept fixed unless studying sensitivity."
+    suggested_range: [0.0, 0.49]
+
+  - name: nodal_loads_values
+    path: "inputs.record6.nodal_loads[*].(load_dof1,load_dof2,load_dof3)"
+    type: "real"
+    unit_category: "force"
+    notes: "Applied nodal forces."
+
+  - name: cg_tolerance
+    path: "inputs.record1.cg_tol"
+    type: "real"
+    unit_category: "-"
+    notes: "Convergence tolerance for conjugate gradient solver."
+
+  - name: cg_iterations
+    path: "inputs.record1.cg_limit"
+    type: "int"
+    unit_category: "-"
+    notes: "Maximum number of conjugate gradient iterations."
+
+  - name: mesh_density
+    path: "inputs.record1.(nxe,nye,nze)"
+    type: "int"
+    unit_category: "-"
+    notes: >
+      Structural knob: changes mesh resolution. If you change nxe/nye/nze, x_coords, y_coords,
+      and z_coords must also match lengths (nxe+1), (nye+1), and (nze+1).
+
+input_schema:
+  file_type: ".dat"
+  reads_in_order:
+    - record: 1
+      fortran_read: "READ(10,*)nod,nxe,nye,nze,nip,cg_tol,cg_limit,np_types"
+      fields:
+        - {name: nod, type: int, description: "Nodes per element"}
+        - {name: nxe, type: int, description: "Elements in x-direction"}
+        - {name: nye, type: int, description: "Elements in y-direction"}
+        - {name: nze, type: int, description: "Elements in z-direction"}
+        - {name: nip, type: int, description: "Number of integration points"}
+        - {name: cg_tol, type: real, description: "Conjugate gradient tolerance"}
+        - {name: cg_limit, type: int, description: "Max CG iterations"}
+        - {name: np_types, type: int, description: "Number of property types"}
+
+    - record: 2
+      fortran_read: "READ(10,*)prop"
+      fields:
+        - name: prop
+          type: "real_matrix"
+          shape: "(nprops=2, np_types)"
+          description: "[E, nu] per material type"
+
+    - record: 3
+      fortran_read: "IF(np_types>1)READ(10,*)etype"
+      condition: "only if np_types > 1"
+      fields:
+        - {name: etype, type: "int_array", shape: "(nels)", description: "Element type array"}
+
+    - record: 4
+      fortran_read: "READ(10,*)x_coords,y_coords,z_coords"
+      fields:
+        - {name: x_coords, type: "real_array", shape: "(nxe+1)"}
+        - {name: y_coords, type: "real_array", shape: "(nye+1)"}
+        - {name: z_coords, type: "real_array", shape: "(nze+1)"}
+
+    - record: 5
+      fortran_read: "READ(10,*)nr,(k,nf(:,k),i=1,nr)"
+      fields:
+        - {name: nr, type: int}
+        - name: bc_table
+          type: "table"
+          columns:
+            - {name: node, type: int}
+            - {name: nf_flag_dof1, type: int, allowed: [0, 1]}
+            - {name: nf_flag_dof2, type: int, allowed: [0, 1]}
+            - {name: nf_flag_dof3, type: int, allowed: [0, 1]}
+          notes: "Typically 0=fixed, 1=free before numbering by formnf()."
+
+    - record: 6
+      fortran_read: "READ(10,*)loaded_nodes,(k,loads(nf(:,k)),i=1,loaded_nodes)"
+      fields:
+        - {name: loaded_nodes, type: int}
+        - name: nodal_loads
+          type: "table"
+          columns:
+            - {name: node, type: int}
+            - {name: load_dof1, type: real}
+            - {name: load_dof2, type: real}
+            - {name: load_dof3, type: real}
+
+    - record: 7
+      fortran_read: "READ(10,*)fixed_freedoms"
+      fields:
+        - {name: fixed_freedoms, type: int}
+
+    - record: 8
+      fortran_read: "READ(10,*)(node(i),sense(i),value(i),i=1,fixed_freedoms)"
+      condition: "only if fixed_freedoms > 0"
+      fields:
+        - name: prescribed_displacements
+          type: "table"
+          columns:
+            - {name: node, type: int}
+            - {name: sense_dof, type: int, allowed: [1, 2, 3]}
+            - {name: value, type: real}
+
 inputs:
   working_directory: "executable/chap05"
   basename: "p56"
   dat_file: "executable/chap05/p56.dat"
+
+  record1:
+    nod: 20
+    nxe: 1
+    nye: 3
+    nze: 2
+    nip: 8
+    cg_tol: 1.0e-5
+    cg_limit: 200
+    np_types: 2
+
+  record2:
+    materials:
+      - {E: {value: 100.0, unit_category: "stress"}, nu: {value: 0.3, unit_category: "dimensionless"}}
+      - {E: {value: 50.0, unit_category: "stress"}, nu: {value: 0.3, unit_category: "dimensionless"}}
+
+  record3:
+    etype:
+      description: "Element type assignment for multi-material mesh"
+      note: "Full etype data available in p56.dat file"
+
+  record4:
+    x_coords: {values: [0.0, 0.5], unit_category: "length"}
+    y_coords: {values: [0.0, 1.0, 2.0, 3.0], unit_category: "length"}
+    z_coords: {values: [0.0, -1.0, -2.0], unit_category: "length"}
+
+  record5:
+    nr: 46
+    bc_table:
+      description: "46 nodes with boundary conditions"
+      note: "Full boundary condition data available in p56.dat file"
+
+  record6:
+    loaded_nodes: 8
+    nodal_loads:
+      - {node: 1, load_dof1: 0.0, load_dof2: 0.0, load_dof3: 0.0417}
+      - {node: 2, load_dof1: 0.0, load_dof2: 0.0, load_dof3: -0.1667}
+      - {node: 3, load_dof1: 0.0, load_dof2: 0.0, load_dof3: 0.0417}
+      - {node: 14, load_dof1: 0.0, load_dof2: 0.0, load_dof3: -0.1667}
+      - {node: 15, load_dof1: 0.0, load_dof2: 0.0, load_dof3: -0.1667}
+      - {node: 20, load_dof1: 0.0, load_dof2: 0.0, load_dof3: 0.0417}
+      - {node: 21, load_dof1: 0.0, load_dof2: 0.0, load_dof3: -0.1667}
+      - {node: 22, load_dof1: 0.0, load_dof2: 0.0, load_dof3: 0.0417}
+
+  record7:
+    fixed_freedoms: 0
+
+  record8:
+    prescribed_displacements: []
+
 outputs:
-  files_expected:
+  output_directory: "executable/chap05"
+  files_created_confirmed:
     - "p56.res"
     - "p56.msh"
     - "p56.vec"
     - "p56.dis"
+
 how_to_run:
-  linux_build:
-    notes: "Build PFEM library modules (main, geom, etc.) then compile p56."
-    executable: "build/bin/p56"
-  linux_run:
-    commands:
-      - "cd ~/Downloads/pfem5/5th_ed/executable/chap05"
-      - 'printf "p56\n" | ~/Downloads/pfem5/5th_ed/build/bin/p56'
+  linux:
+    - "cd ~/Downloads/pfem5/5th_ed/executable/chap05"
+    - 'printf "p56\n" | ~/Downloads/pfem5/5th_ed/build/bin/p56'
+  matlab:
+    - "pfem_root = '~/Downloads/pfem5/5th_ed';"
+    - "[status, outputs] = pfem_runner(pfem_root, 'chap05', 'p56', 'p56');"
+
 notes:
   - "Program prompts for the base name of the .dat file (do not type the .dat extension)."
+  - "Uses conjugate gradient solver for large 3D problems."
+  - "This case has multiple material types (np_types=2)."
+  - "For parametric studies in MATLAB, use the paths in tunable_parameters to modify specific values."

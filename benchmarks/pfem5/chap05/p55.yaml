@@ -1,41 +1,283 @@
 id: pfem5_ch05_p55_p55
-title: "PFEM Program 5.5 (p55) — Plane strain consolidation dataset p55"
+title: "PFEM Program 5.5 (p55) — Plane strain consolidation — case p55"
+
 purpose: >
   Plane strain consolidation analysis (coupled flow-deformation) using Biot theory.
-source:
-  book: "Programming the Finite Element Method (5th ed.)"
-  chapter: 5
-  program: "p55"
+  Solves coupled solid mechanics and pore pressure equations on a structured mesh
+  using 8-node quadrilateral elements.
+
+authors:
+  source:
+    book: "Programming the Finite Method"
+    edition: "5th"
+    chapter: 5
+    program: "p55"
+    dataset: "p55"
+  entry:
+    created_by: "Naeem"
+    created_on: "2026-01-09"
+    verified_platform: "Linux (gfortran)"
+
 code:
   language: "Fortran (F2003)"
   source_file: "source/chap05/p55.f03"
   uses_modules: ["main", "geom"]
+  io_reads_from_unit10:
+    - {line: 27, stmt: "READ(10,*)type_2d,element,nod,dir,nxe,nye,nip,np_types"}
+    - {line: 37, stmt: "READ(10,*)prop"}
+    - {line: 40, stmt: "READ(10,*)x_coords,y_coords"}
+    - {line: 42, stmt: "READ(10,*)nr,(k,nf(:,k),i=1,nr)"}
+    - {line: 45, stmt: "READ(10,*)dtemp"}
+    - {line: 98, stmt: "READ(10,*)nspr"}
+    - {line: 101, stmt: "READ(10,*)(spno(i),spse(i),spva(i),i=1,nspr)"}
+    - {line: 108, stmt: "READ(10,*)loaded_nodes,(k,loads(nf(:,k)),i=1,loaded_nodes)"}
+    - {line: 110, stmt: "READ(10,*)fixed_freedoms"}
+    - {line: 114, stmt: "READ(10,*)(node(i),sense(i),value(i),i=1,fixed_freedoms)"}
+
 fem:
   dimension: 2
-  formulation: "plane"
-  element_family: "quadrilateral"
-  element_nodes: 8
+  formulation:
+    code_supports: ["plane", "axisymmetric"]
+    this_case: "plane"
+  dof:
+    per_node: 3
+    names: ["x-disp", "y-disp", "pore-pressure"]
+    dof_indexing: {1: "x-disp", 2: "y-disp", 3: "pore-pressure"}
+    notes: "Consolidation couples displacement (2 DOF) and pore pressure (1 DOF)"
+  element:
+    family: "quadrilateral"
+    nodes_per_element: 8
+    supported:
+      triangles_nodes: [3, 6, 10, 15]
+      quads_nodes: [4, 8, 9]
+
 analysis:
   physics: "consolidation"
   type: "linear"
   regime: "steady-state"
+  special_features: "Coupled Biot consolidation (displacement + pore pressure)"
+
+units:
+  system: "consistent"
+  notes: >
+    PFEM assumes consistent units (not enforced). Pick a unit system and keep geometry,
+    E, and loads consistent.
+
+tunable_parameters:
+  - name: youngs_modulus_E
+    path: "inputs.record2.material.E.value"
+    type: "real"
+    unit_category: "stress"
+    notes: "Material stiffness. Very common sweep parameter."
+    suggested_range: [1.0e4, 1.0e9]
+
+  - name: poisson_ratio_nu
+    path: "inputs.record2.material.nu.value"
+    type: "real"
+    unit_category: "dimensionless"
+    notes: "Material parameter, often kept fixed unless studying sensitivity."
+    suggested_range: [0.0, 0.49]
+
+  - name: permeability_kx
+    path: "inputs.record2.material.kx.value"
+    type: "real"
+    unit_category: "permeability"
+    notes: "Hydraulic conductivity in x-direction."
+
+  - name: permeability_ky
+    path: "inputs.record2.material.ky.value"
+    type: "real"
+    unit_category: "permeability"
+    notes: "Hydraulic conductivity in y-direction."
+
+  - name: time_step
+    path: "inputs.record5.dtemp"
+    type: "real_array"
+    unit_category: "time"
+    notes: "Time stepping parameters for consolidation analysis."
+
+  - name: seepage_pore_pressures
+    path: "inputs.record7.seepage_nodes[*].value"
+    type: "real"
+    unit_category: "stress"
+    notes: "Prescribed seepage pore pressure values."
+
+  - name: mesh_density
+    path: "inputs.record1.(nxe,nye)"
+    type: "int"
+    unit_category: "-"
+    notes: >
+      Structural knob: changes mesh resolution. If you change nxe/nye, x_coords and y_coords
+      must also match lengths (nxe+1) and (nye+1).
+
+input_schema:
+  file_type: ".dat"
+  reads_in_order:
+    - record: 1
+      fortran_read: "READ(10,*)type_2d,element,nod,dir,nxe,nye,nip,np_types"
+      fields:
+        - {name: type_2d, type: string, allowed: ["plane", "axisymmetric"]}
+        - {name: element, type: string, allowed: ["triangle", "quadrilateral"]}
+        - {name: nod, type: int}
+        - {name: dir, type: string, allowed: ["x", "y", "r", "z"]}
+        - {name: nxe, type: int}
+        - {name: nye, type: int}
+        - {name: nip, type: int}
+        - {name: np_types, type: int}
+
+    - record: 2
+      fortran_read: "READ(10,*)prop"
+      fields:
+        - name: prop
+          type: "real_matrix"
+          shape: "(nprops=4, np_types)"
+          description: "[E, nu, kx, ky] per material type"
+
+    - record: 3
+      fortran_read: "READ(10,*)x_coords, y_coords"
+      fields:
+        - {name: x_coords, type: "real_array", shape: "(nxe+1)"}
+        - {name: y_coords, type: "real_array", shape: "(nye+1)"}
+
+    - record: 4
+      fortran_read: "READ(10,*)nr,(k,nf(:,k),i=1,nr)"
+      fields:
+        - {name: nr, type: int}
+        - name: bc_table
+          type: "table"
+          columns:
+            - {name: node, type: int}
+            - {name: nf_flag_dof1, type: int, allowed: [0, 1]}
+            - {name: nf_flag_dof2, type: int, allowed: [0, 1]}
+            - {name: nf_flag_dof3, type: int, allowed: [0, 1]}
+          notes: "Typically 0=fixed, 1=free before numbering by formnf(). DOF3 is pore pressure."
+
+    - record: 5
+      fortran_read: "READ(10,*)dtemp"
+      fields:
+        - name: dtemp
+          type: "real_array"
+          description: "Time stepping array - consolidation time parameters"
+
+    - record: 6
+      fortran_read: "READ(10,*)nspr"
+      fields:
+        - {name: nspr, type: int, description: "Number of seepage nodes (prescribed pore pressure)"}
+
+    - record: 7
+      fortran_read: "READ(10,*)(spno(i),spse(i),spva(i),i=1,nspr)"
+      condition: "only if nspr > 0"
+      fields:
+        - name: seepage_nodes
+          type: "table"
+          columns:
+            - {name: node, type: int}
+            - {name: sense_dof, type: int, description: "DOF for seepage (usually 3=pore pressure)"}
+            - {name: value, type: real, description: "Prescribed pore pressure value"}
+
+    - record: 8
+      fortran_read: "READ(10,*)loaded_nodes,(k,loads(nf(:,k)),i=1,loaded_nodes)"
+      fields:
+        - {name: loaded_nodes, type: int}
+        - name: nodal_loads
+          type: "table"
+          columns:
+            - {name: node, type: int}
+            - {name: load_dof1, type: real}
+            - {name: load_dof2, type: real}
+            - {name: load_dof3, type: real}
+
+    - record: 9
+      fortran_read: "READ(10,*)fixed_freedoms"
+      fields:
+        - {name: fixed_freedoms, type: int}
+
+    - record: 10
+      fortran_read: "READ(10,*)(node(i),sense(i),value(i),i=1,fixed_freedoms)"
+      condition: "only if fixed_freedoms > 0"
+      fields:
+        - name: prescribed_displacements
+          type: "table"
+          columns:
+            - {name: node, type: int}
+            - {name: sense_dof, type: int, allowed: [1, 2, 3]}
+            - {name: value, type: real}
+
 inputs:
   working_directory: "executable/chap05"
   basename: "p55"
   dat_file: "executable/chap05/p55.dat"
+
+  record1:
+    type_2d: "plane"
+    element: "quadrilateral"
+    nod: 8
+    dir: "y"
+    nxe: 20
+    nye: 2
+    nip: 4
+    np_types: 1
+
+  record2:
+    material:
+      E: {value: 1.0e5, unit_category: "stress"}
+      nu: {value: 0.0, unit_category: "dimensionless"}
+      kx: {value: 1.0e-5, unit_category: "permeability"}
+      ky: {value: 1.0e-5, unit_category: "permeability"}
+
+  record3:
+    x_coords: {values: [0.0, 0.05, 0.10, 0.15, 0.20, 0.25, 0.30, 0.35, 0.40, 0.45, 0.50, 0.55, 0.60, 0.65, 0.70, 0.75, 0.80, 0.85, 0.90, 0.95, 1.00], unit_category: "length"}
+    y_coords: {values: [0.05, 0.0, -0.05], unit_category: "length"}
+
+  record4:
+    nr: 5
+    bc_table:
+      - {node: 1, nf_flag_dof1: 0, nf_flag_dof2: 0, nf_flag_dof3: 0}
+      - {node: 2, nf_flag_dof1: 0, nf_flag_dof2: 0, nf_flag_dof3: 0}
+      - {node: 3, nf_flag_dof1: 0, nf_flag_dof2: 0, nf_flag_dof3: 0}
+      - {node: 4, nf_flag_dof1: 0, nf_flag_dof2: 0, nf_flag_dof3: 0}
+      - {node: 5, nf_flag_dof1: 0, nf_flag_dof2: 0, nf_flag_dof3: 0}
+
+  record5:
+    dtemp:
+      description: "Time stepping matrix for consolidation (20 rows x 5 columns)"
+      note: "Full time stepping data available in p55.dat file"
+
+  record6:
+    nspr: 1
+
+  record7:
+    seepage_nodes:
+      - {node: 163, sense_dof: 2, value: 50.0}
+
+  record8:
+    loaded_nodes: 0
+    nodal_loads: []
+
+  record9:
+    fixed_freedoms: 0
+
+  record10:
+    prescribed_displacements: []
+
 outputs:
-  files_expected:
+  output_directory: "executable/chap05"
+  files_created_confirmed:
     - "p55.res"
     - "p55.msh"
     - "p55.vec"
     - "p55.dis"
+
 how_to_run:
-  linux_build:
-    notes: "Build PFEM library modules (main, geom, etc.) then compile p55."
-    executable: "build/bin/p55"
-  linux_run:
-    commands:
-      - "cd ~/Downloads/pfem5/5th_ed/executable/chap05"
-      - 'printf "p55\n" | ~/Downloads/pfem5/5th_ed/build/bin/p55'
+  linux:
+    - "cd ~/Downloads/pfem5/5th_ed/executable/chap05"
+    - 'printf "p55\n" | ~/Downloads/pfem5/5th_ed/build/bin/p55'
+  matlab:
+    - "pfem_root = '~/Downloads/pfem5/5th_ed';"
+    - "[status, outputs] = pfem_runner(pfem_root, 'chap05', 'p55', 'p55');"
+
 notes:
   - "Program prompts for the base name of the .dat file (do not type the .dat extension)."
+  - "This is a coupled consolidation problem using Biot theory."
+  - "Each node has 3 DOF: x-displacement, y-displacement, and pore pressure."
+  - "For parametric studies in MATLAB, use the paths in tunable_parameters to modify specific values."

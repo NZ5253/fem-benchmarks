@@ -1,41 +1,262 @@
 id: pfem5_ch05_p54_p54_3
-title: "PFEM Program 5.4 (p54) — Axisymmetric strain of elastic solid dataset p54_3"
+title: "PFEM Program 5.4 (p54) — Axisymmetric strain of elastic solid — case p54_3"
+
 purpose: >
-  Axisymmetric strain analysis of elastic solids using triangular or quadrilateral isoparametric elements.
-source:
-  book: "Programming the Finite Element Method (5th ed.)"
-  chapter: 5
-  program: "p54"
+  Axisymmetric strain analysis of elastic solids using triangular or quadrilateral isoparametric
+  elements. This benchmark uses 14-node hexahedral elements in a 3D formulation with prescribed
+  displacements.
+
+authors:
+  source:
+    book: "Programming the Finite Element Method"
+    edition: "5th"
+    chapter: 5
+    program: "p54"
+    dataset: "p54_3"
+  entry:
+    created_by: "Naeem"
+    created_on: "2026-01-09"
+    verified_platform: "Linux (gfortran)"
+
 code:
   language: "Fortran (F2003)"
   source_file: "source/chap05/p54.f03"
   uses_modules: ["main", "geom"]
+  io_reads_from_unit10:
+    - {line: 24, stmt: "READ(10,*)element,nod,nels,nn,nip,nodof,nst,ndim,np_types"}
+    - {line: 31, stmt: "READ(10,*)prop"}
+    - {line: 33, stmt: "IF(np_types>1)READ(10,*)etype"}
+    - {line: 34, stmt: "READ(10,*)g_coord"}
+    - {line: 35, stmt: "READ(10,*)g_num"}
+    - {line: 38, stmt: "READ(10,*)nr,(k,nf(:,k),i=1,nr)"}
+    - {line: 82, stmt: "READ(10,*)loaded_nodes,(k,loads(nf(:,k)),i=1,loaded_nodes)"}
+    - {line: 84, stmt: "READ(10,*)fixed_freedoms"}
+    - {line: 88, stmt: "READ(10,*)(node(i),sense(i),value(i),i=1,fixed_freedoms)"}
+
 fem:
-  dimension: 2
-  formulation: "hexahedron'  14"
-  element_family: "hexahedron"
-  element_nodes: 8
+  dimension: 3
+  formulation:
+    code_supports: ["3D"]
+    this_case: "3D"
+  dof:
+    per_node: 3
+    names: ["x-disp", "y-disp", "z-disp"]
+    dof_indexing: {1: "x-disp", 2: "y-disp", 3: "z-disp"}
+  element:
+    family: "hexahedron"
+    nodes_per_element: 14
+    supported:
+      tetrahedra_nodes: [4, 10]
+      hexahedra_nodes: [8, 14, 20]
+
 analysis:
   physics: "linear elasticity"
   type: "linear"
   regime: "steady-state"
+
+units:
+  system: "consistent"
+  notes: >
+    PFEM assumes consistent units (not enforced). Pick a unit system and keep geometry,
+    E, and loads consistent.
+
+tunable_parameters:
+  - name: youngs_modulus_E
+    path: "inputs.record2.material.E.value"
+    type: "real"
+    unit_category: "stress"
+    notes: "Material stiffness. Very common sweep parameter."
+    suggested_range: [1.0e4, 1.0e9]
+
+  - name: poisson_ratio_nu
+    path: "inputs.record2.material.nu.value"
+    type: "real"
+    unit_category: "dimensionless"
+    notes: "Material parameter, often kept fixed unless studying sensitivity. Nearly incompressible (0.49)."
+    suggested_range: [0.0, 0.49]
+
+  - name: prescribed_displacement_values
+    path: "inputs.record9.prescribed_displacements[*].value"
+    type: "real"
+    unit_category: "length"
+    notes: "Prescribed nodal displacements."
+
+  - name: mesh_resolution
+    path: "inputs.record1.(nels,nn)"
+    type: "int"
+    unit_category: "-"
+    notes: >
+      Structural knob: changes mesh resolution through number of elements and nodes.
+
+input_schema:
+  file_type: ".dat"
+  reads_in_order:
+    - record: 1
+      fortran_read: "READ(10,*)element,nod,nels,nn,nip,nodof,nst,ndim,np_types"
+      fields:
+        - {name: element, type: string, allowed: ["triangle", "quadrilateral", "tetrahedron", "hexahedron"]}
+        - {name: nod, type: int, description: "Nodes per element"}
+        - {name: nels, type: int, description: "Number of elements"}
+        - {name: nn, type: int, description: "Number of nodes"}
+        - {name: nip, type: int, description: "Number of integration points"}
+        - {name: nodof, type: int, description: "Degrees of freedom per node"}
+        - {name: nst, type: int, description: "Number of stress terms"}
+        - {name: ndim, type: int, description: "Number of dimensions"}
+        - {name: np_types, type: int, description: "Number of property types"}
+
+    - record: 2
+      fortran_read: "READ(10,*)prop"
+      fields:
+        - name: prop
+          type: "real_matrix"
+          shape: "(nprops=3, np_types)"
+          description: "[E, nu, rho] per material type (rho often 0.0)"
+
+    - record: 3
+      fortran_read: "IF(np_types>1)READ(10,*)etype"
+      condition: "only if np_types > 1"
+      fields:
+        - {name: etype, type: "int_array", shape: "(nels)", description: "Element type array"}
+
+    - record: 4
+      fortran_read: "READ(10,*)g_coord"
+      fields:
+        - name: g_coord
+          type: "real_matrix"
+          shape: "(ndim, nn)"
+          description: "Global nodal coordinates [x, y, z]"
+
+    - record: 5
+      fortran_read: "READ(10,*)g_num"
+      fields:
+        - name: g_num
+          type: "int_matrix"
+          shape: "(nod, nels)"
+          description: "Element connectivity table"
+
+    - record: 6
+      fortran_read: "READ(10,*)nr,(k,nf(:,k),i=1,nr)"
+      fields:
+        - {name: nr, type: int}
+        - name: bc_table
+          type: "table"
+          columns:
+            - {name: node, type: int}
+            - {name: nf_flag_dof1, type: int, allowed: [0, 1]}
+            - {name: nf_flag_dof2, type: int, allowed: [0, 1]}
+            - {name: nf_flag_dof3, type: int, allowed: [0, 1]}
+          notes: "Typically 0=fixed, 1=free before numbering by formnf()."
+
+    - record: 7
+      fortran_read: "READ(10,*)loaded_nodes,(k,loads(nf(:,k)),i=1,loaded_nodes)"
+      fields:
+        - {name: loaded_nodes, type: int}
+        - name: nodal_loads
+          type: "table"
+          columns:
+            - {name: node, type: int}
+            - {name: load_dof1, type: real}
+            - {name: load_dof2, type: real}
+            - {name: load_dof3, type: real}
+
+    - record: 8
+      fortran_read: "READ(10,*)fixed_freedoms"
+      fields:
+        - {name: fixed_freedoms, type: int}
+
+    - record: 9
+      fortran_read: "READ(10,*)(node(i),sense(i),value(i),i=1,fixed_freedoms)"
+      condition: "only if fixed_freedoms > 0"
+      fields:
+        - name: prescribed_displacements
+          type: "table"
+          columns:
+            - {name: node, type: int}
+            - {name: sense_dof, type: int, allowed: [1, 2, 3]}
+            - {name: value, type: real}
+
 inputs:
   working_directory: "executable/chap05"
   basename: "p54_3"
   dat_file: "executable/chap05/p54_3.dat"
+
+  record1:
+    element: "hexahedron"
+    nod: 14
+    nels: 7
+    nn: 40
+    nip: 27
+    nodof: 3
+    nst: 6
+    ndim: 3
+    np_types: 1
+
+  record2:
+    material:
+      E: {value: 1.0, unit_category: "stress"}
+      nu: {value: 0.49, unit_category: "dimensionless"}
+      rho: {value: 0.0, unit_category: "density"}
+
+  record3:
+    etype: []
+
+  record4:
+    g_coord:
+      description: "40 nodes with x, y, z coordinates - complex 3D geometry"
+      unit_category: "length"
+      note: "Full coordinate data available in p54_3.dat file"
+
+  record5:
+    g_num:
+      description: "7 elements with 14 nodes each - element connectivity"
+      note: "Full connectivity data available in p54_3.dat file"
+
+  record6:
+    nr: 10
+    bc_table:
+      - {node: 1, nf_flag_dof1: 0, nf_flag_dof2: 1, nf_flag_dof3: 1}
+      - {node: 2, nf_flag_dof1: 0, nf_flag_dof2: 0, nf_flag_dof3: 1}
+      - {node: 3, nf_flag_dof1: 0, nf_flag_dof2: 1, nf_flag_dof3: 0}
+      - {node: 4, nf_flag_dof1: 0, nf_flag_dof2: 0, nf_flag_dof3: 0}
+      - {node: 6, nf_flag_dof1: 1, nf_flag_dof2: 0, nf_flag_dof3: 1}
+      - {node: 7, nf_flag_dof1: 1, nf_flag_dof2: 1, nf_flag_dof3: 0}
+      - {node: 8, nf_flag_dof1: 1, nf_flag_dof2: 0, nf_flag_dof3: 0}
+      - {node: 17, nf_flag_dof1: 0, nf_flag_dof2: 1, nf_flag_dof3: 1}
+      - {node: 20, nf_flag_dof1: 1, nf_flag_dof2: 0, nf_flag_dof3: 1}
+      - {node: 21, nf_flag_dof1: 1, nf_flag_dof2: 1, nf_flag_dof3: 0}
+
+  record7:
+    loaded_nodes: 0
+    nodal_loads: []
+
+  record8:
+    fixed_freedoms: 5
+
+  record9:
+    prescribed_displacements:
+      - {node: 1, sense_dof: 2, value: 0.01}
+      - {node: 3, sense_dof: 2, value: 0.01}
+      - {node: 5, sense_dof: 2, value: 0.01}
+      - {node: 7, sense_dof: 2, value: 0.01}
+      - {node: 19, sense_dof: 2, value: 0.01}
+
 outputs:
-  files_expected:
+  output_directory: "executable/chap05"
+  files_created_confirmed:
     - "p54_3.res"
     - "p54_3.msh"
     - "p54_3.vec"
     - "p54_3.dis"
+
 how_to_run:
-  linux_build:
-    notes: "Build PFEM library modules (main, geom, etc.) then compile p54."
-    executable: "build/bin/p54"
-  linux_run:
-    commands:
-      - "cd ~/Downloads/pfem5/5th_ed/executable/chap05"
-      - 'printf "p54_3\n" | ~/Downloads/pfem5/5th_ed/build/bin/p54'
+  linux:
+    - "cd ~/Downloads/pfem5/5th_ed/executable/chap05"
+    - 'printf "p54_3\n" | ~/Downloads/pfem5/5th_ed/build/bin/p54'
+  matlab:
+    - "pfem_root = '~/Downloads/pfem5/5th_ed';"
+    - "[status, outputs] = pfem_runner(pfem_root, 'chap05', 'p54', 'p54_3');"
+
 notes:
   - "Program prompts for the base name of the .dat file (do not type the .dat extension)."
+  - "This case uses nearly incompressible material (nu=0.49) with prescribed displacements."
+  - "For parametric studies in MATLAB, use the paths in tunable_parameters to modify specific values."
