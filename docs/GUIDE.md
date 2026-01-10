@@ -18,11 +18,6 @@ Complete guide for working with the PFEM benchmark catalogue.
 ### Prerequisites
 
 ```bash
-# Python dependencies
-pip install pyyaml anthropic
-
-# Set API key for YAML generation
-export ANTHROPIC_API_KEY='your-key-here'
 
 # Verify PFEM source location (default)
 ls ~/Downloads/pfem5/5th_ed/source/
@@ -287,15 +282,6 @@ fem-benchmarks/
 
 ## Troubleshooting
 
-**Error: "anthropic module not installed"**
-```bash
-pip install anthropic
-```
-
-**Error: "API key required"**
-```bash
-export ANTHROPIC_API_KEY='your-key'
-```
 
 **Error: "Source file not found"**
 - Check PFEM root path with `--pfem-root` flag
@@ -309,16 +295,6 @@ export ANTHROPIC_API_KEY='your-key'
 - Check YAML syntax with online validator
 - Ensure all required sections present
 - Verify proper indentation
-
----
-
-## Cost Estimation
-
-YAML generation uses Anthropic API:
-- Model: claude-sonnet-4
-- ~6,000-8,000 tokens per case
-- ~$0.02-0.03 per YAML
-- All 85 cases: ~$1.50-2.50 total
 
 ---
 
