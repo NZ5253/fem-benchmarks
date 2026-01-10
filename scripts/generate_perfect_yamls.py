@@ -76,8 +76,17 @@ def analyze_source_for_metadata(source_file):
         with open(source_file, 'r', errors='ignore') as f:
             content = f.read().lower()
 
-            # Detect dimension
-            if 'ndim=3' in content or 'ndim = 3' in content:
+            # Detect dimension from nodof (more reliable) or ndim
+            if 'nodof=1' in content or 'nodof = 1' in content:
+                metadata['dimension'] = 1
+                metadata['dof_per_node'] = 1
+            elif 'nodof=2' in content or 'nodof = 2' in content:
+                metadata['dimension'] = 2
+                metadata['dof_per_node'] = 2
+            elif 'nodof=3' in content or 'nodof = 3' in content:
+                metadata['dimension'] = 3
+                metadata['dof_per_node'] = 3
+            elif 'ndim=3' in content or 'ndim = 3' in content:
                 metadata['dimension'] = 3
                 metadata['dof_per_node'] = 3
             elif 'ndim=2' in content:
