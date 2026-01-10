@@ -87,12 +87,6 @@ Example: [benchmarks/pfem5/chap05/p51_3.yaml](benchmarks/pfem5/chap05/p51_3.yaml
 ### Generate Perfect YAMLs
 
 ```bash
-# Install dependencies
-pip install anthropic
-
-# Set API key
-export ANTHROPIC_API_KEY='your-key-here'
-
 # Generate YAMLs for a chapter
 python3 scripts/generate_perfect_yamls.py --chapter chap05
 
@@ -130,7 +124,6 @@ The `generate_perfect_yamls.py` script:
 - Identifies tunable parameters for parametric studies (E, nu, loads, mesh)
 - Generates complete YAML specifications following p54_1.yaml template
 - Includes input_schema, tunable_parameters, and parsed inputs sections
-- Uses Anthropic API for intelligent YAML generation
 
 ### 2. MATLAB Integration
 - **pfem_runner.m**: Execute any PFEM case from MATLAB
