@@ -2,8 +2,7 @@
 """
 Generate perfect YAML benchmark files from PFEM source code and data files.
 
-This script analyzes Fortran source code, extracts READ(10,*) statements,
-parses .dat files, and generates complete YAML specifications.
+Extracts information directly from Fortran source and .dat files without hardcoding.
 
 Usage:
     python3 scripts/generate_perfect_yamls.py --chapter chap05 [--case p54_1]
@@ -22,98 +21,209 @@ from datetime import date
 import yaml
 
 def find_read_statements(source_file):
-    """Extract READ(10,*) statements with line numbers from Fortran source."""
+    """Extract READ(10,*) statements with line numbers and variables."""
     reads = []
     try:
         with open(source_file, 'r', errors='ignore') as f:
             for line_num, line in enumerate(f, 1):
-                # Match READ(10,*) or READ(10, *) or READ (10,*)
                 if re.search(r'READ\s*\(\s*10\s*,\s*\*\s*\)', line, re.IGNORECASE):
-                    # Clean up the statement
                     stmt = line.strip()
-                    # Remove line number if present
                     stmt = re.sub(r'^\d+\s+', '', stmt)
-                    reads.append({'line': line_num, 'stmt': stmt})
+
+                    # Extract variables from READ statement
+                    match = re.search(r'READ\s*\(\s*10\s*,\s*\*\s*\)\s*(.+)', stmt, re.IGNORECASE)
+                    variables = []
+                    if match:
+                        var_part = match.group(1).strip()
+                        # Remove trailing comments
+                        if '!' in var_part:
+                            var_part = var_part.split('!')[0].strip()
+                        variables = [v.strip() for v in re.split(r'[,\s]+', var_part) if v.strip()]
+
+                    reads.append({
+                        'line': line_num,
+                        'stmt': stmt,
+                        'variables': variables
+                    })
     except Exception as e:
         print(f"  Warning: Error reading source file: {e}")
     return reads
 
-def parse_dat_file_records(dat_file, num_reads):
-    """Parse .dat file into records based on number of READ statements."""
-    records = {}
+def parse_dat_file(dat_file):
+    """Parse .dat file and return lines with values."""
     try:
         with open(dat_file, 'r') as f:
-            lines = [line.strip() for line in f if line.strip() and not line.strip().startswith('!')]
-
-        # Organize lines into records
-        for i, line in enumerate(lines[:num_reads], 1):
-            records[f'record{i}'] = line
-
+            lines = []
+            for line in f:
+                stripped = line.strip()
+                # Skip empty lines and comments
+                if stripped and not stripped.startswith('!'):
+                    lines.append(stripped)
+            return lines
     except Exception as e:
         print(f"  Warning: Error parsing .dat file: {e}")
+        return []
 
-    return records
-
-def get_program_info(program):
-    """Get metadata for PFEM programs."""
-    programs = {
-        'p41': {'title': 'One-dimensional bar analysis', 'physics': 'structural', 'dim': 1},
-        'p42': {'title': '1D heat conduction', 'physics': 'thermal', 'dim': 1},
-        'p43': {'title': '1D beam bending', 'physics': 'structural', 'dim': 1},
-        'p44': {'title': '1D rod analysis', 'physics': 'structural', 'dim': 1},
-        'p45': {'title': '1D frame analysis', 'physics': 'structural', 'dim': 1},
-        'p46': {'title': '1D coupled analysis', 'physics': 'coupled', 'dim': 1},
-        'p47': {'title': '1D eigenvalue analysis', 'physics': 'structural', 'dim': 1},
-
-        'p51': {'title': 'Plane linear elasticity', 'physics': 'linear elasticity', 'dim': 2},
-        'p52': {'title': 'Plane elasticity with PCG solver', 'physics': 'linear elasticity', 'dim': 2},
-        'p53': {'title': '3D linear elasticity', 'physics': 'linear elasticity', 'dim': 3},
-        'p54': {'title': 'Axisymmetric strain', 'physics': 'linear elasticity', 'dim': 2},
-        'p55': {'title': 'Plane strain consolidation', 'physics': 'consolidation', 'dim': 2},
-        'p56': {'title': '3D elasticity with PCG', 'physics': 'linear elasticity', 'dim': 3},
-        'p57': {'title': '3D elastic-plastic', 'physics': 'elastic-plastic', 'dim': 3},
-
-        'p61': {'title': 'Elastic-plastic plane strain', 'physics': 'elastic-plastic', 'dim': 2},
-        'p62': {'title': 'Visco-plastic analysis', 'physics': 'visco-plastic', 'dim': 2},
-        'p63': {'title': 'Mohr-Coulomb plasticity', 'physics': 'plasticity', 'dim': 2},
-        'p64': {'title': 'Cam-clay plasticity', 'physics': 'plasticity', 'dim': 2},
-        'p65': {'title': 'Damage mechanics', 'physics': 'damage', 'dim': 2},
-
-        'p71': {'title': 'Steady-state flow', 'physics': 'fluid flow', 'dim': 2},
-        'p72': {'title': 'Confined flow', 'physics': 'fluid flow', 'dim': 2},
-        'p73': {'title': 'Unconfined flow', 'physics': 'fluid flow', 'dim': 2},
-        'p74': {'title': '3D steady flow', 'physics': 'fluid flow', 'dim': 3},
-
-        'p81': {'title': 'Transient heat conduction', 'physics': 'thermal', 'dim': 2},
-        'p82': {'title': 'Transient seepage', 'physics': 'fluid flow', 'dim': 2},
-        'p83': {'title': 'Wave propagation', 'physics': 'dynamics', 'dim': 1},
-        'p84': {'title': 'Dynamic plane strain', 'physics': 'dynamics', 'dim': 2},
-        'p85': {'title': '3D dynamic analysis', 'physics': 'dynamics', 'dim': 3},
-
-        'p91': {'title': 'Coupled consolidation', 'physics': 'coupled', 'dim': 2},
-        'p92': {'title': 'Thermo-mechanical coupling', 'physics': 'coupled', 'dim': 2},
-        'p93': {'title': 'Fluid-structure coupling', 'physics': 'coupled', 'dim': 2},
-
-        'p101': {'title': 'Eigenvalue analysis 2D', 'physics': 'eigenvalue', 'dim': 2},
-        'p102': {'title': 'Eigenvalue analysis 3D', 'physics': 'eigenvalue', 'dim': 3},
-        'p103': {'title': 'Natural frequencies', 'physics': 'eigenvalue', 'dim': 2},
-
-        'p111': {'title': 'Parallel elastic analysis', 'physics': 'linear elasticity', 'dim': 2},
-        'p112': {'title': 'Parallel PCG solver', 'physics': 'linear elasticity', 'dim': 3},
+def analyze_source_for_metadata(source_file):
+    """Analyze source code to extract physics type, dimensions, etc."""
+    metadata = {
+        'dimension': 2,
+        'physics': 'unknown',
+        'dof_per_node': 2
     }
 
-    return programs.get(program, {'title': 'FEM analysis', 'physics': 'unknown', 'dim': 2})
+    try:
+        with open(source_file, 'r', errors='ignore') as f:
+            content = f.read().lower()
 
-def generate_yaml_from_template(case, chapter, program, source_file, dat_file, read_stmts):
-    """Generate YAML using template based on extracted information."""
+            # Detect dimension
+            if 'ndim=3' in content or 'ndim = 3' in content:
+                metadata['dimension'] = 3
+                metadata['dof_per_node'] = 3
+            elif 'ndim=2' in content:
+                metadata['dimension'] = 2
+            elif 'ndim=1' in content:
+                metadata['dimension'] = 1
+                metadata['dof_per_node'] = 1
 
-    prog_info = get_program_info(program)
+            # Detect physics type
+            if 'elastic' in content and 'plastic' in content:
+                metadata['physics'] = 'elastic-plastic'
+            elif 'elastic' in content:
+                metadata['physics'] = 'linear elasticity'
+            elif 'consolidation' in content or 'biot' in content:
+                metadata['physics'] = 'consolidation'
+            elif 'thermal' in content or 'heat' in content:
+                metadata['physics'] = 'thermal'
+            elif 'flow' in content or 'seepage' in content:
+                metadata['physics'] = 'fluid flow'
+            elif 'dynamic' in content or 'transient' in content:
+                metadata['physics'] = 'dynamics'
+            elif 'eigenvalue' in content or 'frequency' in content:
+                metadata['physics'] = 'eigenvalue'
+
+    except Exception as e:
+        print(f"  Warning: Error analyzing source: {e}")
+
+    return metadata
+
+def extract_tunable_parameters(read_stmts, dat_lines):
+    """Extract tunable parameters from READ statements and dat file."""
+    tunables = []
+
+    for i, read_stmt in enumerate(read_stmts):
+        vars_list = read_stmt['variables']
+
+        # Common material property patterns
+        if any('prop' in v.lower() for v in vars_list):
+            tunables.append({
+                'name': 'material_properties',
+                'path': f'inputs.record{i+1}.prop',
+                'type': 'real',
+                'notes': 'Material properties (E, nu, density, etc.)'
+            })
+
+        # Mesh parameters
+        if any(v in ['nxe', 'nye', 'nze', 'nels', 'nn'] for v in vars_list):
+            tunables.append({
+                'name': 'mesh_parameters',
+                'path': f'inputs.record{i+1}',
+                'type': 'int',
+                'notes': 'Mesh configuration (elements, nodes, divisions)'
+            })
+
+        # Loads
+        if any('load' in v.lower() for v in vars_list):
+            tunables.append({
+                'name': 'applied_loads',
+                'path': f'inputs.record{i+1}',
+                'type': 'real',
+                'notes': 'Applied nodal or distributed loads'
+            })
+
+        # Coordinates
+        if any('coord' in v.lower() for v in vars_list):
+            tunables.append({
+                'name': 'nodal_coordinates',
+                'path': f'inputs.record{i+1}',
+                'type': 'real',
+                'notes': 'Node  coordinate values'
+            })
+
+    return tunables if tunables else [{
+        'name': 'parameters',
+        'path': 'inputs',
+        'type': 'mixed',
+        'notes': 'Model parameters from .dat file'
+    }]
+
+def create_input_schema(read_stmts):
+    """Create input_schema from READ statements."""
+    schema = []
+
+    for i, read_stmt in enumerate(read_stmts):
+        record = {
+            'record': i + 1,
+            'fortran_read': read_stmt['stmt'],
+            'variables': read_stmt['variables']
+        }
+
+        # Add condition if present
+        if 'IF' in read_stmt['stmt'] or 'if' in read_stmt['stmt'].lower():
+            condition_match = re.search(r'IF\s*\(([^)]+)\)', read_stmt['stmt'], re.IGNORECASE)
+            if condition_match:
+                record['condition'] = f"only if {condition_match.group(1)}"
+
+        schema.append(record)
+
+    return schema
+
+def map_dat_to_inputs(dat_lines, read_stmts):
+    """Map .dat file lines to input records."""
+    inputs = {}
+
+    for i, line in enumerate(dat_lines[:len(read_stmts)]):
+        record_num = i + 1
+        inputs[f'record{record_num}'] = {
+            'raw_value': line,
+            'description': f'Values for {", ".join(read_stmts[i]["variables"])}' if i < len(read_stmts) else 'Additional data'
+        }
+
+    return inputs
+
+def infer_program_title(program, source_file):
+    """Infer program title from source code comments."""
+    try:
+        with open(source_file, 'r', errors='ignore') as f:
+            # Read first 50 lines looking for program description
+            for i, line in enumerate(f):
+                if i > 50:
+                    break
+                if 'program' in line.lower() and ('!' in line or 'c' == line[0].lower()):
+                    # Found a comment with program description
+                    match = re.search(r'[!c]\s*(.+)', line, re.IGNORECASE)
+                    if match:
+                        desc = match.group(1).strip()
+                        if len(desc) > 10 and 'program' in desc.lower():
+                            return desc.replace('program', '').replace('Program', '').strip()
+    except:
+        pass
+
+    # Fallback to generic title
+    prog_type = program[1]  # First digit
+    return f'FEM analysis program {program}'
+
+def generate_yaml_from_source(case, chapter, program, source_file, dat_file, read_stmts, dat_lines):
+    """Generate YAML by analyzing actual source code and data."""
+
     chapter_num = chapter.replace('chap', '')
+    metadata = analyze_source_for_metadata(source_file)
+    title = infer_program_title(program, source_file)
 
     yaml_dict = {
         'id': f'pfem5_ch{chapter_num}_{program}_{case}',
-        'title': f'PFEM Program {program[1]}.{program[2:]} ({program}) — {prog_info["title"]} — case {case}',
-        'purpose': f'{prog_info["title"]} analysis using finite element method.',
+        'title': f'PFEM Program {program[1]}.{program[2:]} ({program}) — {title} — case {case}',
+        'purpose': f'Analysis using {metadata["physics"]} formulation in {metadata["dimension"]}D.',
 
         'authors': {
             'source': {
@@ -140,14 +250,13 @@ def generate_yaml_from_template(case, chapter, program, source_file, dat_file, r
         },
 
         'fem': {
-            'dimension': prog_info['dim'],
-            'formulation': {'code_supports': ['standard'], 'this_case': 'standard'},
-            'dof': {'per_node': 2 if prog_info['dim'] == 2 else 3}
+            'dimension': metadata['dimension'],
+            'dof': {'per_node': metadata['dof_per_node']}
         },
 
         'analysis': {
-            'physics': prog_info['physics'],
-            'type': 'linear' if 'linear' in prog_info['physics'] else 'nonlinear',
+            'physics': metadata['physics'],
+            'type': 'linear' if 'linear' in metadata['physics'] else 'nonlinear',
             'regime': 'steady-state'
         },
 
@@ -156,25 +265,18 @@ def generate_yaml_from_template(case, chapter, program, source_file, dat_file, r
             'notes': 'PFEM assumes consistent units. Choose a unit system and maintain consistency.'
         },
 
-        'tunable_parameters': [
-            {
-                'name': 'material_properties',
-                'path': 'inputs.record2',
-                'type': 'real',
-                'notes': 'Material properties from .dat file'
-            },
-            {
-                'name': 'mesh_parameters',
-                'path': 'inputs.record1',
-                'type': 'int',
-                'notes': 'Mesh configuration parameters'
-            }
-        ],
+        'tunable_parameters': extract_tunable_parameters(read_stmts, dat_lines),
+
+        'input_schema': {
+            'file_type': '.dat',
+            'reads_in_order': create_input_schema(read_stmts)
+        },
 
         'inputs': {
             'working_directory': f'executable/{chapter}',
             'basename': case,
-            'dat_file': f'executable/{chapter}/{case}.dat'
+            'dat_file': f'executable/{chapter}/{case}.dat',
+            **map_dat_to_inputs(dat_lines, read_stmts)
         },
 
         'outputs': {
@@ -195,7 +297,7 @@ def generate_yaml_from_template(case, chapter, program, source_file, dat_file, r
 
         'notes': [
             'Program prompts for the base name of the .dat file (do not type the .dat extension).',
-            'For parametric studies in MATLAB, modify .dat file parameters as needed.'
+            f'This case has {len(read_stmts)} READ(10,*) statements reading from the .dat file.'
         ]
     }
 
@@ -220,16 +322,19 @@ def process_case(pfem_root, chapter, case, output_dir, dry_run=False):
     print(f"  Reading source: {source_file.name}")
     print(f"  Reading data: {dat_file.name}")
 
-    # Extract READ statements
+    # Extract information
     read_stmts = find_read_statements(source_file)
+    dat_lines = parse_dat_file(dat_file)
+
     print(f"  Found {len(read_stmts)} READ(10,*) statements")
+    print(f"  Parsed {len(dat_lines)} data lines")
 
     if dry_run:
         print(f"  [DRY RUN] Would generate YAML")
         return True
 
-    # Generate YAML
-    yaml_dict = generate_yaml_from_template(case, chapter, program, source_file, dat_file, read_stmts)
+    # Generate YAML from actual source analysis
+    yaml_dict = generate_yaml_from_source(case, chapter, program, source_file, dat_file, read_stmts, dat_lines)
 
     # Save YAML
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -243,7 +348,7 @@ def process_case(pfem_root, chapter, case, output_dir, dry_run=False):
 
 def main():
     parser = argparse.ArgumentParser(
-        description='Generate perfect YAML files from PFEM source and data files'
+        description='Generate YAML files from PFEM source and data files'
     )
     parser.add_argument('--chapter', help='Chapter to process (e.g., chap05)')
     parser.add_argument('--case', help='Specific case (e.g., p54_1)')
