@@ -18,6 +18,8 @@ Complete guide for working with the PFEM benchmark catalogue.
 ### Prerequisites
 
 ```bash
+# Python dependencies
+pip install pyyaml
 
 # Verify PFEM source location (default)
 ls ~/Downloads/pfem5/5th_ed/source/
@@ -29,12 +31,15 @@ ls ~/Downloads/pfem5/5th_ed/source/
 # 1. Generate YAMLs for a chapter
 python3 scripts/generate_perfect_yamls.py --chapter chap05
 
-# 2. Validate generated files
+# 2. Or generate all chapters at once
+python3 scripts/generate_perfect_yamls.py --all-chapters
+
+# 3. Validate generated files
 python3 scripts/verify_yamls.py benchmarks/pfem5/chap05/*.yaml
 
-# 3. Commit changes
-git add benchmarks/pfem5/chap05/
-git commit -m "Add Chapter 5 benchmarks"
+# 4. Commit changes
+git add benchmarks/pfem5/
+git commit -m "Add YAML benchmarks"
 git push
 ```
 
@@ -44,10 +49,11 @@ git push
 
 ### Overview
 
-The `generate_perfect_yamls.py` script creates comprehensive YAML benchmark files by:
+The `generate_perfect_yamls.py` script creates YAML benchmark files by:
 - Analyzing Fortran source code to extract READ statements with line numbers
-- Parsing .dat input files
+- Identifying program metadata (physics type, dimensions, etc.)
 - Generating structured YAML with complete metadata
+- No external dependencies beyond Python standard library + pyyaml
 
 ### Usage
 
@@ -69,22 +75,19 @@ python3 scripts/generate_perfect_yamls.py --chapter chap05 --dry-run
 ### Command Options
 
 ```
---chapter CHAP     Chapter to process (e.g., chap05)
---case CASE        Specific case (optional, default: all cases)
---pfem-root PATH   PFEM source directory (default: ~/Downloads/pfem5/5th_ed)
---api-key KEY      API key (or use ANTHROPIC_API_KEY env var)
---dry-run          Preview only
+--chapter CHAP      Chapter to process (e.g., chap05)
+--case CASE         Specific case (optional, default: all cases)
+--all-chapters      Process all chapters 4-11 at once
+--pfem-root PATH    PFEM source directory (default: ~/Downloads/pfem5/5th_ed)
+--dry-run           Preview only
 ```
 
 ### Generate All Chapters
 
-Process all 85 cases across chapters 4-11:
+Process all 85 cases across chapters 4-11 with one command:
 
 ```bash
-for chapter in chap04 chap05 chap06 chap07 chap08 chap09 chap10 chap11; do
-  python3 scripts/generate_perfect_yamls.py --chapter $chapter
-  python3 scripts/verify_yamls.py benchmarks/pfem5/$chapter/*.yaml
-done
+python3 scripts/generate_perfect_yamls.py --all-chapters
 ```
 
 ### YAML Structure

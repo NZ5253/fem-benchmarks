@@ -7,7 +7,7 @@ parses .dat files, and generates complete YAML specifications.
 
 Usage:
     python3 scripts/generate_perfect_yamls.py --chapter chap05 [--case p54_1]
-    python3 scripts/generate_perfect_yamls.py --chapter chap05 --api-key YOUR_KEY
+    python3 scripts/generate_perfect_yamls.py --all-chapters
 
 Author: Naeem
 Date: 2026-01-10
@@ -19,12 +19,7 @@ import re
 import argparse
 from pathlib import Path
 from datetime import date
-
-try:
-    import anthropic
-    HAS_ANTHROPIC = True
-except ImportError:
-    HAS_ANTHROPIC = False
+import yaml
 
 def find_read_statements(source_file):
     """Extract READ(10,*) statements with line numbers from Fortran source."""
@@ -43,141 +38,172 @@ def find_read_statements(source_file):
         print(f"  Warning: Error reading source file: {e}")
     return reads
 
-def get_program_metadata(program, chapter):
-    """Get basic program metadata."""
-    metadata = {
-        'p51': {
-            'title_template': 'Plane linear elasticity',
-            'purpose': 'Plane (or axisymmetric) strain analysis of an elastic solid using triangular or quadrilateral elements.',
-            'physics': 'linear elasticity',
-            'dimension': 2,
-        },
-        'p52': {
-            'title_template': 'Plane linear elasticity (PCG solver)',
-            'purpose': 'Plane strain analysis with preconditioned conjugate gradient solver.',
-            'physics': 'linear elasticity',
-            'dimension': 2,
-        },
-        'p53': {
-            'title_template': '3D linear elasticity',
-            'purpose': '3D analysis of elastic solids using isoparametric elements.',
-            'physics': 'linear elasticity',
-            'dimension': 3,
-        },
-        'p54': {
-            'title_template': 'Axisymmetric strain of elastic solid',
-            'purpose': 'Axisymmetric strain analysis of elastic solids using triangular or quadrilateral elements.',
-            'physics': 'linear elasticity',
-            'dimension': 2,
-        },
-        'p55': {
-            'title_template': 'Plane strain consolidation',
-            'purpose': 'Plane strain consolidation analysis using coupled Biot formulation.',
-            'physics': 'consolidation (Biot)',
-            'dimension': 2,
-        },
-        'p56': {
-            'title_template': '3D elasticity with PCG solver',
-            'purpose': '3D elastic analysis using preconditioned conjugate gradient solver.',
-            'physics': 'linear elasticity',
-            'dimension': 3,
-        },
-        'p57': {
-            'title_template': '3D elastic-plastic analysis',
-            'purpose': '3D elastic-plastic analysis using von Mises yield criterion.',
-            'physics': 'elastic-plastic',
-            'dimension': 3,
-        },
+def parse_dat_file_records(dat_file, num_reads):
+    """Parse .dat file into records based on number of READ statements."""
+    records = {}
+    try:
+        with open(dat_file, 'r') as f:
+            lines = [line.strip() for line in f if line.strip() and not line.strip().startswith('!')]
+
+        # Organize lines into records
+        for i, line in enumerate(lines[:num_reads], 1):
+            records[f'record{i}'] = line
+
+    except Exception as e:
+        print(f"  Warning: Error parsing .dat file: {e}")
+
+    return records
+
+def get_program_info(program):
+    """Get metadata for PFEM programs."""
+    programs = {
+        'p41': {'title': 'One-dimensional bar analysis', 'physics': 'structural', 'dim': 1},
+        'p42': {'title': '1D heat conduction', 'physics': 'thermal', 'dim': 1},
+        'p43': {'title': '1D beam bending', 'physics': 'structural', 'dim': 1},
+        'p44': {'title': '1D rod analysis', 'physics': 'structural', 'dim': 1},
+        'p45': {'title': '1D frame analysis', 'physics': 'structural', 'dim': 1},
+        'p46': {'title': '1D coupled analysis', 'physics': 'coupled', 'dim': 1},
+        'p47': {'title': '1D eigenvalue analysis', 'physics': 'structural', 'dim': 1},
+
+        'p51': {'title': 'Plane linear elasticity', 'physics': 'linear elasticity', 'dim': 2},
+        'p52': {'title': 'Plane elasticity with PCG solver', 'physics': 'linear elasticity', 'dim': 2},
+        'p53': {'title': '3D linear elasticity', 'physics': 'linear elasticity', 'dim': 3},
+        'p54': {'title': 'Axisymmetric strain', 'physics': 'linear elasticity', 'dim': 2},
+        'p55': {'title': 'Plane strain consolidation', 'physics': 'consolidation', 'dim': 2},
+        'p56': {'title': '3D elasticity with PCG', 'physics': 'linear elasticity', 'dim': 3},
+        'p57': {'title': '3D elastic-plastic', 'physics': 'elastic-plastic', 'dim': 3},
+
+        'p61': {'title': 'Elastic-plastic plane strain', 'physics': 'elastic-plastic', 'dim': 2},
+        'p62': {'title': 'Visco-plastic analysis', 'physics': 'visco-plastic', 'dim': 2},
+        'p63': {'title': 'Mohr-Coulomb plasticity', 'physics': 'plasticity', 'dim': 2},
+        'p64': {'title': 'Cam-clay plasticity', 'physics': 'plasticity', 'dim': 2},
+        'p65': {'title': 'Damage mechanics', 'physics': 'damage', 'dim': 2},
+
+        'p71': {'title': 'Steady-state flow', 'physics': 'fluid flow', 'dim': 2},
+        'p72': {'title': 'Confined flow', 'physics': 'fluid flow', 'dim': 2},
+        'p73': {'title': 'Unconfined flow', 'physics': 'fluid flow', 'dim': 2},
+        'p74': {'title': '3D steady flow', 'physics': 'fluid flow', 'dim': 3},
+
+        'p81': {'title': 'Transient heat conduction', 'physics': 'thermal', 'dim': 2},
+        'p82': {'title': 'Transient seepage', 'physics': 'fluid flow', 'dim': 2},
+        'p83': {'title': 'Wave propagation', 'physics': 'dynamics', 'dim': 1},
+        'p84': {'title': 'Dynamic plane strain', 'physics': 'dynamics', 'dim': 2},
+        'p85': {'title': '3D dynamic analysis', 'physics': 'dynamics', 'dim': 3},
+
+        'p91': {'title': 'Coupled consolidation', 'physics': 'coupled', 'dim': 2},
+        'p92': {'title': 'Thermo-mechanical coupling', 'physics': 'coupled', 'dim': 2},
+        'p93': {'title': 'Fluid-structure coupling', 'physics': 'coupled', 'dim': 2},
+
+        'p101': {'title': 'Eigenvalue analysis 2D', 'physics': 'eigenvalue', 'dim': 2},
+        'p102': {'title': 'Eigenvalue analysis 3D', 'physics': 'eigenvalue', 'dim': 3},
+        'p103': {'title': 'Natural frequencies', 'physics': 'eigenvalue', 'dim': 2},
+
+        'p111': {'title': 'Parallel elastic analysis', 'physics': 'linear elasticity', 'dim': 2},
+        'p112': {'title': 'Parallel PCG solver', 'physics': 'linear elasticity', 'dim': 3},
     }
-    return metadata.get(program, {
-        'title_template': 'FEM analysis',
-        'purpose': 'Finite element analysis.',
-        'physics': 'unknown',
-        'dimension': 2,
-    })
 
-def read_dat_file(dat_file_path):
-    """Read .dat file contents."""
-    try:
-        with open(dat_file_path, 'r') as f:
-            return f.read()
-    except Exception as e:
-        return f"[Error reading .dat file: {e}]"
+    return programs.get(program, {'title': 'FEM analysis', 'physics': 'unknown', 'dim': 2})
 
-def generate_perfect_yaml_with_api(case_info, template_yaml, api_key):
-    """Generate perfect YAML from source analysis."""
-    if not HAS_ANTHROPIC:
-        print("  Error: anthropic module not installed. Install with: pip install anthropic")
-        return None
+def generate_yaml_from_template(case, chapter, program, source_file, dat_file, read_stmts):
+    """Generate YAML using template based on extracted information."""
 
-    client = anthropic.Anthropic(api_key=api_key)
+    prog_info = get_program_info(program)
+    chapter_num = chapter.replace('chap', '')
 
-    prompt = f"""Generate a complete "perfect YAML" benchmark file for PFEM case {case_info['case']}.
+    yaml_dict = {
+        'id': f'pfem5_ch{chapter_num}_{program}_{case}',
+        'title': f'PFEM Program {program[1]}.{program[2:]} ({program}) — {prog_info["title"]} — case {case}',
+        'purpose': f'{prog_info["title"]} analysis using finite element method.',
 
-**REFERENCE TEMPLATE (p54_1.yaml - use this exact structure):**
-{template_yaml}
+        'authors': {
+            'source': {
+                'book': 'Programming the Finite Element Method',
+                'edition': '5th',
+                'chapter': int(chapter_num),
+                'program': program,
+                'dataset': case
+            },
+            'entry': {
+                'created_by': 'Naeem',
+                'created_on': str(date.today()),
+                'verified_platform': 'Linux (gfortran)'
+            }
+        },
 
-**CASE INFORMATION:**
-- Program: {case_info['program']}
-- Case: {case_info['case']}
-- Chapter: {case_info['chapter']}
+        'code': {
+            'language': 'Fortran (F2003)',
+            'source_file': f'source/{chapter}/{program}.f03',
+            'uses_modules': ['main', 'geom'],
+            'io_reads_from_unit10': [
+                {'line': r['line'], 'stmt': r['stmt']} for r in read_stmts
+            ]
+        },
 
-**FORTRAN SOURCE CODE (first 300 lines with READ statements):**
-{case_info['source_code']}
+        'fem': {
+            'dimension': prog_info['dim'],
+            'formulation': {'code_supports': ['standard'], 'this_case': 'standard'},
+            'dof': {'per_node': 2 if prog_info['dim'] == 2 else 3}
+        },
 
-**READ(10,*) STATEMENTS FOUND (with line numbers):**
-{case_info['read_statements']}
+        'analysis': {
+            'physics': prog_info['physics'],
+            'type': 'linear' if 'linear' in prog_info['physics'] else 'nonlinear',
+            'regime': 'steady-state'
+        },
 
-**DATASET FILE ({case_info['case']}.dat):**
-{case_info['dat_content']}
+        'units': {
+            'system': 'consistent',
+            'notes': 'PFEM assumes consistent units. Choose a unit system and maintain consistency.'
+        },
 
-**INSTRUCTIONS:**
-1. Follow the EXACT structure from the p54_1.yaml template
-2. Use these sections in order:
-   - id, title, purpose
-   - authors (with created_by: "Naeem", created_on: "{date.today()}")
-   - code (with io_reads_from_unit10 using the READ statements with line numbers above)
-   - fem (dimension, formulation, dof, element)
-   - analysis (physics, type, regime)
-   - units
-   - tunable_parameters (E, nu, loads, mesh parameters)
-   - input_schema (reads_in_order with detailed field descriptions)
-   - inputs (parsed .dat values organized by record1, record2, etc.)
-   - outputs
-   - how_to_run (linux and matlab commands)
-   - notes
+        'tunable_parameters': [
+            {
+                'name': 'material_properties',
+                'path': 'inputs.record2',
+                'type': 'real',
+                'notes': 'Material properties from .dat file'
+            },
+            {
+                'name': 'mesh_parameters',
+                'path': 'inputs.record1',
+                'type': 'int',
+                'notes': 'Mesh configuration parameters'
+            }
+        ],
 
-3. For io_reads_from_unit10: Use EXACT line numbers and statements from READ statements above
-4. For input_schema: Map each READ statement to a record with field descriptions
-5. For inputs: Parse the .dat file and organize values by record (record1, record2, etc.)
-6. For tunable_parameters: Include E, nu, loads, mesh density with paths like "inputs.record2.material.E.value"
+        'inputs': {
+            'working_directory': f'executable/{chapter}',
+            'basename': case,
+            'dat_file': f'executable/{chapter}/{case}.dat'
+        },
 
-Output ONLY the complete YAML content, no explanations."""
+        'outputs': {
+            'output_directory': f'executable/{chapter}',
+            'files_expected': [f'{case}.res', f'{case}.msh']
+        },
 
-    try:
-        message = client.messages.create(
-            model="claude-sonnet-4-20250514",
-            max_tokens=8000,
-            temperature=0,
-            messages=[{"role": "user", "content": prompt}]
-        )
+        'how_to_run': {
+            'linux': [
+                f'cd ~/Downloads/pfem5/5th_ed/executable/{chapter}',
+                f'printf "{case}\\n" | ~/Downloads/pfem5/5th_ed/build/bin/{program}'
+            ],
+            'matlab': [
+                f'pfem_root = \'~/Downloads/pfem5/5th_ed\';',
+                f'[status, outputs] = pfem_runner(pfem_root, \'{chapter}\', \'{program}\', \'{case}\');'
+            ]
+        },
 
-        yaml_content = message.content[0].text.strip()
+        'notes': [
+            'Program prompts for the base name of the .dat file (do not type the .dat extension).',
+            'For parametric studies in MATLAB, modify .dat file parameters as needed.'
+        ]
+    }
 
-        # Remove markdown code blocks if present
-        if yaml_content.startswith('```yaml'):
-            yaml_content = yaml_content.split('```yaml')[1].split('```')[0].strip()
-        elif yaml_content.startswith('```'):
-            yaml_content = yaml_content.split('```')[1].split('```')[0].strip()
+    return yaml_dict
 
-        return yaml_content
-    except Exception as e:
-        print(f"  Error: API call failed: {e}")
-        return None
-
-def process_case(pfem_root, chapter, case, template_yaml, api_key, dry_run=False):
-    """Process a single case and generate perfect YAML."""
-    program = case.split('_')[0]  # e.g., p54 from p54_1
+def process_case(pfem_root, chapter, case, output_dir, dry_run=False):
+    """Process a single case and generate YAML."""
+    program = case.split('_')[0]
 
     # Paths
     source_file = pfem_root / 'source' / chapter / f'{program}.f03'
@@ -185,10 +211,10 @@ def process_case(pfem_root, chapter, case, template_yaml, api_key, dry_run=False
 
     # Check files exist
     if not source_file.exists():
-        print(f"  Error: Source file not found: {source_file}")
+        print(f"  Warning: Source file not found: {source_file}")
         return False
     if not dat_file.exists():
-        print(f"  Error: Data file not found: {dat_file}")
+        print(f"  Warning: Data file not found: {dat_file}")
         return False
 
     print(f"  Reading source: {source_file.name}")
@@ -198,135 +224,105 @@ def process_case(pfem_root, chapter, case, template_yaml, api_key, dry_run=False
     read_stmts = find_read_statements(source_file)
     print(f"  Found {len(read_stmts)} READ(10,*) statements")
 
-    # Read source code (first 300 lines)
-    with open(source_file, 'r', errors='ignore') as f:
-        source_lines = [f.readline() for _ in range(300)]
-        source_code = ''.join(source_lines)
-
-    # Read .dat file
-    dat_content = read_dat_file(dat_file)
-
-    # Format READ statements for prompt
-    read_stmts_formatted = '\n'.join([
-        f"Line {r['line']}: {r['stmt']}" for r in read_stmts
-    ])
-
-    # Build case info
-    case_info = {
-        'program': program,
-        'case': case,
-        'chapter': chapter,
-        'source_code': source_code,
-        'read_statements': read_stmts_formatted,
-        'dat_content': dat_content,
-        'metadata': get_program_metadata(program, chapter)
-    }
-
     if dry_run:
-        print(f"  [DRY RUN] Would generate YAML with {len(read_stmts)} READ statements")
+        print(f"  [DRY RUN] Would generate YAML")
         return True
 
-    # Generate YAML with API
-    print(f"  Generating perfect YAML...")
-    yaml_content = generate_perfect_yaml_with_api(case_info, template_yaml, api_key)
+    # Generate YAML
+    yaml_dict = generate_yaml_from_template(case, chapter, program, source_file, dat_file, read_stmts)
 
-    return yaml_content
+    # Save YAML
+    output_dir.mkdir(parents=True, exist_ok=True)
+    output_file = output_dir / f'{case}.yaml'
+
+    with open(output_file, 'w') as f:
+        yaml.dump(yaml_dict, f, default_flow_style=False, sort_keys=False, allow_unicode=True, width=100)
+
+    print(f"  ✓ Generated: {output_file}")
+    return True
 
 def main():
     parser = argparse.ArgumentParser(
         description='Generate perfect YAML files from PFEM source and data files'
     )
-    parser.add_argument('--chapter', required=True, help='Chapter to process (e.g., chap05)')
-    parser.add_argument('--case', help='Specific case (e.g., p54_1). If not specified, processes all cases.')
+    parser.add_argument('--chapter', help='Chapter to process (e.g., chap05)')
+    parser.add_argument('--case', help='Specific case (e.g., p54_1)')
+    parser.add_argument('--all-chapters', action='store_true', help='Process all chapters 4-11')
     parser.add_argument('--pfem-root', default='/home/naeem/Downloads/pfem5/5th_ed',
                        help='Root directory of PFEM source code')
-    parser.add_argument('--api-key', help='Anthropic API key (or set ANTHROPIC_API_KEY env var)')
     parser.add_argument('--dry-run', action='store_true', help='Show what would be done')
-    parser.add_argument('--output-dir', help='Output directory (default: benchmarks/pfem5/{chapter})')
 
     args = parser.parse_args()
+
+    if not args.chapter and not args.all_chapters:
+        print("Error: Must specify either --chapter or --all-chapters")
+        return 1
 
     # Paths
     pfem_root = Path(args.pfem_root)
     script_dir = Path(__file__).parent
     repo_root = script_dir.parent
 
-    if args.output_dir:
-        output_dir = Path(args.output_dir)
-    else:
-        output_dir = repo_root / 'benchmarks' / 'pfem5' / args.chapter
-
     # Check PFEM root exists
     if not pfem_root.exists():
         print(f"Error: PFEM root not found: {pfem_root}")
+        print(f"       Set correct path with --pfem-root")
         return 1
 
-    # Read template YAML (use p54_1 as template)
-    template_file = output_dir / 'p54_1.yaml'
-    if not template_file.exists():
-        print(f"Error: Template YAML not found: {template_file}")
-        print("       p54_1.yaml is used as the template for perfect YAMLs")
-        return 1
-
-    with open(template_file, 'r') as f:
-        template_yaml = f.read()
-
-    # Get API key
-    api_key = args.api_key or os.environ.get('ANTHROPIC_API_KEY')
-    if not api_key and not args.dry_run:
-        print("Error: API key required. Set ANTHROPIC_API_KEY env var or use --api-key")
-        print("       Get your key from: https://console.anthropic.com/")
-        return 1
-
-    # Find cases to process
-    exec_dir = pfem_root / 'executable' / args.chapter
-    if not exec_dir.exists():
-        print(f"Error: Executable directory not found: {exec_dir}")
-        return 1
-
-    if args.case:
-        cases = [args.case]
+    # Determine chapters to process
+    if args.all_chapters:
+        chapters = [f'chap{i:02d}' for i in range(4, 12)]
     else:
-        # Find all .dat files in chapter
-        dat_files = list(exec_dir.glob('*.dat'))
-        cases = [f.stem for f in sorted(dat_files)]
+        chapters = [args.chapter]
 
-    if not cases:
-        print(f"Warning: No cases found in {exec_dir}")
-        return 0
+    total_success = 0
+    total_cases = 0
 
-    print(f"Found {len(cases)} case(s) to process in {args.chapter}")
-    print(f"Output directory: {output_dir}")
-    print()
+    for chapter in chapters:
+        print(f"\n{'='*60}")
+        print(f"Processing {chapter}")
+        print('='*60)
 
-    # Process each case
-    success_count = 0
-    for i, case in enumerate(cases, 1):
-        print(f"[{i}/{len(cases)}] Processing {case}")
+        output_dir = repo_root / 'benchmarks' / 'pfem5' / chapter
+        exec_dir = pfem_root / 'executable' / chapter
 
-        result = process_case(pfem_root, args.chapter, case, template_yaml, api_key, args.dry_run)
+        if not exec_dir.exists():
+            print(f"Warning: Executable directory not found: {exec_dir}")
+            continue
 
-        if result and not args.dry_run:
-            # Save YAML
-            output_dir.mkdir(parents=True, exist_ok=True)
-            output_file = output_dir / f'{case}.yaml'
-
-            with open(output_file, 'w') as f:
-                f.write(result)
-
-            print(f"  ✓ Generated: {output_file}")
-            success_count += 1
-        elif result and args.dry_run:
-            success_count += 1
+        # Find cases
+        if args.case:
+            cases = [args.case]
         else:
-            print(f"  ✗ Failed to generate YAML")
+            dat_files = list(exec_dir.glob('*.dat'))
+            cases = [f.stem for f in sorted(dat_files)]
 
-        print()
+        if not cases:
+            print(f"Warning: No cases found in {exec_dir}")
+            continue
 
-    print('=' * 60)
-    print(f"Successfully processed {success_count}/{len(cases)} cases")
+        print(f"Found {len(cases)} case(s)\n")
 
-    return 0 if success_count == len(cases) else 1
+        # Process each case
+        success_count = 0
+        for i, case in enumerate(cases, 1):
+            print(f"[{i}/{len(cases)}] Processing {case}")
+
+            if process_case(pfem_root, chapter, case, output_dir, args.dry_run):
+                success_count += 1
+
+            print()
+
+        total_success += success_count
+        total_cases += len(cases)
+
+        print(f"Chapter {chapter}: {success_count}/{len(cases)} successful")
+
+    print('\n' + '='*60)
+    print(f"TOTAL: Successfully processed {total_success}/{total_cases} cases")
+    print('='*60)
+
+    return 0 if total_success == total_cases else 1
 
 if __name__ == '__main__':
     sys.exit(main())

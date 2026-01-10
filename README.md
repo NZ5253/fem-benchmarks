@@ -15,8 +15,8 @@ This repository provides:
 
 ### Prerequisites
 - Linux environment with `gfortran`
-- Python 3 with `pyyaml` package
-- MATLAB (for parametric studies)
+- Python 3 with `pyyaml`
+- MATLAB (optional, for parametric studies)
 - PFEM 5th edition source code at `~/Downloads/pfem5/5th_ed`
 
 ### Installation
@@ -84,19 +84,17 @@ Example: [benchmarks/pfem5/chap05/p51_3.yaml](benchmarks/pfem5/chap05/p51_3.yaml
 
 ## Workflow
 
-### Generate Perfect YAMLs
+### Generate YAMLs
 
 ```bash
-# Generate YAMLs for a chapter
+# Single chapter
 python3 scripts/generate_perfect_yamls.py --chapter chap05
+
+# All chapters at once
+python3 scripts/generate_perfect_yamls.py --all-chapters
 
 # Verify generated YAMLs
 python3 scripts/verify_yamls.py benchmarks/pfem5/chap05/*.yaml
-
-# Commit changes
-git add benchmarks/pfem5/chap05/
-git commit -m "Add Chapter 5 perfect YAML benchmarks"
-git push
 ```
 
 See [docs/GUIDE.md](docs/GUIDE.md) for complete instructions.
