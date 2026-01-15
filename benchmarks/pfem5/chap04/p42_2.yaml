@@ -1,44 +1,46 @@
-id: pfem5_ch04_p41_p41_1
-title: PFEM Program 4.1 (p41) — 4.1 One dimensional analysis of axially loaded elastic rods — case p41_1
-purpose: Analysis using linear elasticity formulation in 1D.
+id: pfem5_ch04_p42_p42_2
+title: PFEM Program 4.2 (p42) — 4.2 Analysis of elastic pin-jointed frames using 2-node rod — case p42_2
+purpose: Analysis using linear elasticity formulation in 2D.
 authors:
   source:
     book: Programming the Finite Element Method
     edition: 5th
     chapter: 4
-    program: p41
-    dataset: p41_1
+    program: p42
+    dataset: p42_2
   entry:
     created_by: Naeem
     created_on: '2026-01-15'
     verified_platform: Linux (gfortran)
 code:
   language: Fortran (F2003)
-  source_file: source/chap04/p41.f03
+  source_file: source/chap04/p42.f03
   uses_modules:
   - main
   - geom
   io_reads_from_unit10:
   - line: 23
-    stmt: READ(10,*)nels,np_types
-  - line: 27
-    stmt: READ(10,*)prop
+    stmt: READ(10,*)nels,nn,ndim,np_types
   - line: 29
+    stmt: READ(10,*)prop
+  - line: 31
     stmt: IF(np_types>1)READ(10,*)etype
-  - line: 30
-    stmt: READ(10,*)ell
   - line: 32
+    stmt: READ(10,*)g_coord
+  - line: 33
+    stmt: READ(10,*)g_num
+  - line: 35
     stmt: READ(10,*)nr,(k,nf(:,k),i=1,nr)
-  - line: 59
+  - line: 64
     stmt: READ(10,*)loaded_nodes,(k,loads(nf(:,k)),i=1,loaded_nodes)
-  - line: 60
+  - line: 65
     stmt: READ(10,*)fixed_freedoms
-  - line: 63
-    stmt: READ(10,*)(node(i),value(i),i=1,fixed_freedoms)
+  - line: 69
+    stmt: READ(10,*)(node(i),sense(i),value(i),i=1,fixed_freedoms)
 fem:
-  dimension: 1
+  dimension: 2
   dof:
-    per_node: 1
+    per_node: 2
 analysis:
   physics: linear elasticity
   type: linear
@@ -55,17 +57,23 @@ tunable_parameters:
   path: inputs.record2.prop
   type: real
   notes: Material properties (E, nu, density, etc.)
+- name: nodal_coordinates
+  path: inputs.record4
+  type: real
+  notes: Node  coordinate values
 - name: applied_loads
-  path: inputs.record6
+  path: inputs.record7
   type: real
   notes: Applied nodal or distributed loads
 input_schema:
   file_type: .dat
   reads_in_order:
   - record: 1
-    fortran_read: READ(10,*)nels,np_types
+    fortran_read: READ(10,*)nels,nn,ndim,np_types
     variables:
     - nels
+    - nn
+    - ndim
     - np_types
   - record: 2
     fortran_read: READ(10,*)prop
@@ -77,10 +85,14 @@ input_schema:
     - etype
     condition: only if np_types>1
   - record: 4
-    fortran_read: READ(10,*)ell
+    fortran_read: READ(10,*)g_coord
     variables:
-    - ell
+    - g_coord
   - record: 5
+    fortran_read: READ(10,*)g_num
+    variables:
+    - g_num
+  - record: 6
     fortran_read: READ(10,*)nr,(k,nf(:,k),i=1,nr)
     variables:
     - nr
@@ -89,7 +101,7 @@ input_schema:
     - k)
     - i=1
     - nr)
-  - record: 6
+  - record: 7
     fortran_read: READ(10,*)loaded_nodes,(k,loads(nf(:,k)),i=1,loaded_nodes)
     variables:
     - loaded_nodes
@@ -98,57 +110,61 @@ input_schema:
     - k))
     - i=1
     - loaded_nodes)
-  - record: 7
+  - record: 8
     fortran_read: READ(10,*)fixed_freedoms
     variables:
     - fixed_freedoms
-  - record: 8
-    fortran_read: READ(10,*)(node(i),value(i),i=1,fixed_freedoms)
+  - record: 9
+    fortran_read: READ(10,*)(node(i),sense(i),value(i),i=1,fixed_freedoms)
     variables:
     - (node(i)
+    - sense(i)
     - value(i)
     - i=1
     - fixed_freedoms)
 inputs:
   working_directory: executable/chap04
-  basename: p41_1
-  dat_file: executable/chap04/p41_1.dat
+  basename: p42_2
+  dat_file: executable/chap04/p42_2.dat
   record1:
-    raw_value: 4  1
-    description: Values for nels, np_types
+    raw_value: 4  5  3  1
+    description: Values for nels, nn, ndim, np_types
   record2:
-    raw_value: '100000.0'
+    raw_value: 5.0e5
     description: Values for prop
   record3:
-    raw_value: 0.25  0.25  0.25  0.25
+    raw_value: 0.0  0.0  0.0    1.25  3.0   0.0    3.5   2.0   0.0
     description: Values for etype
   record4:
-    raw_value: '1'
-    description: Values for ell
+    raw_value: 4.0  1.0  0.0    2.0   1.5   3.0
+    description: Values for g_coord
   record5:
-    raw_value: 5 0
-    description: Values for nr, (k, nf(:, k), i=1, nr)
+    raw_value: 1 5  2 5  3 5  4 5
+    description: Values for g_num
   record6:
-    raw_value: '5'
-    description: Values for loaded_nodes, (k, loads(nf(:, k)), i=1, loaded_nodes)
+    raw_value: '4'
+    description: Values for nr, (k, nf(:, k), i=1, nr)
   record7:
-    raw_value: 1 -0.625  2 -1.25  3 -1.25  4 -1.25  5 -0.625
-    description: Values for fixed_freedoms
+    raw_value: 1 0 0 0  2 0 0 0  3 0 0 0  4 0 0 0
+    description: Values for loaded_nodes, (k, loads(nf(:, k)), i=1, loaded_nodes)
   record8:
-    raw_value: '0'
-    description: Values for (node(i), value(i), i=1, fixed_freedoms)
+    raw_value: '1'
+    description: Values for fixed_freedoms
+  record9:
+    raw_value: 5  20.0  -20.0  30.0
+    description: Values for (node(i), sense(i), value(i), i=1, fixed_freedoms)
 outputs:
   output_directory: executable/chap04
   files_expected:
-  - p41_1.res
-  - p41_1.msh
+  - p42_2.res
+  - p42_2.msh
 how_to_run:
   linux:
   - cd ~/Downloads/pfem5/5th_ed/executable/chap04
-  - printf "p41_1\n" | ~/Downloads/pfem5/5th_ed/build/bin/p41
+  - printf "p42_2\n" | ~/Downloads/pfem5/5th_ed/build/bin/p42
   matlab:
   - pfem_root = '~/Downloads/pfem5/5th_ed';
-  - '[status, outputs] = pfem_runner(pfem_root, ''chap04'', ''p41'', ''p41_1'');'
+  - '[status, outputs] = pfem_runner(pfem_root, ''chap04'', ''p42'', ''p42_2'');'
 notes:
 - Program prompts for the base name of the .dat file (do not type the .dat extension).
-- This case has 8 READ(10,*) statements reading from the .dat file.
+- This case has 9 READ(10,*) statements reading from the .dat file.

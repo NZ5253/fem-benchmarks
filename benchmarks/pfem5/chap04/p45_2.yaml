@@ -1,0 +1,199 @@
+id: pfem5_ch04_p45_p45_2
+title: PFEM Program 4.5 (p45) — 4.5 Analysis of elasto-plastic beams or rigid-jointed frames — case p45_2
+purpose: Analysis using dynamics formulation in 2D.
+authors:
+  source:
+    book: Programming the Finite Element Method
+    edition: 5th
+    chapter: 4
+    program: p45
+    dataset: p45_2
+  entry:
+    created_by: Naeem
+    created_on: '2026-01-15'
+    verified_platform: Linux (gfortran)
+code:
+  language: Fortran (F2003)
+  source_file: source/chap04/p45.f03
+  uses_modules:
+  - main
+  - geom
+  io_reads_from_unit10:
+  - line: 27
+    stmt: READ(10,*)nels,nn,ndim,nprops,np_types
+  - line: 36
+    stmt: READ(10,*)prop
+  - line: 38
+    stmt: IF(np_types>1)READ(10,*)etype
+  - line: 39
+    stmt: IF(ndim==3)READ(10,*)gamma
+  - line: 40
+    stmt: READ(10,*)g_coord
+  - line: 41
+    stmt: READ(10,*)g_num
+  - line: 43
+    stmt: READ(10,*)nr,(k,nf(:,k),i=1,nr)
+  - line: 71
+    stmt: READ(10,*)loaded_nodes
+  - line: 73
+    stmt: READ(10,*)(node(i),val(i,:),i=1,loaded_nodes)
+  - line: 74
+    stmt: READ(10,*)limit,tol,incs
+  - line: 76
+    stmt: READ(10,*)dload
+fem:
+  dimension: 2
+  dof:
+    per_node: 2
+analysis:
+  physics: dynamics
+  type: nonlinear
+  regime: steady-state
+units:
+  system: consistent
+  notes: PFEM assumes consistent units. Choose a unit system and maintain consistency.
+tunable_parameters:
+- name: material_properties
+  path: inputs.record1.prop
+  type: real
+  notes: Material properties (E, nu, density, etc.)
+- name: mesh_parameters
+  path: inputs.record1
+  type: int
+  notes: Mesh configuration (elements, nodes, divisions)
+- name: material_properties
+  path: inputs.record2.prop
+  type: real
+  notes: Material properties (E, nu, density, etc.)
+- name: nodal_coordinates
+  path: inputs.record5
+  type: real
+  notes: Node  coordinate values
+- name: applied_loads
+  path: inputs.record8
+  type: real
+  notes: Applied nodal or distributed loads
+- name: applied_loads
+  path: inputs.record9
+  type: real
+  notes: Applied nodal or distributed loads
+- name: applied_loads
+  path: inputs.record11
+  type: real
+  notes: Applied nodal or distributed loads
+input_schema:
+  file_type: .dat
+  reads_in_order:
+  - record: 1
+    fortran_read: READ(10,*)nels,nn,ndim,nprops,np_types
+    variables:
+    - nels
+    - nn
+    - ndim
+    - nprops
+    - np_types
+  - record: 2
+    fortran_read: READ(10,*)prop
+    variables:
+    - prop
+  - record: 3
+    fortran_read: IF(np_types>1)READ(10,*)etype
+    variables:
+    - etype
+    condition: only if np_types>1
+  - record: 4
+    fortran_read: IF(ndim==3)READ(10,*)gamma
+    variables:
+    - gamma
+    condition: only if ndim==3
+  - record: 5
+    fortran_read: READ(10,*)g_coord
+    variables:
+    - g_coord
+  - record: 6
+    fortran_read: READ(10,*)g_num
+    variables:
+    - g_num
+  - record: 7
+    fortran_read: READ(10,*)nr,(k,nf(:,k),i=1,nr)
+    variables:
+    - nr
+    - (k
+    - 'nf(:'
+    - k)
+    - i=1
+    - nr)
+  - record: 8
+    fortran_read: READ(10,*)loaded_nodes
+    variables:
+    - loaded_nodes
+  - record: 9
+    fortran_read: READ(10,*)(node(i),val(i,:),i=1,loaded_nodes)
+    variables:
+    - (node(i)
+    - val(i
+    - :)
+    - i=1
+    - loaded_nodes)
+  - record: 10
+    fortran_read: READ(10,*)limit,tol,incs
+    variables:
+    - limit
+    - tol
+    - incs
+  - record: 11
+    fortran_read: READ(10,*)dload
+    variables:
+    - dload
+inputs:
+  working_directory: executable/chap04
+  basename: p45_2
+  dat_file: executable/chap04/p45_2.dat
+  record1:
+    raw_value: 12  10  3  7  1
+    description: Values for nels, nn, ndim, nprops, np_types
+  record2:
+    raw_value: 1.0  1.e4  1.e4  1.0  1.0  1.0  1.e8
+    description: Values for prop
+  record3:
+    raw_value: 0.0  0.0  0.0    0.0  0.0  0.0    0.0  0.0  0.0    0.0  0.0  0.0
+    description: Values for etype
+  record4:
+    raw_value: 0.0  0.0  0.0    1.0  0.0  0.0    1.0  1.0  0.0    2.0  0.0  0.0
+    description: Values for gamma
+  record5:
+    raw_value: 2.0  1.0  0.0    2.0  2.0  0.0    3.0  0.0  0.0    3.0  1.0  0.0
+    description: Values for g_coord
+  record6:
+    raw_value: 3.0  2.0  0.0    3.0  3.0  0.0
+    description: Values for g_num
+  record7:
+    raw_value: 1 2  2 3  2 4  3 5  4 5  5 6  4 7  5 8  6 9  7 8  8 9  9 10
+    description: Values for nr, (k, nf(:, k), i=1, nr)
+  record8:
+    raw_value: '4'
+    description: Values for loaded_nodes
+  record9:
+    raw_value: 1 0 0 0 0 0 0  3 0 0 0 0 0 0  6 0 0 0 0 0 0  10 0 0 0 0 0 0
+    description: Values for (node(i), val(i, :), i=1, loaded_nodes)
+  record10:
+    raw_value: '1'
+    description: Values for limit, tol, incs
+  record11:
+    raw_value: 7  0.0  0.0  1.0  0.0  0.0  0.0
+    description: Values for dload
+outputs:
+  output_directory: executable/chap04
+  files_expected:
+  - p45_2.res
+  - p45_2.msh
+how_to_run:
+  linux:
+  - cd ~/Downloads/pfem5/5th_ed/executable/chap04
+  - printf "p45_2\n" | ~/Downloads/pfem5/5th_ed/build/bin/p45
+  matlab:
+  - pfem_root = '~/Downloads/pfem5/5th_ed';
+  - '[status, outputs] = pfem_runner(pfem_root, ''chap04'', ''p45'', ''p45_2'');'
+notes:
+- Program prompts for the base name of the .dat file (do not type the .dat extension).
+- This case has 11 READ(10,*) statements reading from the .dat file.

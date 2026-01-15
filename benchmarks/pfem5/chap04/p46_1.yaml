@@ -1,0 +1,123 @@
+id: pfem5_ch04_p46_p46_1
+title: PFEM Program 4.6 (p46) — 4.6 Stability (buckling) analysis of elastic beams using 2-node — case
+  p46_1
+purpose: Analysis using linear elasticity formulation in 2D.
+authors:
+  source:
+    book: Programming the Finite Element Method
+    edition: 5th
+    chapter: 4
+    program: p46
+    dataset: p46_1
+  entry:
+    created_by: Naeem
+    created_on: '2026-01-15'
+    verified_platform: Linux (gfortran)
+code:
+  language: Fortran (F2003)
+  source_file: source/chap04/p46.f03
+  uses_modules:
+  - main
+  - geom
+  io_reads_from_unit10:
+  - line: 23
+    stmt: READ(10,*)nels,nprops,np_types
+  - line: 28
+    stmt: READ(10,*)prop
+  - line: 30
+    stmt: IF(np_types>1)READ(10,*)etype
+  - line: 31
+    stmt: READ(10,*)ell
+  - line: 33
+    stmt: READ(10,*)nr,(k,nf(:,k),i=1,nr),limit,tol
+fem:
+  dimension: 2
+  dof:
+    per_node: 2
+analysis:
+  physics: linear elasticity
+  type: linear
+  regime: steady-state
+units:
+  system: consistent
+  notes: PFEM assumes consistent units. Choose a unit system and maintain consistency.
+tunable_parameters:
+- name: material_properties
+  path: inputs.record1.prop
+  type: real
+  notes: Material properties (E, nu, density, etc.)
+- name: mesh_parameters
+  path: inputs.record1
+  type: int
+  notes: Mesh configuration (elements, nodes, divisions)
+- name: material_properties
+  path: inputs.record2.prop
+  type: real
+  notes: Material properties (E, nu, density, etc.)
+input_schema:
+  file_type: .dat
+  reads_in_order:
+  - record: 1
+    fortran_read: READ(10,*)nels,nprops,np_types
+    variables:
+    - nels
+    - nprops
+    - np_types
+  - record: 2
+    fortran_read: READ(10,*)prop
+    variables:
+    - prop
+  - record: 3
+    fortran_read: IF(np_types>1)READ(10,*)etype
+    variables:
+    - etype
+    condition: only if np_types>1
+  - record: 4
+    fortran_read: READ(10,*)ell
+    variables:
+    - ell
+  - record: 5
+    fortran_read: READ(10,*)nr,(k,nf(:,k),i=1,nr),limit,tol
+    variables:
+    - nr
+    - (k
+    - 'nf(:'
+    - k)
+    - i=1
+    - nr)
+    - limit
+    - tol
+inputs:
+  working_directory: executable/chap04
+  basename: p46_1
+  dat_file: executable/chap04/p46_1.dat
+  record1:
+    raw_value: 4  1  1
+    description: Values for nels, nprops, np_types
+  record2:
+    raw_value: '1.0'
+    description: Values for prop
+  record3:
+    raw_value: 0.25 0.25 0.25 0.25
+    description: Values for etype
+  record4:
+    raw_value: '2'
+    description: Values for ell
+  record5:
+    raw_value: 1 0 1  5 0 0
+    description: Values for nr, (k, nf(:, k), i=1, nr), limit, tol
+outputs:
+  output_directory: executable/chap04
+  files_expected:
+  - p46_1.res
+  - p46_1.msh
+how_to_run:
+  linux:
+  - cd ~/Downloads/pfem5/5th_ed/executable/chap04
+  - printf "p46_1\n" | ~/Downloads/pfem5/5th_ed/build/bin/p46
+  matlab:
+  - pfem_root = '~/Downloads/pfem5/5th_ed';
+  - '[status, outputs] = pfem_runner(pfem_root, ''chap04'', ''p46'', ''p46_1'');'
+notes:
+- Program prompts for the base name of the .dat file (do not type the .dat extension).
+- This case has 5 READ(10,*) statements reading from the .dat file.
