@@ -42,3 +42,6 @@ __pycache__/
 *.swp
 *.swo
 *~
+runs/
+# simpler: just unignore the exact two foldersRUN1/
+.gitignoreRUN2/
