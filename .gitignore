@@ -27,6 +27,14 @@ pfem_yaml_bundle/
 # Run outputs
 runs/
 
+!runs/
+!runs/single/
+!runs/single/chap05/
+!runs/single/chap05/p51/
+!runs/single/chap05/p51/p51_3/
+!runs/single/chap05/p51/p51_3/205320/
+!runs/single/chap05/p51/p51_3/205319/
+
 # Build directories
 build/
 **/build/
