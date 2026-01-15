@@ -1,0 +1,45 @@
+%!PS-Adobe-1.0
+%%DocumentFonts: none
+%%Pages: 1
+%%EndComments
+/m {moveto} def
+/l {lineto} def
+/s {stroke} def
+/c {closepath} def
+%%EndProlog
+%%Page: 0 1
+gsave
+   108.00   328.75 translate
+     0.50 setlinewidth
+     0.00    55.80 m
+     0.00   112.20 l
+   132.16   112.20 l
+   135.13    56.90 l
+c s
+     0.00     0.00 m
+     0.00    55.80 l
+   135.13    56.90 l
+   132.00     0.00 l
+c s
+   135.13    56.90 m
+   132.16   112.20 l
+   264.25   134.49 l
+   266.91    66.39 l
+c s
+   132.00     0.00 m
+   135.13    56.90 l
+   266.91    66.39 l
+   264.00     0.00 l
+c s
+   266.91    66.39 m
+   264.25   134.49 l
+   396.00   132.56 l
+   396.00    66.69 l
+c s
+   264.00     0.00 m
+   266.91    66.39 l
+   396.00    66.69 l
+   396.00     0.00 l
+c s
+grestore
+showpage
