@@ -1,4 +1,4 @@
-% NZ_sweep.m - Run a loop of simulations
+% NZ_sweep.m - Run a loop of simulations with auto-discovery
 clear; clc;
 
 % Setup Paths
@@ -7,34 +7,70 @@ pfem_root = fullfile(getenv('HOME'), 'Downloads', 'pfem5', '5th_ed');
 addpath(fullfile(repo_root, 'matlab'));
 addpath(fullfile(repo_root, 'matlab', 'utils'));
 
-yaml_path = fullfile(repo_root, 'benchmarks', 'pfem5', 'chap05', 'p51_3.yaml');
+%% Configuration - EDIT THIS SECTION
+yaml_path = fullfile(repo_root, 'benchmarks', 'pfem5', 'chap05', 'p51_2.yaml');
 
-% Define the Sweep
-E_values = [1.0e5, 2.0e5, 5.0e5]; % varying Young's Modulus
+% Show available tunables for this case
+fprintf('Loading YAML and discovering tunables...\n');
+tunables = pfem_show_tunables(yaml_path);
+
+% Pick parameter to sweep (must match a name from tunables above)
+sweep_param = 'youngs_modulus_E';
+sweep_values = [1000, 2000, 4000, 8000];  % Adjust based on current_value shown above
+
+%% Validate parameter exists
+param_names = {tunables.name};
+if ~ismember(sweep_param, param_names)
+    error('Parameter "%s" not found! Available: %s', sweep_param, strjoin(param_names, ', '));
+end
+
+%% Run Sweep
 results = struct();
+fprintf('\n');
+fprintf('============================================================\n');
+fprintf('Sweeping %s over %d values\n', sweep_param, length(sweep_values));
+fprintf('============================================================\n\n');
 
-fprintf('Starting Sweep over %d values...\n', length(E_values));
+for i = 1:length(sweep_values)
+    val = sweep_values(i);
 
-for i = 1:length(E_values)
-    % 1. Set current parameter
+    % Build overrides dynamically
     overrides = struct();
-    overrides.youngs_modulus_E = E_values(i);
-    
-    fprintf('[Run %d] E = %.2e ... ', i, E_values(i));
-    
-    % 2. Run Simulation
+    overrides.(sweep_param) = val;
+
+    fprintf('[Run %d/%d] %s = %.4g ... ', i, length(sweep_values), sweep_param, val);
+
+    % Run Simulation
     [status, out] = pfem_run_from_yaml(repo_root, pfem_root, yaml_path, overrides);
-    
-    % 3. Store Result
-    results(i).E = E_values(i);
+
+    % Store Result
+    results(i).param = sweep_param;
+    results(i).value = val;
     results(i).status = status;
+    results(i).run_dir = out.work_dir;
     results(i).files = out.files;
-    
+
     if status == 0
-        fprintf('Success\n');
+        fprintf('Success (%d files)\n', out.num_files);
     else
         fprintf('Failed\n');
     end
 end
 
-fprintf('Sweep Complete.\n');
+%% Summary
+fprintf('\n');
+fprintf('============================================================\n');
+fprintf('Sweep Complete: %d/%d successful\n', sum([results.status]==0), length(sweep_values));
+fprintf('============================================================\n');
+
+% Display results table
+fprintf('\n%-12s  %-8s  %s\n', 'VALUE', 'STATUS', 'RUN_DIR');
+fprintf('%s\n', repmat('-', 1, 70));
+for i = 1:length(results)
+    if results(i).status == 0
+        status_str = 'OK';
+    else
+        status_str = 'FAIL';
+    end
+    fprintf('%-12.4g  %-8s  %s\n', results(i).value, status_str, results(i).run_dir);
+end

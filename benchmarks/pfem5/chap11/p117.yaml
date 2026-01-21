@@ -1,0 +1,171 @@
+id: pfem5_ch11_p117_p117
+title: PFEM Program p117 — case p117
+purpose: Linear Elasticity analysis in 2D.
+authors:
+  source:
+    book: Programming the Finite Element Method
+    edition: 5th
+    chapter: 11
+    program: p117
+    dataset: p117
+  entry:
+    created_by: Naeem
+    created_on: '2026-01-22'
+    verified_platform: Linux (gfortran)
+code:
+  language: Fortran (F2003)
+  source_file: source/chap11/p117.f03
+  uses_modules:
+  - main
+  - geom
+  io_reads_from_unit10:
+  - line: 33
+    stmt: READ(10,*)nxe,nye,cg_tol,cg_limit,np_types
+  - line: 41
+    stmt: READ(10,*)prop
+  - line: 43
+    stmt: IF(np_types>1)READ(10,*)etype
+  - line: 44
+    stmt: READ(10,*)x_coords,y_coords,dtim,nstep,theta,npri,nres,fm,fk
+  - line: 46
+    stmt: READ(10,*)nr,(k,nf(:,k),i=1,nr)
+  - line: 52
+    stmt: READ(10,*)loaded_nodes
+  - line: 54
+    stmt: READ(10,*)(node(i),val(i,:),i=1,loaded_nodes)
+fem:
+  dimension: 2
+  dof:
+    per_node: 2
+analysis:
+  physics: linear elasticity
+  type: linear
+  regime: steady-state
+units:
+  system: consistent
+  notes: PFEM assumes consistent units.
+tunable_parameters:
+- name: nels_or_nxe
+  global_token_index: 1
+  line: 1
+  type: int
+  description: Number of elements (nels) or x-divisions (nxe)
+  unit_category: count
+  current_value: '3'
+- name: np_types_or_nye
+  global_token_index: 2
+  line: 1
+  type: int
+  description: Material types (np_types) or y-divisions (nye)
+  unit_category: count
+  current_value: '1'
+input_schema:
+  file_type: .dat
+  total_tokens: 35
+  reads_in_order:
+  - record: 1
+    fortran_read: READ(10,*)nxe,nye,cg_tol,cg_limit,np_types
+    variables:
+    - nxe
+    - nye
+    - cg_tol
+    - cg_limit
+    - np_types
+  - record: 2
+    fortran_read: READ(10,*)prop
+    variables:
+    - prop
+  - record: 3
+    fortran_read: IF(np_types>1)READ(10,*)etype
+    variables:
+    - etype
+    conditional: true
+  - record: 4
+    fortran_read: READ(10,*)x_coords,y_coords,dtim,nstep,theta,npri,nres,fm,fk
+    variables:
+    - x_coords
+    - y_coords
+    - dtim
+    - nstep
+    - theta
+    - npri
+    - nres
+    - fm
+    - fk
+  - record: 5
+    fortran_read: READ(10,*)nr,(k,nf(:,k),i=1,nr)
+    variables:
+    - nr
+    - (k
+    - 'nf(:'
+    - k)
+    - i=1
+    - nr)
+  - record: 6
+    fortran_read: READ(10,*)loaded_nodes
+    variables:
+    - loaded_nodes
+  - record: 7
+    fortran_read: READ(10,*)(node(i),val(i,:),i=1,loaded_nodes)
+    variables:
+    - (node(i)
+    - val(i
+    - :)
+    - i=1
+    - loaded_nodes)
+inputs:
+  working_directory: executable/chap11
+  basename: p117
+  dat_file: executable/chap11/p117.dat
+  all_tokens:
+  - '3'
+  - '1'
+  - '1.0e-5'
+  - '50'
+  - '1'
+  - '1.0'
+  - '0.3'
+  - '1.0'
+  - '0.0'
+  - '1.33333'
+  - '2.66667'
+  - '4.0'
+  - '0.0'
+  - '-1.0'
+  - '1.0'
+  - '20'
+  - '0.5'
+  - '1'
+  - '18'
+  - '0.005'
+  - '0.272'
+  - '3'
+  - '1'
+  - '0'
+  - '0'
+  - '2'
+  - '0'
+  - '0'
+  - '3'
+  - '0'
+  - '0'
+  - '1'
+  - '18'
+  - '0.0'
+  - '1.0'
+outputs:
+  output_directory: executable/chap11
+  files_expected:
+  - p117.res
+  - p117.msh
+how_to_run:
+  linux:
+  - cd ~/Downloads/pfem5/5th_ed/executable/chap11
+  - printf "p117\n" | ~/Downloads/pfem5/5th_ed/build/bin/p117
+  matlab:
+  - pfem_root = '~/Downloads/pfem5/5th_ed';
+  - '[status, out] = pfem_run_from_yaml(repo_root, pfem_root, yaml_path, struct());'
+notes:
+- Use global_token_index from tunable_parameters for patching.
+- The patcher replaces tokens by their 1-based index in the flat token list.
+- This file has 35 tokens and 7 READ statements.

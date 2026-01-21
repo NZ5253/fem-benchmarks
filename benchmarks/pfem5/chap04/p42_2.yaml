@@ -1,6 +1,6 @@
 id: pfem5_ch04_p42_p42_2
-title: PFEM Program 4.2 (p42) — 4.2 Analysis of elastic pin-jointed frames using 2-node rod — case p42_2
-purpose: Analysis using linear elasticity formulation in 2D.
+title: PFEM Program p42 — case p42_2
+purpose: Linear Elasticity analysis in 2D.
 authors:
   source:
     book: Programming the Finite Element Method
@@ -10,7 +10,7 @@ authors:
     dataset: p42_2
   entry:
     created_by: Naeem
-    created_on: '2026-01-15'
+    created_on: '2026-01-22'
     verified_platform: Linux (gfortran)
 code:
   language: Fortran (F2003)
@@ -47,26 +47,35 @@ analysis:
   regime: steady-state
 units:
   system: consistent
-  notes: PFEM assumes consistent units. Choose a unit system and maintain consistency.
+  notes: PFEM assumes consistent units.
 tunable_parameters:
-- name: mesh_parameters
-  path: inputs.record1
+- name: youngs_modulus_E
+  global_token_index: 5
+  line: 2
+  type: real
+  description: Young's modulus
+  unit_category: stress
+  current_value: 5.0e5
+  suggested_range:
+  - 10000.0
+  - 1000000000000.0
+- name: nels_or_nxe
+  global_token_index: 1
+  line: 1
   type: int
-  notes: Mesh configuration (elements, nodes, divisions)
-- name: material_properties
-  path: inputs.record2.prop
-  type: real
-  notes: Material properties (E, nu, density, etc.)
-- name: nodal_coordinates
-  path: inputs.record4
-  type: real
-  notes: Node  coordinate values
-- name: applied_loads
-  path: inputs.record7
-  type: real
-  notes: Applied nodal or distributed loads
+  description: Number of elements (nels) or x-divisions (nxe)
+  unit_category: count
+  current_value: '4'
+- name: np_types_or_nye
+  global_token_index: 2
+  line: 1
+  type: int
+  description: Material types (np_types) or y-divisions (nye)
+  unit_category: count
+  current_value: '5'
 input_schema:
   file_type: .dat
+  total_tokens: 54
   reads_in_order:
   - record: 1
     fortran_read: READ(10,*)nels,nn,ndim,np_types
@@ -83,7 +92,7 @@ input_schema:
     fortran_read: IF(np_types>1)READ(10,*)etype
     variables:
     - etype
-    condition: only if np_types>1
+    conditional: true
   - record: 4
     fortran_read: READ(10,*)g_coord
     variables:
@@ -126,33 +135,61 @@ inputs:
   working_directory: executable/chap04
   basename: p42_2
   dat_file: executable/chap04/p42_2.dat
-  record1:
-    raw_value: 4  5  3  1
-    description: Values for nels, nn, ndim, np_types
-  record2:
-    raw_value: 5.0e5
-    description: Values for prop
-  record3:
-    raw_value: 0.0  0.0  0.0    1.25  3.0   0.0    3.5   2.0   0.0
-    description: Values for etype
-  record4:
-    raw_value: 4.0  1.0  0.0    2.0   1.5   3.0
-    description: Values for g_coord
-  record5:
-    raw_value: 1 5  2 5  3 5  4 5
-    description: Values for g_num
-  record6:
-    raw_value: '4'
-    description: Values for nr, (k, nf(:, k), i=1, nr)
-  record7:
-    raw_value: 1 0 0 0  2 0 0 0  3 0 0 0  4 0 0 0
-    description: Values for loaded_nodes, (k, loads(nf(:, k)), i=1, loaded_nodes)
-  record8:
-    raw_value: '1'
-    description: Values for fixed_freedoms
-  record9:
-    raw_value: 5  20.0  -20.0  30.0
-    description: Values for (node(i), sense(i), value(i), i=1, fixed_freedoms)
+  all_tokens:
+  - '4'
+  - '5'
+  - '3'
+  - '1'
+  - 5.0e5
+  - '0.0'
+  - '0.0'
+  - '0.0'
+  - '1.25'
+  - '3.0'
+  - '0.0'
+  - '3.5'
+  - '2.0'
+  - '0.0'
+  - '4.0'
+  - '1.0'
+  - '0.0'
+  - '2.0'
+  - '1.5'
+  - '3.0'
+  - '1'
+  - '5'
+  - '2'
+  - '5'
+  - '3'
+  - '5'
+  - '4'
+  - '5'
+  - '4'
+  - '1'
+  - '0'
+  - '0'
+  - '0'
+  - '2'
+  - '0'
+  - '0'
+  - '0'
+  - '3'
+  - '0'
+  - '0'
+  - '0'
+  - '4'
+  - '0'
+  - '0'
+  - '0'
+  - '1'
+  - '5'
+  - '20.0'
+  - '-20.0'
+  - '30.0'
+  - '1'
+  - '5'
+  - '2'
+  - '-0.0005'
 outputs:
   output_directory: executable/chap04
   files_expected:
@@ -164,7 +201,8 @@ how_to_run:
   - printf "p42_2\n" | ~/Downloads/pfem5/5th_ed/build/bin/p42
   matlab:
   - pfem_root = '~/Downloads/pfem5/5th_ed';
-  - '[status, outputs] = pfem_runner(pfem_root, ''chap04'', ''p42'', ''p42_2'');'
+  - '[status, out] = pfem_run_from_yaml(repo_root, pfem_root, yaml_path, struct());'
 notes:
-- Program prompts for the base name of the .dat file (do not type the .dat extension).
-- This case has 9 READ(10,*) statements reading from the .dat file.
+- Use global_token_index from tunable_parameters for patching.
+- The patcher replaces tokens by their 1-based index in the flat token list.
+- This file has 54 tokens and 9 READ statements.

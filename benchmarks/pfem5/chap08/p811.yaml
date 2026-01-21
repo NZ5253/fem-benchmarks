@@ -1,0 +1,356 @@
+id: pfem5_ch08_p811_p811
+title: PFEM Program p811 — case p811
+purpose: Thermal analysis in 2D.
+authors:
+  source:
+    book: Programming the Finite Element Method
+    edition: 5th
+    chapter: 8
+    program: p811
+    dataset: p811
+  entry:
+    created_by: Naeem
+    created_on: '2026-01-22'
+    verified_platform: Linux (gfortran)
+code:
+  language: Fortran (F2003)
+  source_file: source/chap08/p811.f03
+  uses_modules:
+  - main
+  - geom
+  io_reads_from_unit10:
+  - line: 27
+    stmt: READ(10,*)type_2d,dir,nxe,nye,np_types
+  - line: 36
+    stmt: READ(10,*)prop
+  - line: 38
+    stmt: if(np_types>1)read(10,*)etype
+  - line: 39
+    stmt: READ(10,*)x_coords,y_coords
+  - line: 40
+    stmt: READ(10,*)dtim,nstep,theta,npri,nres,ntime
+  - line: 86
+    stmt: READ(10,*)nflx,(k,flxv(k),i=1,nflx);rhs=flxv
+  - line: 87
+    stmt: READ(10,*)ncon
+  - line: 90
+    stmt: READ(10,*)(econn(:,i),econv(:,i),i=1,ncon)
+  - line: 119
+    stmt: READ(10,*)loads(1:)
+  - line: 121
+    stmt: READ(10,*)fixed_freedoms
+  - line: 125
+    stmt: READ(10,*)(node(i),value(i),i=1,fixed_freedoms)
+  - line: 142
+    stmt: READ(10,*)nci
+fem:
+  dimension: 2
+  dof:
+    per_node: 2
+analysis:
+  physics: thermal
+  type: linear
+  regime: steady-state
+units:
+  system: consistent
+  notes: PFEM assumes consistent units.
+tunable_parameters:
+- name: youngs_modulus_E
+  global_token_index: 8
+  line: 3
+  type: real
+  description: Young's modulus
+  unit_category: stress
+  current_value: '4155400.0'
+  suggested_range:
+  - 10000.0
+  - 1000000000000.0
+- name: poisson_ratio_nu
+  global_token_index: 10
+  line: 4
+  type: real
+  description: Poisson's ratio
+  unit_category: dimensionless
+  current_value: '0.005'
+  suggested_range:
+  - 0.0
+  - 0.49
+- name: permeability_k
+  global_token_index: 11
+  line: 4
+  type: real
+  description: Permeability or conductivity
+  unit_category: permeability
+  current_value: '0.01'
+  suggested_range:
+  - 1.0e-06
+  - 100.0
+- name: nels_or_nxe
+  global_token_index: 3
+  line: 2
+  type: int
+  description: Number of elements (nels) or x-divisions (nxe)
+  unit_category: count
+  current_value: '8'
+- name: np_types_or_nye
+  global_token_index: 4
+  line: 2
+  type: int
+  description: Material types (np_types) or y-divisions (nye)
+  unit_category: count
+  current_value: '6'
+input_schema:
+  file_type: .dat
+  total_tokens: 159
+  reads_in_order:
+  - record: 1
+    fortran_read: READ(10,*)type_2d,dir,nxe,nye,np_types
+    variables:
+    - type_2d
+    - dir
+    - nxe
+    - nye
+    - np_types
+  - record: 2
+    fortran_read: READ(10,*)prop
+    variables:
+    - prop
+  - record: 3
+    fortran_read: if(np_types>1)read(10,*)etype
+    variables:
+    - etype
+    conditional: true
+  - record: 4
+    fortran_read: READ(10,*)x_coords,y_coords
+    variables:
+    - x_coords
+    - y_coords
+  - record: 5
+    fortran_read: READ(10,*)dtim,nstep,theta,npri,nres,ntime
+    variables:
+    - dtim
+    - nstep
+    - theta
+    - npri
+    - nres
+    - ntime
+  - record: 6
+    fortran_read: READ(10,*)nflx,(k,flxv(k),i=1,nflx);rhs=flxv
+    variables:
+    - nflx
+    - (k
+    - flxv(k)
+    - i=1
+    - nflx);rhs=flxv
+  - record: 7
+    fortran_read: READ(10,*)ncon
+    variables:
+    - ncon
+  - record: 8
+    fortran_read: READ(10,*)(econn(:,i),econv(:,i),i=1,ncon)
+    variables:
+    - '(econn(:'
+    - i)
+    - 'econv(:'
+    - i)
+    - i=1
+    - ncon)
+  - record: 9
+    fortran_read: READ(10,*)loads(1:)
+    variables:
+    - loads(1:)
+  - record: 10
+    fortran_read: READ(10,*)fixed_freedoms
+    variables:
+    - fixed_freedoms
+  - record: 11
+    fortran_read: READ(10,*)(node(i),value(i),i=1,fixed_freedoms)
+    variables:
+    - (node(i)
+    - value(i)
+    - i=1
+    - fixed_freedoms)
+  - record: 12
+    fortran_read: READ(10,*)nci
+    variables:
+    - nci
+inputs:
+  working_directory: executable/chap08
+  basename: p811
+  dat_file: executable/chap08/p811.dat
+  all_tokens:
+  - '''axisymmetric'''
+  - '''z'''
+  - '8'
+  - '6'
+  - '1'
+  - '17.4'
+  - '17.4'
+  - '4155400.0'
+  - '0.0'
+  - '0.005'
+  - '0.01'
+  - '0.015'
+  - '0.02'
+  - '0.025'
+  - '0.03'
+  - '0.035'
+  - '0.04'
+  - '0.0'
+  - '-0.005'
+  - '-0.01'
+  - '-0.015'
+  - '-0.02'
+  - '-0.025'
+  - '-0.03'
+  - '1.0'
+  - '180'
+  - '0.5'
+  - '15'
+  - '7'
+  - '180'
+  - '0'
+  - '14'
+  - '1'
+  - '8'
+  - '500.0'
+  - '300.0'
+  - '8'
+  - '15'
+  - '500.0'
+  - '300.0'
+  - '15'
+  - '22'
+  - '500.0'
+  - '300.0'
+  - '22'
+  - '29'
+  - '500.0'
+  - '300.0'
+  - '29'
+  - '36'
+  - '500.0'
+  - '300.0'
+  - '36'
+  - '43'
+  - '500.0'
+  - '300.0'
+  - '43'
+  - '50'
+  - '500.0'
+  - '300.0'
+  - '50'
+  - '57'
+  - '500.0'
+  - '300.0'
+  - '57'
+  - '58'
+  - '500.0'
+  - '300.0'
+  - '58'
+  - '59'
+  - '500.0'
+  - '300.0'
+  - '59'
+  - '60'
+  - '500.0'
+  - '300.0'
+  - '60'
+  - '61'
+  - '500.0'
+  - '300.0'
+  - '61'
+  - '62'
+  - '500.0'
+  - '300.0'
+  - '62'
+  - '63'
+  - '500.0'
+  - '300.0'
+  - '600.0'
+  - '600.0'
+  - '600.0'
+  - '600.0'
+  - '600.0'
+  - '600.0'
+  - '600.0'
+  - '600.0'
+  - '600.0'
+  - '600.0'
+  - '600.0'
+  - '600.0'
+  - '600.0'
+  - '600.0'
+  - '600.0'
+  - '600.0'
+  - '600.0'
+  - '600.0'
+  - '600.0'
+  - '600.0'
+  - '600.0'
+  - '600.0'
+  - '600.0'
+  - '600.0'
+  - '600.0'
+  - '600.0'
+  - '600.0'
+  - '600.0'
+  - '600.0'
+  - '600.0'
+  - '600.0'
+  - '600.0'
+  - '600.0'
+  - '600.0'
+  - '600.0'
+  - '600.0'
+  - '600.0'
+  - '600.0'
+  - '600.0'
+  - '600.0'
+  - '600.0'
+  - '600.0'
+  - '600.0'
+  - '600.0'
+  - '600.0'
+  - '600.0'
+  - '600.0'
+  - '600.0'
+  - '600.0'
+  - '600.0'
+  - '600.0'
+  - '600.0'
+  - '600.0'
+  - '600.0'
+  - '600.0'
+  - '600.0'
+  - '600.0'
+  - '600.0'
+  - '600.0'
+  - '600.0'
+  - '600.0'
+  - '600.0'
+  - '600.0'
+  - '0'
+  - '10'
+  - '0.1'
+  - '1800'
+  - '0.5'
+  - '150'
+  - '7'
+  - '1800'
+outputs:
+  output_directory: executable/chap08
+  files_expected:
+  - p811.res
+  - p811.msh
+how_to_run:
+  linux:
+  - cd ~/Downloads/pfem5/5th_ed/executable/chap08
+  - printf "p811\n" | ~/Downloads/pfem5/5th_ed/build/bin/p811
+  matlab:
+  - pfem_root = '~/Downloads/pfem5/5th_ed';
+  - '[status, out] = pfem_run_from_yaml(repo_root, pfem_root, yaml_path, struct());'
+notes:
+- Use global_token_index from tunable_parameters for patching.
+- The patcher replaces tokens by their 1-based index in the flat token list.
+- This file has 159 tokens and 12 READ statements.

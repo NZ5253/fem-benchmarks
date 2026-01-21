@@ -1,0 +1,213 @@
+id: pfem5_ch09_p93_p93
+title: PFEM Program p93 — case p93
+purpose: Linear Elasticity analysis in 2D.
+authors:
+  source:
+    book: Programming the Finite Element Method
+    edition: 5th
+    chapter: 9
+    program: p93
+    dataset: p93
+  entry:
+    created_by: Naeem
+    created_on: '2026-01-22'
+    verified_platform: Linux (gfortran)
+code:
+  language: Fortran (F2003)
+  source_file: source/chap09/p93.f03
+  uses_modules:
+  - main
+  - geom
+  io_reads_from_unit10:
+  - line: 25
+    stmt: READ(10,*)nels,np_types
+  - line: 31
+    stmt: READ(10,*)prop
+  - line: 33
+    stmt: IF(np_types>1)READ(10,*)etype
+  - line: 34
+    stmt: READ(10,*)ell
+  - line: 35
+    stmt: READ(10,*)dtim,nstep,theta,npri,nres,ntime
+  - line: 37
+    stmt: READ(10,*)nr,(k,nf(:,k),i=1,nr)
+  - line: 41
+    stmt: READ(10,*)loaded_nodes
+  - line: 43
+    stmt: READ(10,*)(no(i),val(i),i=1,loaded_nodes)
+  - line: 44
+    stmt: READ(10,*)nlfp
+  - line: 46
+    stmt: READ(10,*)lf
+fem:
+  dimension: 2
+  dof:
+    per_node: 2
+analysis:
+  physics: linear elasticity
+  type: linear
+  regime: steady-state
+units:
+  system: consistent
+  notes: PFEM assumes consistent units.
+tunable_parameters:
+- name: youngs_modulus_E
+  global_token_index: 50
+  line: 12
+  type: real
+  description: Young's modulus
+  unit_category: stress
+  current_value: '300.0'
+  suggested_range:
+  - 10000.0
+  - 1000000000000.0
+- name: nels_or_nxe
+  global_token_index: 1
+  line: 1
+  type: int
+  description: Number of elements (nels) or x-divisions (nxe)
+  unit_category: count
+  current_value: '25'
+- name: np_types_or_nye
+  global_token_index: 2
+  line: 1
+  type: int
+  description: Material types (np_types) or y-divisions (nye)
+  unit_category: count
+  current_value: '1'
+input_schema:
+  file_type: .dat
+  total_tokens: 56
+  reads_in_order:
+  - record: 1
+    fortran_read: READ(10,*)nels,np_types
+    variables:
+    - nels
+    - np_types
+  - record: 2
+    fortran_read: READ(10,*)prop
+    variables:
+    - prop
+  - record: 3
+    fortran_read: IF(np_types>1)READ(10,*)etype
+    variables:
+    - etype
+    conditional: true
+  - record: 4
+    fortran_read: READ(10,*)ell
+    variables:
+    - ell
+  - record: 5
+    fortran_read: READ(10,*)dtim,nstep,theta,npri,nres,ntime
+    variables:
+    - dtim
+    - nstep
+    - theta
+    - npri
+    - nres
+    - ntime
+  - record: 6
+    fortran_read: READ(10,*)nr,(k,nf(:,k),i=1,nr)
+    variables:
+    - nr
+    - (k
+    - 'nf(:'
+    - k)
+    - i=1
+    - nr)
+  - record: 7
+    fortran_read: READ(10,*)loaded_nodes
+    variables:
+    - loaded_nodes
+  - record: 8
+    fortran_read: READ(10,*)(no(i),val(i),i=1,loaded_nodes)
+    variables:
+    - (no(i)
+    - val(i)
+    - i=1
+    - loaded_nodes)
+  - record: 9
+    fortran_read: READ(10,*)nlfp
+    variables:
+    - nlfp
+  - record: 10
+    fortran_read: READ(10,*)lf
+    variables:
+    - lf
+inputs:
+  working_directory: executable/chap09
+  basename: p93
+  dat_file: executable/chap09/p93.dat
+  all_tokens:
+  - '25'
+  - '1'
+  - '2.694E-4'
+  - '3.215E-5'
+  - '1.0'
+  - '1.0'
+  - '1.0'
+  - '1.0'
+  - '1.0'
+  - '1.0'
+  - '1.0'
+  - '1.0'
+  - '1.0'
+  - '1.0'
+  - '1.0'
+  - '1.0'
+  - '1.0'
+  - '1.0'
+  - '1.0'
+  - '1.0'
+  - '1.0'
+  - '1.0'
+  - '1.0'
+  - '1.0'
+  - '1.0'
+  - '1.0'
+  - '1.0'
+  - '1.0'
+  - '1.0'
+  - '1.0'
+  - '30'
+  - '0.5'
+  - '2'
+  - '26'
+  - '10'
+  - '2'
+  - '1'
+  - '1'
+  - '0'
+  - '26'
+  - '0'
+  - '1'
+  - '1'
+  - '1'
+  - '1.0'
+  - '5'
+  - '0.0'
+  - '0.0'
+  - '5.0'
+  - '300.0'
+  - '10.0'
+  - '450.0'
+  - '20.0'
+  - '500.0'
+  - '300.0'
+  - '500.0'
+outputs:
+  output_directory: executable/chap09
+  files_expected:
+  - p93.res
+  - p93.msh
+how_to_run:
+  linux:
+  - cd ~/Downloads/pfem5/5th_ed/executable/chap09
+  - printf "p93\n" | ~/Downloads/pfem5/5th_ed/build/bin/p93
+  matlab:
+  - pfem_root = '~/Downloads/pfem5/5th_ed';
+  - '[status, out] = pfem_run_from_yaml(repo_root, pfem_root, yaml_path, struct());'
+notes:
+- Use global_token_index from tunable_parameters for patching.
+- The patcher replaces tokens by their 1-based index in the flat token list.
+- This file has 56 tokens and 10 READ statements.

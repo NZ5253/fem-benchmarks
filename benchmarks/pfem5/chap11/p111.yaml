@@ -1,0 +1,204 @@
+id: pfem5_ch11_p111_p111
+title: PFEM Program p111 — case p111
+purpose: Linear Elasticity analysis in 2D.
+authors:
+  source:
+    book: Programming the Finite Element Method
+    edition: 5th
+    chapter: 11
+    program: p111
+    dataset: p111
+  entry:
+    created_by: Naeem
+    created_on: '2026-01-22'
+    verified_platform: Linux (gfortran)
+code:
+  language: Fortran (F2003)
+  source_file: source/chap11/p111.f03
+  uses_modules:
+  - main
+  - geom
+  io_reads_from_unit10:
+  - line: 25
+    stmt: READ(10,*)nels,np_types
+  - line: 29
+    stmt: READ(10,*)prop
+  - line: 31
+    stmt: IF(np_types>1)READ(10,*)etype
+  - line: 32
+    stmt: READ(10,*)ell,dtim,beta,gamma,fm,fk
+  - line: 34
+    stmt: READ(10,*)nr,(k,nf(:,k),i=1,nr)
+  - line: 67
+    stmt: v=zero   !  alternatively READ(10,*)d(1:),v(1:)
+  - line: 68
+    stmt: READ(10,*)nlf
+  - line: 71
+    stmt: READ(10,*)lnode,lsense,nlfp
+  - line: 74
+    stmt: READ(10,*)(rt(j),rl(j),j=1,nlfp)
+  - line: 94
+    stmt: READ(10,*)nof
+  - line: 97
+    stmt: READ(10,*)(node(i),sense(i),i=1,nof)
+fem:
+  dimension: 2
+  dof:
+    per_node: 2
+analysis:
+  physics: linear elasticity
+  type: linear
+  regime: steady-state
+units:
+  system: consistent
+  notes: PFEM assumes consistent units.
+tunable_parameters:
+- name: nels_or_nxe
+  global_token_index: 1
+  line: 1
+  type: int
+  description: Number of elements (nels) or x-divisions (nxe)
+  unit_category: count
+  current_value: '1'
+- name: np_types_or_nye
+  global_token_index: 2
+  line: 2
+  type: int
+  description: Material types (np_types) or y-divisions (nye)
+  unit_category: count
+  current_value: '1'
+input_schema:
+  file_type: .dat
+  total_tokens: 45
+  reads_in_order:
+  - record: 1
+    fortran_read: READ(10,*)nels,np_types
+    variables:
+    - nels
+    - np_types
+  - record: 2
+    fortran_read: READ(10,*)prop
+    variables:
+    - prop
+  - record: 3
+    fortran_read: IF(np_types>1)READ(10,*)etype
+    variables:
+    - etype
+    conditional: true
+  - record: 4
+    fortran_read: READ(10,*)ell,dtim,beta,gamma,fm,fk
+    variables:
+    - ell
+    - dtim
+    - beta
+    - gamma
+    - fm
+    - fk
+  - record: 5
+    fortran_read: READ(10,*)nr,(k,nf(:,k),i=1,nr)
+    variables:
+    - nr
+    - (k
+    - 'nf(:'
+    - k)
+    - i=1
+    - nr)
+  - record: 6
+    fortran_read: v=zero   !  alternatively READ(10,*)d(1:),v(1:)
+    variables:
+    - d(1:)
+    - v(1:)
+  - record: 7
+    fortran_read: READ(10,*)nlf
+    variables:
+    - nlf
+  - record: 8
+    fortran_read: READ(10,*)lnode,lsense,nlfp
+    variables:
+    - lnode
+    - lsense
+    - nlfp
+  - record: 9
+    fortran_read: READ(10,*)(rt(j),rl(j),j=1,nlfp)
+    variables:
+    - (rt(j)
+    - rl(j)
+    - j=1
+    - nlfp)
+  - record: 10
+    fortran_read: READ(10,*)nof
+    variables:
+    - nof
+  - record: 11
+    fortran_read: READ(10,*)(node(i),sense(i),i=1,nof)
+    variables:
+    - (node(i)
+    - sense(i)
+    - i=1
+    - nof)
+inputs:
+  working_directory: executable/chap11
+  basename: p111
+  dat_file: executable/chap11/p111.dat
+  all_tokens:
+  - '1'
+  - '1'
+  - '3.1941'
+  - '1.0'
+  - '1.0'
+  - '0.05'
+  - '0.25'
+  - '0.5'
+  - '0.0'
+  - '0.0'
+  - '1'
+  - '1'
+  - '0'
+  - '0'
+  - '1'
+  - '2'
+  - '1'
+  - '12'
+  - '0.000'
+  - '0.000'
+  - '0.100'
+  - '0.987'
+  - '0.200'
+  - '1.877'
+  - '0.300'
+  - '2.584'
+  - '0.400'
+  - '3.038'
+  - '0.500'
+  - '3.194'
+  - '0.600'
+  - '3.038'
+  - '0.700'
+  - '2.584'
+  - '0.800'
+  - '1.877'
+  - '0.900'
+  - '0.987'
+  - '1.000'
+  - '0.000'
+  - '1.800'
+  - '0.000'
+  - '1'
+  - '2'
+  - '1'
+outputs:
+  output_directory: executable/chap11
+  files_expected:
+  - p111.res
+  - p111.msh
+how_to_run:
+  linux:
+  - cd ~/Downloads/pfem5/5th_ed/executable/chap11
+  - printf "p111\n" | ~/Downloads/pfem5/5th_ed/build/bin/p111
+  matlab:
+  - pfem_root = '~/Downloads/pfem5/5th_ed';
+  - '[status, out] = pfem_run_from_yaml(repo_root, pfem_root, yaml_path, struct());'
+notes:
+- Use global_token_index from tunable_parameters for patching.
+- The patcher replaces tokens by their 1-based index in the flat token list.
+- This file has 45 tokens and 11 READ statements.

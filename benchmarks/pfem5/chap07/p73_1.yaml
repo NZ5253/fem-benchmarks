@@ -1,0 +1,187 @@
+id: pfem5_ch07_p73_p73_1
+title: PFEM Program p73 — case p73_1
+purpose: Dynamics analysis in 2D.
+authors:
+  source:
+    book: Programming the Finite Element Method
+    edition: 5th
+    chapter: 7
+    program: p73
+    dataset: p73_1
+  entry:
+    created_by: Naeem
+    created_on: '2026-01-22'
+    verified_platform: Linux (gfortran)
+code:
+  language: Fortran (F2003)
+  source_file: source/chap07/p73.f03
+  uses_modules:
+  - main
+  - geom
+  io_reads_from_unit10:
+  - line: 27
+    stmt: READ(10,*)nxe,nye,tol,limit,np_types;
+  - line: 35
+    stmt: READ(10,*)prop;
+  - line: 37
+    stmt: IF(np_types>1)READ(10,*)etype
+  - line: 38
+    stmt: READ(10,*)bottom_width;
+  - line: 39
+    stmt: READ(10,*)top_width;
+  - line: 40
+    stmt: READ(10,*)initial_height
+  - line: 43
+    stmt: READ(10,*)hup,fixed_up;
+  - line: 45
+    stmt: READ(10,*)node_up
+  - line: 46
+    stmt: READ(10,*)hdown,fixed_down;
+  - line: 48
+    stmt: READ(10,*)node_down;
+  - line: 116
+    stmt: READ(10,*)nci;
+fem:
+  dimension: 2
+  dof:
+    per_node: 2
+analysis:
+  physics: dynamics
+  type: linear
+  regime: transient
+units:
+  system: consistent
+  notes: PFEM assumes consistent units.
+tunable_parameters:
+- name: nels_or_nxe
+  global_token_index: 1
+  line: 1
+  type: int
+  description: Number of elements (nels) or x-divisions (nxe)
+  unit_category: count
+  current_value: '8'
+- name: np_types_or_nye
+  global_token_index: 2
+  line: 1
+  type: int
+  description: Material types (np_types) or y-divisions (nye)
+  unit_category: count
+  current_value: '7'
+input_schema:
+  file_type: .dat
+  total_tokens: 42
+  reads_in_order:
+  - record: 1
+    fortran_read: READ(10,*)nxe,nye,tol,limit,np_types;
+    variables:
+    - nxe
+    - nye
+    - tol
+    - limit
+    - np_types;
+  - record: 2
+    fortran_read: READ(10,*)prop;
+    variables:
+    - prop;
+  - record: 3
+    fortran_read: IF(np_types>1)READ(10,*)etype
+    variables:
+    - etype
+    conditional: true
+  - record: 4
+    fortran_read: READ(10,*)bottom_width;
+    variables:
+    - bottom_width;
+  - record: 5
+    fortran_read: READ(10,*)top_width;
+    variables:
+    - top_width;
+  - record: 6
+    fortran_read: READ(10,*)initial_height
+    variables:
+    - initial_height
+  - record: 7
+    fortran_read: READ(10,*)hup,fixed_up;
+    variables:
+    - hup
+    - fixed_up;
+  - record: 8
+    fortran_read: READ(10,*)node_up
+    variables:
+    - node_up
+  - record: 9
+    fortran_read: READ(10,*)hdown,fixed_down;
+    variables:
+    - hdown
+    - fixed_down;
+  - record: 10
+    fortran_read: READ(10,*)node_down;
+    variables:
+    - node_down;
+  - record: 11
+    fortran_read: READ(10,*)nci;
+    variables:
+    - nci;
+inputs:
+  working_directory: executable/chap07
+  basename: p73_1
+  dat_file: executable/chap07/p73_1.dat
+  all_tokens:
+  - '8'
+  - '7'
+  - '0.01'
+  - '20'
+  - '1'
+  - '0.001'
+  - '0.001'
+  - '0.0'
+  - '1.0'
+  - '2.0'
+  - '3.0'
+  - '4.0'
+  - '5.0'
+  - '6.0'
+  - '7.0'
+  - '8.0'
+  - '0.0'
+  - '1.0'
+  - '2.0'
+  - '3.0'
+  - '4.0'
+  - '5.0'
+  - '6.0'
+  - '7.0'
+  - '8.0'
+  - '7.0'
+  - '7.0'
+  - '8'
+  - '9'
+  - '18'
+  - '27'
+  - '36'
+  - '45'
+  - '54'
+  - '63'
+  - '72'
+  - '2.0'
+  - '3'
+  - '46'
+  - '55'
+  - '64'
+  - '20'
+outputs:
+  output_directory: executable/chap07
+  files_expected:
+  - p73_1.res
+  - p73_1.msh
+how_to_run:
+  linux:
+  - cd ~/Downloads/pfem5/5th_ed/executable/chap07
+  - printf "p73_1\n" | ~/Downloads/pfem5/5th_ed/build/bin/p73
+  matlab:
+  - pfem_root = '~/Downloads/pfem5/5th_ed';
+  - '[status, out] = pfem_run_from_yaml(repo_root, pfem_root, yaml_path, struct());'
+notes:
+- Use global_token_index from tunable_parameters for patching.
+- The patcher replaces tokens by their 1-based index in the flat token list.
+- This file has 42 tokens and 11 READ statements.

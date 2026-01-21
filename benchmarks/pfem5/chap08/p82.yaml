@@ -1,0 +1,279 @@
+id: pfem5_ch08_p82_p82
+title: PFEM Program p82 — case p82
+purpose: Consolidation analysis in 2D.
+authors:
+  source:
+    book: Programming the Finite Element Method
+    edition: 5th
+    chapter: 8
+    program: p82
+    dataset: p82
+  entry:
+    created_by: Naeem
+    created_on: '2026-01-22'
+    verified_platform: Linux (gfortran)
+code:
+  language: Fortran (F2003)
+  source_file: source/chap08/p82.f03
+  uses_modules:
+  - main
+  - geom
+  io_reads_from_unit10:
+  - line: 23
+    stmt: READ(10,*)nels,np_types
+  - line: 27
+    stmt: READ(10,*)prop,gamw  ! prop(1,:)=k, prop(2,:)=mv
+  - line: 29
+    stmt: IF(np_types>1)READ(10,*)etype
+  - line: 30
+    stmt: READ(10,*)ell,dtim,nstep,theta,npri,nres,ntime
+  - line: 57
+    stmt: READ(10,*)loads(1:)
+  - line: 65
+    stmt: READ(10,*)fixed_freedoms
+  - line: 69
+    stmt: READ(10,*)(node(i),value(i),i=1,fixed_freedoms)
+fem:
+  dimension: 2
+  dof:
+    per_node: 2
+analysis:
+  physics: consolidation
+  type: linear
+  regime: transient
+units:
+  system: consistent
+  notes: PFEM assumes consistent units.
+tunable_parameters:
+- name: youngs_modulus_E
+  global_token_index: 92
+  line: 15
+  type: real
+  description: Young's modulus
+  unit_category: stress
+  current_value: '86400.0'
+  suggested_range:
+  - 10000.0
+  - 1000000000000.0
+- name: nels_or_nxe
+  global_token_index: 1
+  line: 1
+  type: int
+  description: Number of elements (nels) or x-divisions (nxe)
+  unit_category: count
+  current_value: '40'
+- name: np_types_or_nye
+  global_token_index: 2
+  line: 1
+  type: int
+  description: Material types (np_types) or y-divisions (nye)
+  unit_category: count
+  current_value: '4'
+input_schema:
+  file_type: .dat
+  total_tokens: 143
+  reads_in_order:
+  - record: 1
+    fortran_read: READ(10,*)nels,np_types
+    variables:
+    - nels
+    - np_types
+  - record: 2
+    fortran_read: READ(10,*)prop,gamw  ! prop(1,:)=k, prop(2,:)=mv
+    variables:
+    - prop
+    - gamw
+  - record: 3
+    fortran_read: IF(np_types>1)READ(10,*)etype
+    variables:
+    - etype
+    conditional: true
+  - record: 4
+    fortran_read: READ(10,*)ell,dtim,nstep,theta,npri,nres,ntime
+    variables:
+    - ell
+    - dtim
+    - nstep
+    - theta
+    - npri
+    - nres
+    - ntime
+  - record: 5
+    fortran_read: READ(10,*)loads(1:)
+    variables:
+    - loads(1:)
+  - record: 6
+    fortran_read: READ(10,*)fixed_freedoms
+    variables:
+    - fixed_freedoms
+  - record: 7
+    fortran_read: READ(10,*)(node(i),value(i),i=1,fixed_freedoms)
+    variables:
+    - (node(i)
+    - value(i)
+    - i=1
+    - fixed_freedoms)
+inputs:
+  working_directory: executable/chap08
+  basename: p82
+  dat_file: executable/chap08/p82.dat
+  all_tokens:
+  - '40'
+  - '4'
+  - '2.78E-11'
+  - '6.41E-5'
+  - '8.25E-11'
+  - '4.08E-5'
+  - '1.17E-11'
+  - '2.04E-5'
+  - '2.94E-11'
+  - '4.08E-5'
+  - '9.81'
+  - '1'
+  - '1'
+  - '1'
+  - '1'
+  - '1'
+  - '1'
+  - '1'
+  - '1'
+  - '1'
+  - '1'
+  - '2'
+  - '2'
+  - '2'
+  - '2'
+  - '2'
+  - '2'
+  - '2'
+  - '2'
+  - '2'
+  - '2'
+  - '3'
+  - '3'
+  - '3'
+  - '3'
+  - '3'
+  - '3'
+  - '3'
+  - '3'
+  - '3'
+  - '3'
+  - '4'
+  - '4'
+  - '4'
+  - '4'
+  - '4'
+  - '4'
+  - '4'
+  - '4'
+  - '4'
+  - '4'
+  - '0.305'
+  - '0.305'
+  - '0.305'
+  - '0.305'
+  - '0.305'
+  - '0.305'
+  - '0.305'
+  - '0.305'
+  - '0.305'
+  - '0.305'
+  - '0.61'
+  - '0.61'
+  - '0.61'
+  - '0.61'
+  - '0.61'
+  - '0.61'
+  - '0.61'
+  - '0.61'
+  - '0.61'
+  - '0.61'
+  - '0.914'
+  - '0.914'
+  - '0.914'
+  - '0.914'
+  - '0.914'
+  - '0.914'
+  - '0.914'
+  - '0.914'
+  - '0.914'
+  - '0.914'
+  - '0.61'
+  - '0.61'
+  - '0.61'
+  - '0.61'
+  - '0.61'
+  - '0.61'
+  - '0.61'
+  - '0.61'
+  - '0.61'
+  - '0.61'
+  - '86400.0'
+  - '7200'
+  - '0.5'
+  - '400'
+  - '21'
+  - '740'
+  - '100.0'
+  - '100.0'
+  - '100.0'
+  - '100.0'
+  - '100.0'
+  - '100.0'
+  - '100.0'
+  - '100.0'
+  - '100.0'
+  - '100.0'
+  - '100.0'
+  - '100.0'
+  - '100.0'
+  - '100.0'
+  - '100.0'
+  - '100.0'
+  - '100.0'
+  - '100.0'
+  - '100.0'
+  - '100.0'
+  - '100.0'
+  - '100.0'
+  - '100.0'
+  - '100.0'
+  - '100.0'
+  - '100.0'
+  - '100.0'
+  - '100.0'
+  - '100.0'
+  - '100.0'
+  - '100.0'
+  - '100.0'
+  - '100.0'
+  - '100.0'
+  - '100.0'
+  - '100.0'
+  - '100.0'
+  - '100.0'
+  - '100.0'
+  - '100.0'
+  - '100.0'
+  - '2'
+  - '1'
+  - '0.0'
+  - '41'
+  - '0.0'
+outputs:
+  output_directory: executable/chap08
+  files_expected:
+  - p82.res
+  - p82.msh
+how_to_run:
+  linux:
+  - cd ~/Downloads/pfem5/5th_ed/executable/chap08
+  - printf "p82\n" | ~/Downloads/pfem5/5th_ed/build/bin/p82
+  matlab:
+  - pfem_root = '~/Downloads/pfem5/5th_ed';
+  - '[status, out] = pfem_run_from_yaml(repo_root, pfem_root, yaml_path, struct());'
+notes:
+- Use global_token_index from tunable_parameters for patching.
+- The patcher replaces tokens by their 1-based index in the flat token list.
+- This file has 143 tokens and 7 READ statements.

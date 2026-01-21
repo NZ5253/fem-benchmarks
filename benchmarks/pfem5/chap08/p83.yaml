@@ -1,0 +1,166 @@
+id: pfem5_ch08_p83_p83
+title: PFEM Program p83 — case p83
+purpose: Consolidation analysis in 2D.
+authors:
+  source:
+    book: Programming the Finite Element Method
+    edition: 5th
+    chapter: 8
+    program: p83
+    dataset: p83
+  entry:
+    created_by: Naeem
+    created_on: '2026-01-22'
+    verified_platform: Linux (gfortran)
+code:
+  language: Fortran (F2003)
+  source_file: source/chap08/p83.f03
+  uses_modules:
+  - main
+  - geom
+  io_reads_from_unit10:
+  - line: 23
+    stmt: READ(10,*)nels,np_types
+  - line: 28
+    stmt: READ(10,*)prop
+  - line: 30
+    stmt: IF(np_types>1)READ(10,*)etype
+  - line: 31
+    stmt: READ(10,*)ell,dtim,nstep,npri,nres,ntime
+  - line: 47
+    stmt: READ(10,*)loads(1:)
+  - line: 49
+    stmt: READ(10,*)fixed_freedoms
+  - line: 53
+    stmt: READ(10,*)(node(i),value(i),i=1,fixed_freedoms)
+fem:
+  dimension: 2
+  dof:
+    per_node: 2
+analysis:
+  physics: consolidation
+  type: linear
+  regime: transient
+units:
+  system: consistent
+  notes: PFEM assumes consistent units.
+tunable_parameters:
+- name: youngs_modulus_E
+  global_token_index: 15
+  line: 4
+  type: real
+  description: Young's modulus
+  unit_category: stress
+  current_value: '2000'
+  suggested_range:
+  - 10000.0
+  - 1000000000000.0
+- name: nels_or_nxe
+  global_token_index: 1
+  line: 1
+  type: int
+  description: Number of elements (nels) or x-divisions (nxe)
+  unit_category: count
+  current_value: '10'
+- name: np_types_or_nye
+  global_token_index: 2
+  line: 1
+  type: int
+  description: Material types (np_types) or y-divisions (nye)
+  unit_category: count
+  current_value: '1'
+input_schema:
+  file_type: .dat
+  total_tokens: 32
+  reads_in_order:
+  - record: 1
+    fortran_read: READ(10,*)nels,np_types
+    variables:
+    - nels
+    - np_types
+  - record: 2
+    fortran_read: READ(10,*)prop
+    variables:
+    - prop
+  - record: 3
+    fortran_read: IF(np_types>1)READ(10,*)etype
+    variables:
+    - etype
+    conditional: true
+  - record: 4
+    fortran_read: READ(10,*)ell,dtim,nstep,npri,nres,ntime
+    variables:
+    - ell
+    - dtim
+    - nstep
+    - npri
+    - nres
+    - ntime
+  - record: 5
+    fortran_read: READ(10,*)loads(1:)
+    variables:
+    - loads(1:)
+  - record: 6
+    fortran_read: READ(10,*)fixed_freedoms
+    variables:
+    - fixed_freedoms
+  - record: 7
+    fortran_read: READ(10,*)(node(i),value(i),i=1,fixed_freedoms)
+    variables:
+    - (node(i)
+    - value(i)
+    - i=1
+    - fixed_freedoms)
+inputs:
+  working_directory: executable/chap08
+  basename: p83
+  dat_file: executable/chap08/p83.dat
+  all_tokens:
+  - '10'
+  - '1'
+  - '1.0'
+  - '0.1'
+  - '0.1'
+  - '0.1'
+  - '0.1'
+  - '0.1'
+  - '0.1'
+  - '0.1'
+  - '0.1'
+  - '0.1'
+  - '0.1'
+  - '0.001'
+  - '2000'
+  - '100'
+  - '11'
+  - '1000'
+  - '100.0'
+  - '100.0'
+  - '100.0'
+  - '100.0'
+  - '100.0'
+  - '100.0'
+  - '100.0'
+  - '100.0'
+  - '100.0'
+  - '100.0'
+  - '100.0'
+  - '1'
+  - '1'
+  - '0.0'
+outputs:
+  output_directory: executable/chap08
+  files_expected:
+  - p83.res
+  - p83.msh
+how_to_run:
+  linux:
+  - cd ~/Downloads/pfem5/5th_ed/executable/chap08
+  - printf "p83\n" | ~/Downloads/pfem5/5th_ed/build/bin/p83
+  matlab:
+  - pfem_root = '~/Downloads/pfem5/5th_ed';
+  - '[status, out] = pfem_run_from_yaml(repo_root, pfem_root, yaml_path, struct());'
+notes:
+- Use global_token_index from tunable_parameters for patching.
+- The patcher replaces tokens by their 1-based index in the flat token list.
+- This file has 32 tokens and 7 READ statements.

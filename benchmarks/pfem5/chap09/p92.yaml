@@ -1,0 +1,534 @@
+id: pfem5_ch09_p92_p92
+title: PFEM Program p92 — case p92
+purpose: Dynamics analysis in 3D.
+authors:
+  source:
+    book: Programming the Finite Element Method
+    edition: 5th
+    chapter: 9
+    program: p92
+    dataset: p92
+  entry:
+    created_by: Naeem
+    created_on: '2026-01-22'
+    verified_platform: Linux (gfortran)
+code:
+  language: Fortran (F2003)
+  source_file: source/chap09/p92.f03
+  uses_modules:
+  - main
+  - geom
+  io_reads_from_unit10:
+  - line: 36
+    stmt: READ(10,*)nxe,nye,tol,limit,visc,rho,cg_tol,cg_limit,x0,ell,kappa
+  - line: 47
+    stmt: READ(10,*)x_coords,y_coords
+  - line: 54
+    stmt: READ(10,*)nr,(k,nf(:,k),i=1,nr)
+  - line: 72
+    stmt: READ(10,*)fixed_freedoms
+  - line: 75
+    stmt: READ(10,*)(node(i),sense(i),value(i),i=1,fixed_freedoms)
+fem:
+  dimension: 3
+  dof:
+    per_node: 3
+analysis:
+  physics: dynamics
+  type: linear
+  regime: transient
+units:
+  system: consistent
+  notes: PFEM assumes consistent units.
+tunable_parameters:
+- name: youngs_modulus_E
+  global_token_index: 8
+  line: 2
+  type: real
+  description: Young's modulus
+  unit_category: stress
+  current_value: '200'
+  suggested_range:
+  - 10000.0
+  - 1000000000000.0
+- name: poisson_ratio_nu
+  global_token_index: 13
+  line: 3
+  type: real
+  description: Poisson's ratio
+  unit_category: dimensionless
+  current_value: '0.2'
+  suggested_range:
+  - 0.0
+  - 0.49
+- name: permeability_k
+  global_token_index: 14
+  line: 3
+  type: real
+  description: Permeability or conductivity
+  unit_category: permeability
+  current_value: '0.4'
+  suggested_range:
+  - 1.0e-06
+  - 100.0
+- name: nels_or_nxe
+  global_token_index: 1
+  line: 1
+  type: int
+  description: Number of elements (nels) or x-divisions (nxe)
+  unit_category: count
+  current_value: '5'
+- name: np_types_or_nye
+  global_token_index: 2
+  line: 1
+  type: int
+  description: Material types (np_types) or y-divisions (nye)
+  unit_category: count
+  current_value: '5'
+input_schema:
+  file_type: .dat
+  total_tokens: 382
+  reads_in_order:
+  - record: 1
+    fortran_read: READ(10,*)nxe,nye,tol,limit,visc,rho,cg_tol,cg_limit,x0,ell,kappa
+    variables:
+    - nxe
+    - nye
+    - tol
+    - limit
+    - visc
+    - rho
+    - cg_tol
+    - cg_limit
+    - x0
+    - ell
+    - kappa
+  - record: 2
+    fortran_read: READ(10,*)x_coords,y_coords
+    variables:
+    - x_coords
+    - y_coords
+  - record: 3
+    fortran_read: READ(10,*)nr,(k,nf(:,k),i=1,nr)
+    variables:
+    - nr
+    - (k
+    - 'nf(:'
+    - k)
+    - i=1
+    - nr)
+  - record: 4
+    fortran_read: READ(10,*)fixed_freedoms
+    variables:
+    - fixed_freedoms
+  - record: 5
+    fortran_read: READ(10,*)(node(i),sense(i),value(i),i=1,fixed_freedoms)
+    variables:
+    - (node(i)
+    - sense(i)
+    - value(i)
+    - i=1
+    - fixed_freedoms)
+inputs:
+  working_directory: executable/chap09
+  basename: p92
+  dat_file: executable/chap09/p92.dat
+  all_tokens:
+  - '5'
+  - '5'
+  - '0.001'
+  - '30'
+  - '0.01'
+  - '1.0'
+  - '1.0e-5'
+  - '200'
+  - '1.0'
+  - '4'
+  - '0.0'
+  - '0.0'
+  - '0.2'
+  - '0.4'
+  - '0.6'
+  - '0.8'
+  - '1.0'
+  - '0.0'
+  - '-0.2'
+  - '-0.4'
+  - '-0.6'
+  - '-0.8'
+  - '-1.0'
+  - '81'
+  - '1'
+  - '1'
+  - '0'
+  - '0'
+  - '2'
+  - '1'
+  - '0'
+  - '0'
+  - '3'
+  - '1'
+  - '1'
+  - '0'
+  - '4'
+  - '1'
+  - '0'
+  - '0'
+  - '5'
+  - '1'
+  - '1'
+  - '0'
+  - '6'
+  - '1'
+  - '0'
+  - '0'
+  - '7'
+  - '1'
+  - '1'
+  - '0'
+  - '8'
+  - '1'
+  - '0'
+  - '0'
+  - '9'
+  - '1'
+  - '1'
+  - '0'
+  - '10'
+  - '1'
+  - '0'
+  - '0'
+  - '11'
+  - '1'
+  - '1'
+  - '0'
+  - '12'
+  - '0'
+  - '0'
+  - '0'
+  - '13'
+  - '1'
+  - '0'
+  - '1'
+  - '14'
+  - '1'
+  - '0'
+  - '1'
+  - '15'
+  - '1'
+  - '0'
+  - '1'
+  - '16'
+  - '1'
+  - '0'
+  - '1'
+  - '17'
+  - '0'
+  - '0'
+  - '0'
+  - '18'
+  - '0'
+  - '1'
+  - '0'
+  - '19'
+  - '1'
+  - '0'
+  - '1'
+  - '21'
+  - '1'
+  - '0'
+  - '1'
+  - '23'
+  - '1'
+  - '0'
+  - '1'
+  - '25'
+  - '1'
+  - '0'
+  - '1'
+  - '27'
+  - '1'
+  - '0'
+  - '1'
+  - '28'
+  - '0'
+  - '1'
+  - '0'
+  - '29'
+  - '0'
+  - '0'
+  - '0'
+  - '30'
+  - '1'
+  - '0'
+  - '1'
+  - '31'
+  - '1'
+  - '0'
+  - '1'
+  - '32'
+  - '1'
+  - '0'
+  - '1'
+  - '33'
+  - '1'
+  - '0'
+  - '1'
+  - '34'
+  - '0'
+  - '0'
+  - '0'
+  - '35'
+  - '0'
+  - '1'
+  - '0'
+  - '36'
+  - '1'
+  - '0'
+  - '1'
+  - '38'
+  - '1'
+  - '0'
+  - '1'
+  - '40'
+  - '1'
+  - '0'
+  - '1'
+  - '42'
+  - '1'
+  - '0'
+  - '1'
+  - '44'
+  - '1'
+  - '0'
+  - '1'
+  - '45'
+  - '0'
+  - '1'
+  - '0'
+  - '46'
+  - '0'
+  - '0'
+  - '0'
+  - '47'
+  - '1'
+  - '0'
+  - '1'
+  - '48'
+  - '1'
+  - '0'
+  - '1'
+  - '49'
+  - '1'
+  - '0'
+  - '1'
+  - '50'
+  - '1'
+  - '0'
+  - '1'
+  - '51'
+  - '0'
+  - '0'
+  - '0'
+  - '52'
+  - '0'
+  - '1'
+  - '0'
+  - '53'
+  - '1'
+  - '0'
+  - '1'
+  - '54'
+  - '1'
+  - '1'
+  - '1'
+  - '55'
+  - '1'
+  - '0'
+  - '1'
+  - '57'
+  - '1'
+  - '0'
+  - '1'
+  - '59'
+  - '1'
+  - '0'
+  - '1'
+  - '61'
+  - '1'
+  - '0'
+  - '1'
+  - '62'
+  - '0'
+  - '1'
+  - '0'
+  - '63'
+  - '0'
+  - '0'
+  - '0'
+  - '64'
+  - '1'
+  - '0'
+  - '1'
+  - '65'
+  - '1'
+  - '0'
+  - '1'
+  - '66'
+  - '1'
+  - '0'
+  - '1'
+  - '67'
+  - '1'
+  - '0'
+  - '1'
+  - '68'
+  - '0'
+  - '0'
+  - '0'
+  - '69'
+  - '0'
+  - '1'
+  - '0'
+  - '70'
+  - '1'
+  - '0'
+  - '1'
+  - '72'
+  - '1'
+  - '0'
+  - '1'
+  - '74'
+  - '1'
+  - '0'
+  - '1'
+  - '76'
+  - '1'
+  - '0'
+  - '1'
+  - '78'
+  - '1'
+  - '0'
+  - '1'
+  - '79'
+  - '0'
+  - '1'
+  - '0'
+  - '80'
+  - '0'
+  - '0'
+  - '0'
+  - '81'
+  - '1'
+  - '0'
+  - '1'
+  - '82'
+  - '1'
+  - '0'
+  - '1'
+  - '83'
+  - '1'
+  - '0'
+  - '1'
+  - '84'
+  - '1'
+  - '0'
+  - '1'
+  - '85'
+  - '0'
+  - '0'
+  - '0'
+  - '86'
+  - '0'
+  - '1'
+  - '0'
+  - '87'
+  - '0'
+  - '0'
+  - '0'
+  - '88'
+  - '0'
+  - '1'
+  - '0'
+  - '89'
+  - '0'
+  - '0'
+  - '0'
+  - '90'
+  - '0'
+  - '1'
+  - '0'
+  - '91'
+  - '0'
+  - '0'
+  - '0'
+  - '92'
+  - '0'
+  - '1'
+  - '0'
+  - '93'
+  - '0'
+  - '0'
+  - '0'
+  - '94'
+  - '0'
+  - '1'
+  - '0'
+  - '95'
+  - '0'
+  - '0'
+  - '0'
+  - '96'
+  - '0'
+  - '1'
+  - '0'
+  - '11'
+  - '1'
+  - '1'
+  - '1.0'
+  - '2'
+  - '1'
+  - '1.0'
+  - '3'
+  - '1'
+  - '1.0'
+  - '4'
+  - '1'
+  - '1.0'
+  - '5'
+  - '1'
+  - '1.0'
+  - '6'
+  - '1'
+  - '1.0'
+  - '7'
+  - '1'
+  - '1.0'
+  - '8'
+  - '1'
+  - '1.0'
+  - '9'
+  - '1'
+  - '1.0'
+  - '10'
+  - '1'
+  - '1.0'
+  - '11'
+  - '1'
+  - '1.0'
+outputs:
+  output_directory: executable/chap09
+  files_expected:
+  - p92.res
+  - p92.msh
+how_to_run:
+  linux:
+  - cd ~/Downloads/pfem5/5th_ed/executable/chap09
+  - printf "p92\n" | ~/Downloads/pfem5/5th_ed/build/bin/p92
+  matlab:
+  - pfem_root = '~/Downloads/pfem5/5th_ed';
+  - '[status, out] = pfem_run_from_yaml(repo_root, pfem_root, yaml_path, struct());'
+notes:
+- Use global_token_index from tunable_parameters for patching.
+- The patcher replaces tokens by their 1-based index in the flat token list.
+- This file has 382 tokens and 5 READ statements.

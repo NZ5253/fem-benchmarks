@@ -1,0 +1,303 @@
+id: pfem5_ch09_p96_p96_1
+title: PFEM Program p96 — case p96_1
+purpose: Elastic-Plastic analysis in 3D.
+authors:
+  source:
+    book: Programming the Finite Element Method
+    edition: 5th
+    chapter: 9
+    program: p96
+    dataset: p96_1
+  entry:
+    created_by: Naeem
+    created_on: '2026-01-22'
+    verified_platform: Linux (gfortran)
+code:
+  language: Fortran (F2003)
+  source_file: source/chap09/p96.f03
+  uses_modules:
+  - main
+  - geom
+  io_reads_from_unit10:
+  - line: 36
+    stmt: READ(10,*)nxe,nye,np_types
+  - line: 48
+    stmt: READ(10,*)prop,cons
+  - line: 50
+    stmt: IF(np_types>1)READ(10,*)etype
+  - line: 51
+    stmt: READ(10,*)x_coords,y_coords,dtim,nstep,theta,npri,nres
+  - line: 53
+    stmt: READ(10,*)nr,(k,nf(:,k),i=1,nr)
+  - line: 58
+    stmt: READ(10,*)loaded_nodes
+  - line: 60
+    stmt: READ(10,*)(no(i),val(i,:),i=1,loaded_nodes)
+  - line: 61
+    stmt: READ(10,*)tol,limit,nlfp
+  - line: 63
+    stmt: READ(10,*)lf
+fem:
+  dimension: 3
+  dof:
+    per_node: 3
+analysis:
+  physics: elastic-plastic
+  type: nonlinear
+  regime: steady-state
+units:
+  system: consistent
+  notes: PFEM assumes consistent units.
+tunable_parameters:
+- name: youngs_modulus_E
+  global_token_index: 6
+  line: 2
+  type: real
+  description: Young's modulus
+  unit_category: stress
+  current_value: 1.0e4
+  suggested_range:
+  - 10000.0
+  - 1000000000000.0
+- name: poisson_ratio_nu
+  global_token_index: 7
+  line: 2
+  type: real
+  description: Poisson's ratio
+  unit_category: dimensionless
+  current_value: '0.25'
+  suggested_range:
+  - 0.0
+  - 0.49
+- name: permeability_k
+  global_token_index: 8
+  line: 2
+  type: real
+  description: Permeability or conductivity
+  unit_category: permeability
+  current_value: '30.0'
+  suggested_range:
+  - 1.0e-06
+  - 100.0
+- name: nels_or_nxe
+  global_token_index: 1
+  line: 1
+  type: int
+  description: Number of elements (nels) or x-divisions (nxe)
+  unit_category: count
+  current_value: '2'
+- name: np_types_or_nye
+  global_token_index: 2
+  line: 1
+  type: int
+  description: Material types (np_types) or y-divisions (nye)
+  unit_category: count
+  current_value: '2'
+input_schema:
+  file_type: .dat
+  total_tokens: 126
+  reads_in_order:
+  - record: 1
+    fortran_read: READ(10,*)nxe,nye,np_types
+    variables:
+    - nxe
+    - nye
+    - np_types
+  - record: 2
+    fortran_read: READ(10,*)prop,cons
+    variables:
+    - prop
+    - cons
+  - record: 3
+    fortran_read: IF(np_types>1)READ(10,*)etype
+    variables:
+    - etype
+    conditional: true
+  - record: 4
+    fortran_read: READ(10,*)x_coords,y_coords,dtim,nstep,theta,npri,nres
+    variables:
+    - x_coords
+    - y_coords
+    - dtim
+    - nstep
+    - theta
+    - npri
+    - nres
+  - record: 5
+    fortran_read: READ(10,*)nr,(k,nf(:,k),i=1,nr)
+    variables:
+    - nr
+    - (k
+    - 'nf(:'
+    - k)
+    - i=1
+    - nr)
+  - record: 6
+    fortran_read: READ(10,*)loaded_nodes
+    variables:
+    - loaded_nodes
+  - record: 7
+    fortran_read: READ(10,*)(no(i),val(i,:),i=1,loaded_nodes)
+    variables:
+    - (no(i)
+    - val(i
+    - :)
+    - i=1
+    - loaded_nodes)
+  - record: 8
+    fortran_read: READ(10,*)tol,limit,nlfp
+    variables:
+    - tol
+    - limit
+    - nlfp
+  - record: 9
+    fortran_read: READ(10,*)lf
+    variables:
+    - lf
+inputs:
+  working_directory: executable/chap09
+  basename: p96_1
+  dat_file: executable/chap09/p96_1.dat
+  all_tokens:
+  - '2'
+  - '2'
+  - '1'
+  - '1.0e-6'
+  - '1.0e-6'
+  - 1.0e4
+  - '0.25'
+  - '30.0'
+  - '0.0'
+  - '0.0'
+  - '-100.0'
+  - '0.0'
+  - '0.5'
+  - '1.0'
+  - '0.0'
+  - '-0.5'
+  - '-1.0'
+  - '0.5'
+  - '200'
+  - '0.5'
+  - '1'
+  - '1'
+  - '20'
+  - '1'
+  - '0'
+  - '1'
+  - '0'
+  - '2'
+  - '1'
+  - '1'
+  - '0'
+  - '3'
+  - '1'
+  - '1'
+  - '0'
+  - '4'
+  - '1'
+  - '1'
+  - '0'
+  - '5'
+  - '1'
+  - '1'
+  - '0'
+  - '6'
+  - '0'
+  - '1'
+  - '0'
+  - '7'
+  - '1'
+  - '1'
+  - '0'
+  - '8'
+  - '1'
+  - '1'
+  - '0'
+  - '9'
+  - '0'
+  - '1'
+  - '1'
+  - '10'
+  - '1'
+  - '1'
+  - '0'
+  - '12'
+  - '1'
+  - '1'
+  - '0'
+  - '13'
+  - '1'
+  - '1'
+  - '0'
+  - '14'
+  - '0'
+  - '1'
+  - '0'
+  - '15'
+  - '1'
+  - '1'
+  - '0'
+  - '16'
+  - '1'
+  - '1'
+  - '0'
+  - '17'
+  - '0'
+  - '0'
+  - '1'
+  - '18'
+  - '1'
+  - '0'
+  - '0'
+  - '19'
+  - '1'
+  - '0'
+  - '1'
+  - '20'
+  - '1'
+  - '0'
+  - '0'
+  - '21'
+  - '1'
+  - '0'
+  - '0'
+  - '5'
+  - '1'
+  - '0.0'
+  - '-0.08333'
+  - '2'
+  - '0.0'
+  - '-0.33333'
+  - '3'
+  - '0.0'
+  - '-0.16667'
+  - '4'
+  - '0.0'
+  - '-0.33333'
+  - '5'
+  - '0.0'
+  - '-0.08333'
+  - '0.001'
+  - '250'
+  - '2'
+  - '0.0'
+  - '0.0'
+  - '10.0'
+  - '150.0'
+outputs:
+  output_directory: executable/chap09
+  files_expected:
+  - p96_1.res
+  - p96_1.msh
+how_to_run:
+  linux:
+  - cd ~/Downloads/pfem5/5th_ed/executable/chap09
+  - printf "p96_1\n" | ~/Downloads/pfem5/5th_ed/build/bin/p96
+  matlab:
+  - pfem_root = '~/Downloads/pfem5/5th_ed';
+  - '[status, out] = pfem_run_from_yaml(repo_root, pfem_root, yaml_path, struct());'
+notes:
+- Use global_token_index from tunable_parameters for patching.
+- The patcher replaces tokens by their 1-based index in the flat token list.
+- This file has 126 tokens and 9 READ statements.

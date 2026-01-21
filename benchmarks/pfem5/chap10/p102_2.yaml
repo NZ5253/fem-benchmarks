@@ -1,0 +1,144 @@
+id: pfem5_ch10_p102_p102_2
+title: PFEM Program p102 — case p102_2
+purpose: Linear Elasticity analysis in 2D.
+authors:
+  source:
+    book: Programming the Finite Element Method
+    edition: 5th
+    chapter: 10
+    program: p102
+    dataset: p102_2
+  entry:
+    created_by: Naeem
+    created_on: '2026-01-22'
+    verified_platform: Linux (gfortran)
+code:
+  language: Fortran (F2003)
+  source_file: source/chap10/p102.f03
+  uses_modules:
+  - main
+  - geom
+  io_reads_from_unit10:
+  - line: 25
+    stmt: READ(10,*)nxe,nye,nod,np_types
+  - line: 31
+    stmt: READ(10,*)prop
+  - line: 33
+    stmt: IF(np_types>1)READ(10,*)etype
+  - line: 34
+    stmt: READ(10,*)x_coords,y_coords
+  - line: 36
+    stmt: READ(10,*)nr,(k,nf(:,k),i=1,nr)
+  - line: 103
+    stmt: READ(10,*)nmodes
+fem:
+  dimension: 2
+  dof:
+    per_node: 2
+analysis:
+  physics: linear elasticity
+  type: linear
+  regime: steady-state
+units:
+  system: consistent
+  notes: PFEM assumes consistent units.
+tunable_parameters:
+- name: nels_or_nxe
+  global_token_index: 1
+  line: 1
+  type: int
+  description: Number of elements (nels) or x-divisions (nxe)
+  unit_category: count
+  current_value: '5'
+- name: np_types_or_nye
+  global_token_index: 2
+  line: 1
+  type: int
+  description: Material types (np_types) or y-divisions (nye)
+  unit_category: count
+  current_value: '1'
+input_schema:
+  file_type: .dat
+  total_tokens: 26
+  reads_in_order:
+  - record: 1
+    fortran_read: READ(10,*)nxe,nye,nod,np_types
+    variables:
+    - nxe
+    - nye
+    - nod
+    - np_types
+  - record: 2
+    fortran_read: READ(10,*)prop
+    variables:
+    - prop
+  - record: 3
+    fortran_read: IF(np_types>1)READ(10,*)etype
+    variables:
+    - etype
+    conditional: true
+  - record: 4
+    fortran_read: READ(10,*)x_coords,y_coords
+    variables:
+    - x_coords
+    - y_coords
+  - record: 5
+    fortran_read: READ(10,*)nr,(k,nf(:,k),i=1,nr)
+    variables:
+    - nr
+    - (k
+    - 'nf(:'
+    - k)
+    - i=1
+    - nr)
+  - record: 6
+    fortran_read: READ(10,*)nmodes
+    variables:
+    - nmodes
+inputs:
+  working_directory: executable/chap10
+  basename: p102_2
+  dat_file: executable/chap10/p102_2.dat
+  all_tokens:
+  - '5'
+  - '1'
+  - '8'
+  - '1'
+  - '1.0'
+  - '0.0'
+  - '1.0'
+  - '0.0'
+  - '0.8'
+  - '1.6'
+  - '2.4'
+  - '3.2'
+  - '4.0'
+  - '0.0'
+  - '-1.0'
+  - '3'
+  - '1'
+  - '0'
+  - '0'
+  - '2'
+  - '0'
+  - '0'
+  - '3'
+  - '0'
+  - '0'
+  - '5'
+outputs:
+  output_directory: executable/chap10
+  files_expected:
+  - p102_2.res
+  - p102_2.msh
+how_to_run:
+  linux:
+  - cd ~/Downloads/pfem5/5th_ed/executable/chap10
+  - printf "p102_2\n" | ~/Downloads/pfem5/5th_ed/build/bin/p102
+  matlab:
+  - pfem_root = '~/Downloads/pfem5/5th_ed';
+  - '[status, out] = pfem_run_from_yaml(repo_root, pfem_root, yaml_path, struct());'
+notes:
+- Use global_token_index from tunable_parameters for patching.
+- The patcher replaces tokens by their 1-based index in the flat token list.
+- This file has 26 tokens and 6 READ statements.

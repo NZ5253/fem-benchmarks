@@ -8,8 +8,9 @@ Complete guide for working with the PFEM benchmark catalogue.
 2. [Generating YAML Files](#generating-yaml-files)
 3. [Running Benchmarks](#running-benchmarks)
 4. [MATLAB Integration](#matlab-integration)
-5. [Validation](#validation)
-6. [Repository Structure](#repository-structure)
+5. [Token-Based Patching](#token-based-patching)
+6. [Validation](#validation)
+7. [Repository Structure](#repository-structure)
 
 ---
 
@@ -49,11 +50,17 @@ git push
 
 ### Overview
 
-The `generate_perfect_yamls.py` script creates YAML benchmark files by:
-- Analyzing Fortran source code to extract READ statements with line numbers
-- Identifying program metadata (physics type, dimensions, etc.)
-- Generating structured YAML with complete metadata
-- No external dependencies beyond Python standard library + pyyaml
+The `generate_yamls_v2.py` script creates YAML benchmark files with **token-based patch coordinates**:
+- Tokenizes `.dat` files preserving position information
+- Extracts READ(10,*) statements from Fortran source
+- Detects tunable parameters (E, nu, mesh parameters) with their token indices
+- Generates structured YAML with `global_token_index` for each tunable
+
+### Key Features
+
+- **Token indexing**: Each tunable has a `global_token_index` for direct patching
+- **Conservative detection**: Identifies E (>10000), nu (0-0.5), and mesh parameters
+- **All tokens stored**: Complete token list in `inputs.all_tokens` for verification
 
 ### Usage
 
@@ -132,6 +139,18 @@ cd ~/Downloads/pfem5/5th_ed/executable/chap05
 printf "p51_3\n" | ../../build/bin/p51
 ```
 
+### Batch Build
+
+Build all programs for a chapter at once:
+
+```bash
+# Build all chap04 programs
+./scripts/pfem_build_chapter.sh ~/Downloads/pfem5/5th_ed chap04
+
+# Force rebuild
+./scripts/pfem_build_chapter.sh ~/Downloads/pfem5/5th_ed chap04 --rebuild
+```
+
 ---
 
 ## MATLAB Integration
@@ -163,16 +182,98 @@ results = pfem_parametric_sweep('~/Downloads/pfem5/5th_ed', 'chap05', ...
 
 ### Tunable Parameters
 
-Check YAML files for parameter paths:
+Check YAML files for tunable parameters with their token indices:
 
 ```yaml
 tunable_parameters:
   - name: youngs_modulus_E
-    path: "inputs.record2.material.E.value"
-    suggested_range: [1.0e4, 1.0e9]
+    global_token_index: 9
+    suggested_range: [1.0e4, 1.0e12]
 ```
 
-Use these paths to modify .dat files programmatically.
+### Batch Chapter Runner
+
+Run all cases in a chapter:
+
+```matlab
+% Run all chap04 cases with no overrides
+results = pfem_run_chapter(repo_root, pfem_root, 'chap04');
+
+% Run with specific overrides for some cases
+overrides_map = containers.Map();
+overrides_map('p41_1') = struct('youngs_modulus_E', 2e5);
+results = pfem_run_chapter(repo_root, pfem_root, 'chap04', overrides_map);
+```
+
+### Test Script
+
+Verify the pipeline works:
+
+```matlab
+cd ~/projects/fem-benchmarks
+pfem_test_run
+```
+
+---
+
+## Token-Based Patching
+
+The YAML files now include **token-based patch coordinates** for each tunable parameter. This enables generic patching across all PFEM chapters without hardcoded assumptions.
+
+### How It Works
+
+1. **Tokenization**: The `.dat` file is parsed into a flat list of tokens
+2. **Global Index**: Each tunable parameter stores its `global_token_index` (1-based position)
+3. **Patching**: The MATLAB patcher replaces tokens directly by index
+
+### YAML Structure
+
+```yaml
+tunable_parameters:
+  - name: youngs_modulus_E
+    global_token_index: 9     # Position in flat token list
+    line: 4                   # Original line number
+    type: real
+    description: "Young's modulus"
+    current_value: '1.0e6'
+    suggested_range: [1.0e4, 1.0e12]
+```
+
+### Using Overrides in MATLAB
+
+```matlab
+% Load YAML
+yaml_path = 'benchmarks/pfem5/chap05/p51_3.yaml';
+
+% Define overrides (keyed by tunable name)
+overrides = struct();
+overrides.youngs_modulus_E = 2e6;     % Double the stiffness
+overrides.poisson_ratio_nu = 0.25;    % Change Poisson's ratio
+
+% Run with patching
+[status, out] = pfem_run_from_yaml(repo_root, pfem_root, yaml_path, overrides);
+```
+
+### Benefits
+
+- **Generic**: Works for all chapters (4-11) without program-specific code
+- **Robust**: No assumptions about record structure or property ordering
+- **Traceable**: Token indices can be verified against the `.dat` file
+
+### Viewing Token Information
+
+Each YAML stores all tokens for reference:
+
+```yaml
+inputs:
+  all_tokens:
+    - "'plane'"
+    - "'quadrilateral'"
+    - '4'
+    - "'y'"
+    - '3'
+    # ... (token index = position in this list)
+```
 
 ---
 
