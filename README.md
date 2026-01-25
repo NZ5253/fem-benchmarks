@@ -57,13 +57,17 @@ fem-benchmarks/
 │       └── chap11/      # Chapter 11: 8 cases
 ├── scripts/             # Build and utility scripts
 │   ├── pfem_build_and_run.sh        # Build & execute PFEM programs
-│   ├── generate_perfect_yamls.py    # Perfect YAML generator (primary tool)
-│   ├── verify_yamls.py              # YAML validation
-│   └── git_publish.sh               # Git helper
+│   ├── pfem_build_chapter.sh        # Batch chapter build
+│   ├── generate_yamls_v2.py         # YAML generator (token-based)
+│   └── verify_yamls.py              # YAML validation
 ├── matlab/              # MATLAB interface
 │   ├── pfem_runner.m              # Single case runner
-│   ├── pfem_parametric_sweep.m    # Parametric study framework
-│   └── README.md
+│   ├── pfem_run_from_yaml.m       # YAML-driven runner
+│   ├── pfem_show_tunables.m       # Display available tunables
+│   ├── pfem_smart_sweep.m         # Auto-discovery sweep
+│   ├── pfem_compare_results.m     # Result comparison & plotting
+│   ├── NZ.m                       # Example sweep script
+│   └── utils/                     # Utility functions
 ├── docs/                # Documentation
 │   └── GUIDE.md                   # Complete usage guide
 └── README.md            # This file
@@ -102,15 +106,22 @@ See [docs/GUIDE.md](docs/GUIDE.md) for complete instructions.
 ### Parametric Study Example
 
 ```matlab
-% Define parameter variations
-param_ranges.E = [1e5, 5e5, 1e6, 5e6, 1e7];   % Young's modulus
-param_ranges.nu = [0.2, 0.25, 0.3, 0.35];      % Poisson's ratio
+% Discover available tunables
+pfem_show_tunables('benchmarks/pfem5/chap05/p51_4.yaml');
 
-% Run parametric sweep
-results = pfem_parametric_sweep('~/Downloads/pfem5/5th_ed', 'chap05', ...
-                                'p51', 'p51_3', param_ranges);
+% Run parameter sweep
+yaml_path = 'benchmarks/pfem5/chap05/p51_4.yaml';
+for E = [500, 1000, 5000, 10000]
+    overrides.youngs_modulus_E = E;
+    [status, out] = pfem_run_from_yaml(repo_root, pfem_root, yaml_path, overrides);
+    results(end+1).out = out;
+end
 
-% Results saved to ./runs/sweep_<timestamp>/
+% Compare results (text and plots)
+for i = 1:length(results)
+    pfem_compare_results(results(i).out, 'plot', false);  % Text comparison
+end
+pfem_compare_results(results, 'plot', true);  % Sweep summary plot
 ```
 
 ## Key Features
@@ -125,9 +136,11 @@ The `generate_perfect_yamls.py` script creates comprehensive benchmark files:
 
 ### 2. MATLAB Integration
 - **pfem_runner.m**: Execute any PFEM case from MATLAB
-- **pfem_parametric_sweep.m**: Framework for parameter studies
-- Result parsing and organization
-- Extensible for custom analyses
+- **pfem_run_from_yaml.m**: YAML-driven runner with parameter overrides
+- **pfem_show_tunables.m**: Discover available parameters for any case
+- **pfem_smart_sweep.m**: Auto-discovery parameter sweeps
+- **pfem_compare_results.m**: Compare original vs modified results with plots
+- Organized output folders with parameter values in names
 
 ## Documentation
 

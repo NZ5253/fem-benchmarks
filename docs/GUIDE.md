@@ -166,29 +166,108 @@ Returns:
 - `status`: 0 = success, 1 = failure
 - `outputs`: struct with result file paths and contents
 
+### Parameter Discovery
+
+Use `pfem_show_tunables` to see available parameters for any case:
+
+```matlab
+tunables = pfem_show_tunables('benchmarks/pfem5/chap05/p51_4.yaml');
+```
+
+Output:
+```
+============================================================
+Tunable Parameters for: p51_4
+Program: p51 | Chapter: 5
+============================================================
+
+NAME                       TOKEN          CURRENT      TYPE  SUGGESTED RANGE
+--------------------------------------------------------------------------------
+youngs_modulus_E               9            1.0e6      real  [1.00e+04, 1.00e+12]
+poisson_ratio_nu              10              0.3      real  [0.00e+00, 4.90e-01]
+nels_or_nxe                    3                8       int  -
+```
+
 ### Parametric Studies
 
 ```matlab
-% Define parameter ranges
-param_ranges.E = [1e5, 5e5, 1e6, 5e6, 1e7];
-param_ranges.nu = [0.2, 0.25, 0.3, 0.35];
+yaml_path = 'benchmarks/pfem5/chap05/p51_4.yaml';
+overrides = struct();
+results = [];
 
-% Run sweep
-results = pfem_parametric_sweep('~/Downloads/pfem5/5th_ed', 'chap05', ...
-                                'p51', 'p51_3', param_ranges);
-
-% Results saved to ./runs/sweep_<timestamp>/
+for E = [500, 1000, 5000, 10000]
+    overrides.youngs_modulus_E = E;
+    [status, out] = pfem_run_from_yaml(repo_root, pfem_root, yaml_path, overrides);
+    results(end+1).out = out;
+    results(end).value = E;
+    results(end).status = status;
+end
 ```
 
-### Tunable Parameters
+Each run creates an isolated folder with parameter values in the name:
+```
+runs/single/chap05/p51/p51_4/260125_160124_E_500/
+```
 
-Check YAML files for tunable parameters with their token indices:
+### Result Comparison
 
-```yaml
-tunable_parameters:
-  - name: youngs_modulus_E
-    global_token_index: 9
-    suggested_range: [1.0e4, 1.0e12]
+Compare original vs modified results with text tables and plots:
+
+```matlab
+% Text comparison only (displacement and stress tables)
+pfem_compare_results(out, 'plot', false);
+
+% Plot only (bar charts for single run)
+pfem_compare_results(out, 'plot', true, 'text', false);
+
+% Sweep summary (parameter vs displacement/stress plots)
+pfem_compare_results(results_array, 'plot', true);
+```
+
+#### Comparison Output
+
+Text output shows:
+- Node-by-node displacement comparison (original vs modified)
+- Element stress comparison
+- Max absolute and relative differences
+
+Plots include:
+- **Single run**: Bar charts comparing X/Y displacements and stresses
+- **Sweep**: Line plots showing how displacement/stress vary with parameter
+
+### Complete Sweep Example (NZ.m)
+
+```matlab
+% Setup
+yaml_path = fullfile(repo_root, 'benchmarks', 'pfem5', 'chap05', 'p51_4.yaml');
+
+% Discover tunables
+tunables = pfem_show_tunables(yaml_path);
+
+% Define sweep
+sweep_param = 'youngs_modulus_E';
+sweep_values = [500, 1000, 5000, 10000];
+
+% Run sweep
+for i = 1:length(sweep_values)
+    overrides.(sweep_param) = sweep_values(i);
+    [status, out] = pfem_run_from_yaml(repo_root, pfem_root, yaml_path, overrides);
+    results(i).out = out;
+    results(i).status = status;
+end
+
+% Text comparison for ALL runs
+for i = 1:length(results)
+    pfem_compare_results(results(i).out, 'plot', false);
+end
+
+% Sweep summary plot
+pfem_compare_results(results, 'plot', true);
+
+% Individual comparison plots for ALL runs
+for i = 1:length(results)
+    pfem_compare_results(results(i).out, 'plot', true, 'text', false);
+end
 ```
 
 ### Batch Chapter Runner
@@ -196,13 +275,7 @@ tunable_parameters:
 Run all cases in a chapter:
 
 ```matlab
-% Run all chap04 cases with no overrides
 results = pfem_run_chapter(repo_root, pfem_root, 'chap04');
-
-% Run with specific overrides for some cases
-overrides_map = containers.Map();
-overrides_map('p41_1') = struct('youngs_modulus_E', 2e5);
-results = pfem_run_chapter(repo_root, pfem_root, 'chap04', overrides_map);
 ```
 
 ### Test Script
@@ -317,7 +390,7 @@ The script verifies:
 fem-benchmarks/
 ├── benchmarks/pfem5/      # YAML benchmark catalogue
 │   ├── chap04/           # 13 cases
-│   ├── chap05/           # 13 cases (complete with perfect YAMLs)
+│   ├── chap05/           # 13 cases
 │   ├── chap06/           # 15 cases
 │   ├── chap07/           # 8 cases
 │   ├── chap08/           # 16 cases
@@ -326,14 +399,22 @@ fem-benchmarks/
 │   └── chap11/           # 8 cases (85 total)
 │
 ├── scripts/
-│   ├── generate_perfect_yamls.py   # YAML generator
+│   ├── generate_yamls_v2.py        # YAML generator (token-based)
 │   ├── verify_yamls.py             # Validation tool
 │   ├── pfem_build_and_run.sh       # Build & run script
-│   └── git_publish.sh              # Git helper
+│   └── pfem_build_chapter.sh       # Batch chapter build
 │
 ├── matlab/
 │   ├── pfem_runner.m               # Single case runner
-│   └── pfem_parametric_sweep.m     # Parametric studies
+│   ├── pfem_run_from_yaml.m        # YAML-driven runner with overrides
+│   ├── pfem_show_tunables.m        # Display available tunables
+│   ├── pfem_smart_sweep.m          # Auto-discovery sweep
+│   ├── pfem_compare_results.m      # Result comparison & plotting
+│   ├── pfem_run_chapter.m          # Batch chapter runner
+│   ├── NZ.m                        # Example sweep script
+│   └── utils/
+│       ├── pfem_yaml_load.m        # YAML loader
+│       └── pfem_patch_dat_using_yaml.m  # Token-based patcher
 │
 ├── docs/
 │   └── GUIDE.md                    # This file

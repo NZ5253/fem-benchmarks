@@ -1,39 +1,112 @@
 # PFEM MATLAB Interface
 
-This directory contains MATLAB scripts for running PFEM benchmarks and performing parametric studies.
+This directory contains MATLAB scripts for running PFEM benchmarks and performing parametric studies with automatic parameter discovery and result comparison.
 
 ## Files
 
-### pfem_runner.m
+### Core Scripts
+
+#### pfem_runner.m
 Basic runner for executing a single PFEM case from MATLAB.
 
-**Usage:**
-```matlab
-[status, outputs] = pfem_runner(pfem_root, chapter, program, case_name);
-```
-
-**Example:**
 ```matlab
 pfem_root = '~/Downloads/pfem5/5th_ed';
 [status, outputs] = pfem_runner(pfem_root, 'chap05', 'p51', 'p51_3');
+```
 
-if status == 0
-    fprintf('Success! Generated %d output files\n', outputs.num_files);
-    disp(outputs.files);
+#### pfem_run_from_yaml.m
+YAML-driven runner with parameter overrides. Creates isolated run folders with parameter values in the name.
+
+```matlab
+yaml_path = 'benchmarks/pfem5/chap05/p51_4.yaml';
+overrides = struct();
+overrides.youngs_modulus_E = 500;
+[status, out] = pfem_run_from_yaml(repo_root, pfem_root, yaml_path, overrides);
+% Creates folder: runs/single/chap05/p51/p51_4/260125_160124_E_500/
+```
+
+### Parameter Discovery
+
+#### pfem_show_tunables.m
+Display available tunable parameters for any YAML case.
+
+```matlab
+tunables = pfem_show_tunables('benchmarks/pfem5/chap05/p51_4.yaml');
+```
+
+Output:
+```
+============================================================
+Tunable Parameters for: p51_4
+Program: p51 | Chapter: 5
+============================================================
+
+NAME                       TOKEN          CURRENT      TYPE  SUGGESTED RANGE
+--------------------------------------------------------------------------------
+youngs_modulus_E               9            1.0e6      real  [1.00e+04, 1.00e+12]
+poisson_ratio_nu              10              0.3      real  [0.00e+00, 4.90e-01]
+nels_or_nxe                    3                8       int  -
+```
+
+#### pfem_smart_sweep.m
+Run parameter sweeps with automatic tunable discovery.
+
+```matlab
+% Sweep a specific parameter
+results = pfem_smart_sweep('benchmarks/pfem5/chap05/p51_4.yaml', 'youngs_modulus_E', [500, 1000, 5000]);
+
+% Auto-select first tunable with suggested range
+results = pfem_smart_sweep('benchmarks/pfem5/chap05/p51_4.yaml', 'auto', 5);
+```
+
+### Result Comparison
+
+#### pfem_compare_results.m
+Compare original vs modified results with tables and plots.
+
+```matlab
+% Text comparison only
+pfem_compare_results(out, 'plot', false);
+
+% Plot only (no text)
+pfem_compare_results(out, 'plot', true, 'text', false);
+
+% Compare sweep results (generates parameter vs displacement/stress plots)
+pfem_compare_results(results_array, 'plot', true);
+```
+
+### Example Sweep Script (NZ.m)
+
+Complete example showing parameter sweep with comparison:
+
+```matlab
+% Setup
+yaml_path = fullfile(repo_root, 'benchmarks', 'pfem5', 'chap05', 'p51_4.yaml');
+
+% Discover tunables
+tunables = pfem_show_tunables(yaml_path);
+
+% Define sweep
+sweep_param = 'youngs_modulus_E';
+sweep_values = [500, 1000, 5000, 10000];
+
+% Run sweep and compare
+for i = 1:length(sweep_values)
+    overrides.(sweep_param) = sweep_values(i);
+    [status, out] = pfem_run_from_yaml(repo_root, pfem_root, yaml_path, overrides);
+    results(i).out = out;
+end
+
+% Show ALL comparisons (text)
+for i = 1:length(results)
+    pfem_compare_results(results(i).out, 'plot', false);
+end
+
+% Generate ALL comparison plots
+for i = 1:length(results)
+    pfem_compare_results(results(i).out, 'plot', true, 'text', false);
 end
 ```
-
-### pfem_parametric_sweep.m
-Framework for running parametric studies by varying input parameters.
-
-**Usage:**
-```matlab
-param_ranges.E = [1e5, 1e6, 1e7];
-param_ranges.nu = [0.2, 0.3, 0.4];
-results = pfem_parametric_sweep(pfem_root, chapter, program, base_case, param_ranges);
-```
-
-**Note:** The `dat_modifier` function inside needs to be customized for each program based on its specific READ(10,*) format. See YAML files for input schema.
 
 ## Prerequisites
 
@@ -49,67 +122,72 @@ results = pfem_parametric_sweep(pfem_root, chapter, program, base_case, param_ra
 
 ### Single Run
 ```matlab
-% Initialize
 pfem_root = '~/Downloads/pfem5/5th_ed';
-
-% Run a case
 [status, outputs] = pfem_runner(pfem_root, 'chap05', 'p51', 'p51_3');
-
-% Parse results
-if status == 0 && isfield(outputs, 'res_info')
-    fprintf('Equations: %d\n', outputs.res_info.num_equations);
-    fprintf('Skyline storage: %d\n', outputs.res_info.skyline_storage);
-end
 ```
 
-### Parametric Study
-
-1. Define parameter ranges
-2. Run sweep
-3. Analyze results
+### Parameter Sweep with Comparison
 
 ```matlab
-pfem_root = '~/Downloads/pfem5/5th_ed';
+% 1. Discover available tunables
+pfem_show_tunables('benchmarks/pfem5/chap05/p51_4.yaml');
 
-% Define parameter variations
-param_ranges.E = [1e5, 5e5, 1e6, 5e6, 1e7];  % Young's modulus
-param_ranges.nu = [0.2, 0.25, 0.3, 0.35];     % Poisson's ratio
+% 2. Run sweep
+yaml_path = 'benchmarks/pfem5/chap05/p51_4.yaml';
+overrides = struct();
+results = [];
 
-% Run sweep
-results = pfem_parametric_sweep(pfem_root, 'chap05', 'p51', 'p51_3', ...
-                                param_ranges, './runs/p51_param_study');
-
-% Analyze results
-success_count = 0;
-for i = 1:length(results.runs)
-    if results.runs{i}.status == 0
-        success_count = success_count + 1;
-    end
+for E = [500, 1000, 5000, 10000]
+    overrides.youngs_modulus_E = E;
+    [status, out] = pfem_run_from_yaml(repo_root, pfem_root, yaml_path, overrides);
+    results(end+1).out = out;
+    results(end).value = E;
+    results(end).status = status;
 end
-fprintf('Successful runs: %d/%d\n', success_count, length(results.runs));
+
+% 3. Compare all results
+for i = 1:length(results)
+    pfem_compare_results(results(i).out, 'plot', false);  % Text
+end
+
+% 4. Plot all comparisons
+for i = 1:length(results)
+    pfem_compare_results(results(i).out, 'plot', true, 'text', false);  % Plots only
+end
 ```
 
-## Customization
+### Batch Chapter Runner
 
-To use parametric sweeps with a specific program:
+Run all cases in a chapter:
 
-1. Examine the YAML file for the program (in `benchmarks/pfem5/chapXX/`)
-2. Understand the READ(10,*) sequence (input schema)
-3. Customize the `dat_modifier` function in `pfem_parametric_sweep.m` to:
-   - Parse the base .dat file
-   - Identify which lines/values correspond to tunable parameters
-   - Modify those values
-   - Maintain the correct format
+```matlab
+results = pfem_run_chapter(repo_root, pfem_root, 'chap04');
+```
 
-## Future Enhancements
+## Output Structure
 
-- Generic .dat parser based on YAML input schema
-- Result parsers for different output formats
-- Visualization utilities (mesh plots, deformation, stress)
-- Result comparison against reference values
+Each run creates an isolated folder:
+```
+runs/single/chap05/p51/p51_4/
+  260125_160124_E_500/          # Timestamp + parameter values
+    p51_4_XXXX.dat              # Modified input
+    p51_4_XXXX.res              # Results
+    case.yaml                   # Copy of YAML
+    overrides.mat               # Parameter overrides
+```
+
+## Comparison Features
+
+### Text Output
+- Node-by-node displacement comparison (original vs modified)
+- Element stress comparison
+- Max absolute/relative differences
+
+### Plots
+- **Single run**: Bar charts comparing displacements and stresses
+- **Sweep**: Line plots of parameter vs displacement/stress
 
 ## References
 
-- See `docs/HANDOVER.md` for complete documentation
 - YAML benchmark files contain detailed input/output schemas
 - PFEM book: "Programming the Finite Element Method (5th ed.)"
