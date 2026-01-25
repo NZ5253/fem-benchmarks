@@ -336,6 +336,7 @@ end
 
 function plot_single_comparison(orig_disp, mod_disp, orig_stress, mod_stress, out, do_save)
 % Create comparison plots for single run vs original
+% Uses line plots with markers + difference subplot for clarity
     figure('Name', 'Original vs Modified Comparison', 'Position', [100 100 1400 900]);
 
     % Get parameter info for title
@@ -361,63 +362,66 @@ function plot_single_comparison(orig_disp, mod_disp, orig_stress, mod_stress, ou
     n_nodes = size(orig_disp, 1);
     nodes = 1:n_nodes;
 
-    % Subplot 1: X-Displacement comparison
-    subplot(2, 2, 1);
-    bar_data = [orig_disp(:,1), mod_disp(:,1)];
-    b = bar(nodes, bar_data);
-    b(1).FaceColor = [0.2 0.4 0.8];  % Blue for original
-    b(2).FaceColor = [0.8 0.4 0.2];  % Orange for modified
-    xlabel('Node Number', 'FontSize', 11, 'FontWeight', 'bold');
-    ylabel('X-Displacement (m)', 'FontSize', 11, 'FontWeight', 'bold');
-    title('X-Displacement Comparison', 'FontSize', 12, 'FontWeight', 'bold');
-    legend({'Original (E=1e6)', sprintf('Modified (%s=%.4g)', param_name, param_value)}, ...
-        'Location', 'best', 'FontSize', 10);
-    grid on;
-    set(gca, 'FontSize', 10);
+    % Calculate differences
+    disp_diff_x = mod_disp(:,1) - orig_disp(:,1);
+    disp_diff_y = mod_disp(:,2) - orig_disp(:,2);
 
-    % Subplot 2: Y-Displacement comparison
-    subplot(2, 2, 2);
-    bar_data = [orig_disp(:,2), mod_disp(:,2)];
-    b = bar(nodes, bar_data);
-    b(1).FaceColor = [0.2 0.4 0.8];
-    b(2).FaceColor = [0.8 0.4 0.2];
+    % Subplot 1: Displacement values (line plot)
+    subplot(2, 2, 1);
+    plot(nodes, orig_disp(:,2), 'b-o', 'LineWidth', 2, 'MarkerSize', 6, 'MarkerFaceColor', 'b');
+    hold on;
+    plot(nodes, mod_disp(:,2), 'r-s', 'LineWidth', 2, 'MarkerSize', 6, 'MarkerFaceColor', 'r');
+    hold off;
     xlabel('Node Number', 'FontSize', 11, 'FontWeight', 'bold');
     ylabel('Y-Displacement (m)', 'FontSize', 11, 'FontWeight', 'bold');
-    title('Y-Displacement Comparison', 'FontSize', 12, 'FontWeight', 'bold');
+    title('Y-Displacement: Original vs Modified', 'FontSize', 12, 'FontWeight', 'bold');
     legend({'Original (E=1e6)', sprintf('Modified (%s=%.4g)', param_name, param_value)}, ...
         'Location', 'best', 'FontSize', 10);
     grid on;
     set(gca, 'FontSize', 10);
 
-    % Subplot 3: Stress σx comparison
+    % Subplot 2: Displacement DIFFERENCE
+    subplot(2, 2, 2);
+    stem(nodes, disp_diff_y, 'filled', 'LineWidth', 1.5, 'MarkerSize', 6, 'Color', [0.8 0.2 0.2]);
+    xlabel('Node Number', 'FontSize', 11, 'FontWeight', 'bold');
+    ylabel('\Delta Y-Displacement (m)', 'FontSize', 11, 'FontWeight', 'bold');
+    title('Y-Displacement Difference (Modified - Original)', 'FontSize', 12, 'FontWeight', 'bold');
+    grid on;
+    set(gca, 'FontSize', 10);
+    % Add zero line
+    hold on;
+    plot(xlim, [0 0], 'k--', 'LineWidth', 1);
+    hold off;
+
+    % Subplot 3: Stress values (line plot)
     if ~isempty(orig_stress) && ~isempty(mod_stress)
         n_elem = size(orig_stress, 1);
         elements = 1:n_elem;
+        stress_diff = mod_stress(:,3) - orig_stress(:,3);
 
         subplot(2, 2, 3);
-        bar_data = [orig_stress(:,3), mod_stress(:,3)];
-        b = bar(elements, bar_data);
-        b(1).FaceColor = [0.2 0.6 0.2];  % Green for original
-        b(2).FaceColor = [0.6 0.2 0.6];  % Purple for modified
+        plot(elements, orig_stress(:,3), 'b-o', 'LineWidth', 2, 'MarkerSize', 8, 'MarkerFaceColor', 'b');
+        hold on;
+        plot(elements, mod_stress(:,3), 'r-s', 'LineWidth', 2, 'MarkerSize', 8, 'MarkerFaceColor', 'r');
+        hold off;
         xlabel('Element Number', 'FontSize', 11, 'FontWeight', 'bold');
         ylabel('\sigma_x (Pa)', 'FontSize', 11, 'FontWeight', 'bold');
-        title('Stress \sigma_x Comparison', 'FontSize', 12, 'FontWeight', 'bold');
+        title('Stress \sigma_x: Original vs Modified', 'FontSize', 12, 'FontWeight', 'bold');
         legend({'Original', 'Modified'}, 'Location', 'best', 'FontSize', 10);
         grid on;
         set(gca, 'FontSize', 10);
 
-        % Subplot 4: Stress σy comparison
+        % Subplot 4: Stress DIFFERENCE
         subplot(2, 2, 4);
-        bar_data = [orig_stress(:,4), mod_stress(:,4)];
-        b = bar(elements, bar_data);
-        b(1).FaceColor = [0.2 0.6 0.2];
-        b(2).FaceColor = [0.6 0.2 0.6];
+        stem(elements, stress_diff, 'filled', 'LineWidth', 1.5, 'MarkerSize', 8, 'Color', [0.2 0.6 0.2]);
         xlabel('Element Number', 'FontSize', 11, 'FontWeight', 'bold');
-        ylabel('\sigma_y (Pa)', 'FontSize', 11, 'FontWeight', 'bold');
-        title('Stress \sigma_y Comparison', 'FontSize', 12, 'FontWeight', 'bold');
-        legend({'Original', 'Modified'}, 'Location', 'best', 'FontSize', 10);
+        ylabel('\Delta \sigma_x (Pa)', 'FontSize', 11, 'FontWeight', 'bold');
+        title('Stress \sigma_x Difference (Modified - Original)', 'FontSize', 12, 'FontWeight', 'bold');
         grid on;
         set(gca, 'FontSize', 10);
+        hold on;
+        plot(xlim, [0 0], 'k--', 'LineWidth', 1);
+        hold off;
     end
 
     % Main title with case and parameter info

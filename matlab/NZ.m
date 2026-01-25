@@ -1,5 +1,5 @@
 % NZ_sweep.m - Run a loop of simulations with auto-discovery and comparison
-clear; clc;
+clear; clc; close all;
 
 % Setup Paths
 repo_root = fullfile(getenv('HOME'), 'projects', 'fem-benchmarks');
@@ -8,6 +8,12 @@ addpath(fullfile(repo_root, 'matlab'));
 addpath(fullfile(repo_root, 'matlab', 'utils'));
 
 %% Configuration - EDIT THIS SECTION
+%
+% CASE SELECTION:
+%   p51_4 (load-controlled):    Changing E affects DISPLACEMENTS only (stresses constant)
+%   p51_3 (disp-controlled):    Changing E affects STRESSES only (displacements fixed)
+%   Any case + Poisson ratio:   Changing nu affects BOTH stresses and displacements
+%
 yaml_path = fullfile(repo_root, 'benchmarks', 'pfem5', 'chap05', 'p51_4.yaml');
 
 % Show available tunables for this case
@@ -15,8 +21,13 @@ fprintf('Loading YAML and discovering tunables...\n');
 tunables = pfem_show_tunables(yaml_path);
 
 % Pick parameter to sweep (must match a name from tunables above)
+% Options: 'youngs_modulus_E', 'poisson_ratio_nu', etc.
 sweep_param = 'youngs_modulus_E';
 sweep_values = [500, 1000, 5000, 10000];  % Multiple values to compare
+
+% To see BOTH stress and displacement change, try:
+%   sweep_param = 'poisson_ratio_nu';
+%   sweep_values = [0.1, 0.2, 0.3, 0.4];
 
 %% Validate parameter exists
 param_names = {tunables.name};
