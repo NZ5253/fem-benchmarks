@@ -119,3 +119,19 @@ for i = 1:length(results)
         pfem_compare_results(results(i).out, 'plot', true, 'text', false, 'save', false);
     end
 end
+
+%% Plot Mesh Visualization (deformed shape)
+fprintf('\n============================================================\n');
+fprintf('Generating Mesh Visualization...\n');
+fprintf('============================================================\n');
+
+% Show mesh comparison across sweep values
+pfem_plot_mesh(results);
+
+% Show detailed mesh for first and last run
+if results(1).status == 0
+    pfem_plot_mesh(results(1).out, 'title', sprintf('First: %s = %.4g', sweep_param, results(1).value));
+end
+if results(end).status == 0 && length(results) > 1
+    pfem_plot_mesh(results(end).out, 'title', sprintf('Last: %s = %.4g', sweep_param, results(end).value));
+end
