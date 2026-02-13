@@ -22,12 +22,12 @@ tunables = pfem_show_tunables(yaml_path);
 
 % Pick parameter to sweep (must match a name from tunables above)
 % Options: 'youngs_modulus_E', 'poisson_ratio_nu', etc.
-sweep_param = 'youngs_modulus_E';
-sweep_values = [500, 1000, 5000, 10000];  % Multiple values to compare
+%sweep_param = 'youngs_modulus_E';
+%sweep_values = [500, 1000, 5000, 10000];  % Multiple values to compare
 
 % To see BOTH stress and displacement change, try:
-%   sweep_param = 'poisson_ratio_nu';
-%   sweep_values = [0.1, 0.2, 0.3, 0.4];
+sweep_param = 'poisson_ratio_nu';
+sweep_values = [0.1, 0.2, 0.3, 0.4];
 
 %% Validate parameter exists
 param_names = {tunables.name};
