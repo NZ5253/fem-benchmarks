@@ -18,6 +18,77 @@ from collections import defaultdict
 # Note: 'source' can be either top-level or under 'authors.source' (perfect YAML format)
 REQUIRED_KEYS = ['id', 'title', 'code', 'fem', 'analysis', 'inputs', 'outputs']
 
+def verify_token_consistency(data):
+    """Check token-level consistency within a YAML file.
+
+    Runs four checks:
+    1. len(all_tokens) == input_schema.total_tokens
+    2. Every global_token_index is within 1..len(all_tokens)
+    3. tunable current_value matches all_tokens[global_token_index-1]
+    4. tunable book_reference.value (if present) matches all_tokens[global_token_index-1]
+
+    Note: book_reference.value must be a quoted string in the YAML file
+    (e.g. value: '1.0e6') to prevent YAML float coercion breaking comparison.
+
+    Returns list of error strings (empty if all pass).
+    """
+    errors = []
+    inputs = data.get('inputs', {})
+    input_schema = data.get('input_schema', {})
+    tunables = data.get('tunable_parameters', [])
+    all_tokens = inputs.get('all_tokens')
+    total_tokens = input_schema.get('total_tokens')
+
+    # Check 1: token count consistency
+    if all_tokens is not None and total_tokens is not None:
+        if len(all_tokens) != total_tokens:
+            errors.append(
+                f"Token count mismatch: input_schema.total_tokens={total_tokens} "
+                f"but len(inputs.all_tokens)={len(all_tokens)}"
+            )
+
+    if not all_tokens or not isinstance(tunables, list):
+        return errors
+
+    n = len(all_tokens)
+    for param in tunables:
+        if not isinstance(param, dict):
+            continue
+        name = param.get('name', '?')
+        gidx = param.get('global_token_index')
+        if gidx is None:
+            continue
+
+        # Check 2: index in bounds
+        if not isinstance(gidx, int) or gidx < 1 or gidx > n:
+            errors.append(
+                f"tunable '{name}': global_token_index={gidx} out of bounds (1..{n})"
+            )
+            continue
+
+        actual = str(all_tokens[gidx - 1])
+
+        # Check 3: current_value matches token
+        cv = param.get('current_value')
+        if cv is not None and str(cv) != actual:
+            errors.append(
+                f"tunable '{name}': current_value='{cv}' != all_tokens[{gidx}]='{actual}'"
+            )
+
+        # Check 4: book_reference.value matches token
+        book_ref = param.get('book_reference')
+        if isinstance(book_ref, dict) and 'value' in book_ref:
+            bval = str(book_ref['value'])
+            if bval != actual:
+                fig = book_ref.get('figure', 'unknown figure')
+                errors.append(
+                    f"tunable '{name}': book_reference.value='{bval}' ({fig}) "
+                    f"!= all_tokens[{gidx}]='{actual}'"
+                )
+
+    return errors
+
+
 def verify_yaml_file(yaml_path):
     """Verify a single YAML file. Returns (is_valid, errors, data)."""
     errors = []
@@ -63,6 +134,7 @@ def verify_yaml_file(yaml_path):
     if 'analysis' in data and not isinstance(data['analysis'], dict):
         errors.append("'analysis' must be a dictionary")
 
+    errors.extend(verify_token_consistency(data))
     return len(errors) == 0, errors, data
 
 def main():

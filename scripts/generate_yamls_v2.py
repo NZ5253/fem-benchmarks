@@ -70,35 +70,54 @@ def tokenize_dat_file(dat_path):
 # =============================================================================
 
 def find_read_statements(source_file):
-    """Extract READ(10,*) statements with line numbers and variables."""
+    """Extract READ(10,*) statements with line numbers and variables.
+
+    Handles Fortran continuation lines (trailing &) by joining physical lines
+    into logical lines before searching for READ statements.
+    """
     reads = []
     try:
         with open(source_file, 'r', errors='ignore') as f:
-            for line_num, line in enumerate(f, 1):
-                if re.search(r'READ\s*\(\s*10\s*,\s*\*\s*\)', line, re.IGNORECASE):
-                    stmt = line.strip()
-                    # Remove leading line numbers (if any)
-                    stmt = re.sub(r'^\d+\s+', '', stmt)
+            physical_lines = f.readlines()
 
-                    # Check if this is a conditional READ
-                    is_conditional = 'IF' in stmt.upper() and 'READ' in stmt.upper()
+        # Join Fortran continuation lines (trailing &) into logical lines.
+        # Each entry is (start_line_num_1based, joined_code_text).
+        logical_lines = []
+        i = 0
+        while i < len(physical_lines):
+            line_num = i + 1  # 1-based; record the start line
+            code = physical_lines[i].rstrip('\n').split('!')[0]  # strip inline comment
+            while code.rstrip().endswith('&'):
+                code = code.rstrip()[:-1]  # strip trailing &
+                i += 1
+                if i < len(physical_lines):
+                    next_code = physical_lines[i].rstrip('\n').split('!')[0]
+                    code = code + ' ' + next_code.lstrip()
+                else:
+                    break
+            logical_lines.append((line_num, code))
+            i += 1
 
-                    # Extract variables from READ statement
-                    match = re.search(r'READ\s*\(\s*10\s*,\s*\*\s*\)\s*(.+)', stmt, re.IGNORECASE)
-                    variables = []
-                    if match:
-                        var_part = match.group(1).strip()
-                        if '!' in var_part:
-                            var_part = var_part.split('!')[0].strip()
-                        # Simple split on comma (doesn't handle all cases but good enough)
-                        variables = [v.strip() for v in re.split(r',', var_part) if v.strip()]
+        for line_num, stmt_text in logical_lines:
+            if not re.search(r'READ\s*\(\s*10\s*,\s*\*\s*\)', stmt_text, re.IGNORECASE):
+                continue
 
-                    reads.append({
-                        'line': line_num,
-                        'stmt': stmt,
-                        'variables': variables,
-                        'conditional': is_conditional
-                    })
+            stmt = re.sub(r'^\d+\s+', '', stmt_text.strip())
+            is_conditional = 'IF' in stmt.upper() and 'READ' in stmt.upper()
+
+            match = re.search(r'READ\s*\(\s*10\s*,\s*\*\s*\)\s*(.+)', stmt, re.IGNORECASE)
+            variables = []
+            if match:
+                var_part = match.group(1).strip().split('!')[0].strip()
+                variables = [v.strip() for v in re.split(r',', var_part) if v.strip()]
+
+            reads.append({
+                'line': line_num,
+                'stmt': stmt,
+                'variables': variables,
+                'conditional': is_conditional
+            })
+
     except Exception as e:
         print(f"  Warning: Error reading source file: {e}")
     return reads
@@ -234,10 +253,21 @@ def estimate_token_count(var_spec, symbol_table, constants):
     vs = var_spec.lower().strip()
     vn = vs.split('(')[0].strip()
 
-    nels     = int(symbol_table.get('nels',    1))
     nxe      = int(symbol_table.get('nxe',    1))
     nye      = int(symbol_table.get('nye',    1))
     nze      = int(symbol_table.get('nze',    1))
+    nels     = int(symbol_table.get('nels',    0))
+    if nels <= 0:
+        # Derive nels from mesh parameters when not directly available
+        if all(k in symbol_table for k in ['nx1', 'nx2', 'ny1', 'ny2']):
+            # 3D embanking mesh formula (p612, p613)
+            _nx1 = int(symbol_table['nx1']); _nx2 = int(symbol_table['nx2'])
+            _ny1 = int(symbol_table['ny1']); _ny2 = int(symbol_table['ny2'])
+            nels = (_nx1 * _ny1 + _ny2 * (_nx1 + _nx2)) * nze
+        elif nxe > 1 and nye > 1:
+            nels = nxe * nye
+        else:
+            nels = 1
     nr       = int(symbol_table.get('nr',     0))
     np_types = int(symbol_table.get('np_types', 1))
     nn       = int(symbol_table.get('nn',     1))

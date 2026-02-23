@@ -22,7 +22,7 @@ code:
   - line: 23
     stmt: READ(10,*)nels,np_types
   - line: 27
-    stmt: READ(10,*)prop,gamw  ! prop(1,:)=k, prop(2,:)=mv
+    stmt: READ(10,*)prop,gamw
   - line: 29
     stmt: IF(np_types>1)READ(10,*)etype
   - line: 30
@@ -121,7 +121,7 @@ input_schema:
     - nels
     - np_types
   - record: 2
-    fortran_read: READ(10,*)prop,gamw  ! prop(1,:)=k, prop(2,:)=mv
+    fortran_read: READ(10,*)prop,gamw
     variables:
     - prop
     - gamw

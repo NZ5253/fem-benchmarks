@@ -20,7 +20,7 @@ code:
   - geom
   io_reads_from_unit10:
   - line: 33
-    stmt: READ(10,*)fnxe,fnye,nn,incs,limit,tol,lifts,enxe,enye,itype,k0,e_f,v_f,  &
+    stmt: READ(10,*)fnxe,fnye,nn,incs,limit,tol,lifts,enxe,enye,itype,k0,e_f,v_f,   c_f,phi_f,psi_f,gama_f,e_e,v_e,c_e,phi_e,psi_e,gama_e
   - line: 49
     stmt: READ(10,*)fwidth,fdepth,ewidth,edepth
   - line: 51
@@ -88,7 +88,7 @@ input_schema:
   total_tokens: 203
   reads_in_order:
   - record: 1
-    fortran_read: READ(10,*)fnxe,fnye,nn,incs,limit,tol,lifts,enxe,enye,itype,k0,e_f,v_f,  &
+    fortran_read: READ(10,*)fnxe,fnye,nn,incs,limit,tol,lifts,enxe,enye,itype,k0,e_f,v_f,   c_f,phi_f,psi_f,gama_f,e_e,v_e,c_e,phi_e,psi_e,gama_e
     variables:
     - fnxe
     - fnye
@@ -103,7 +103,16 @@ input_schema:
     - k0
     - e_f
     - v_f
-    - '&'
+    - c_f
+    - phi_f
+    - psi_f
+    - gama_f
+    - e_e
+    - v_e
+    - c_e
+    - phi_e
+    - psi_e
+    - gama_e
     conditional: true
   - record: 2
     fortran_read: READ(10,*)fwidth,fdepth,ewidth,edepth

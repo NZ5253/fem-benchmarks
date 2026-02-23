@@ -57,6 +57,9 @@ tunable_parameters:
   suggested_range:
   - 1.0e-10
   - 100.0
+  book_reference:
+    value: '3.0'
+    figure: 'Figure 7.3'
 - name: nels_or_nxe
   global_token_index: 1
   line: 1
@@ -73,6 +76,8 @@ tunable_parameters:
   unit_category: count
   current_value: '5'
   note: 'WARNING: changing this invalidates coordinate arrays'
+verification:
+  book_figure: 'Figure 7.3'
 input_schema:
   file_type: .dat
   total_tokens: 38

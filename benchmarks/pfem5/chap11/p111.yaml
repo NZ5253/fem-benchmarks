@@ -29,8 +29,6 @@ code:
     stmt: READ(10,*)ell,dtim,beta,gamma,fm,fk
   - line: 34
     stmt: READ(10,*)nr,(k,nf(:,k),i=1,nr)
-  - line: 67
-    stmt: v=zero   !  alternatively READ(10,*)d(1:),v(1:)
   - line: 68
     stmt: READ(10,*)nlf
   - line: 71
@@ -176,32 +174,27 @@ input_schema:
     - i=1
     - nr)
   - record: 6
-    fortran_read: v=zero   !  alternatively READ(10,*)d(1:),v(1:)
-    variables:
-    - d(1:)
-    - v(1:)
-  - record: 7
     fortran_read: READ(10,*)nlf
     variables:
     - nlf
-  - record: 8
+  - record: 7
     fortran_read: READ(10,*)lnode,lsense,nlfp
     variables:
     - lnode
     - lsense
     - nlfp
-  - record: 9
+  - record: 8
     fortran_read: READ(10,*)(rt(j),rl(j),j=1,nlfp)
     variables:
     - (rt(j)
     - rl(j)
     - j=1
     - nlfp)
-  - record: 10
+  - record: 9
     fortran_read: READ(10,*)nof
     variables:
     - nof
-  - record: 11
+  - record: 10
     fortran_read: READ(10,*)(node(i),sense(i),i=1,nof)
     variables:
     - (node(i)
@@ -273,4 +266,4 @@ how_to_run:
 notes:
 - Use global_token_index from tunable_parameters for patching.
 - The patcher replaces tokens by their 1-based index in the flat token list.
-- This file has 45 tokens and 11 READ statements.
+- This file has 45 tokens and 10 READ statements.

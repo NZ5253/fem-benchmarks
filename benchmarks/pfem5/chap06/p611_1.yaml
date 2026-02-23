@@ -59,6 +59,34 @@ tunable_parameters:
   unit_category: count
   current_value: '1'
   note: 'WARNING: changing this invalidates coordinate arrays'
+- name: bulk_modulus_ke
+  global_token_index: 8
+  line: 1
+  type: real
+  description: Apparent fluid bulk modulus Ke (undrained analysis penalty parameter)
+  unit_category: stress
+  current_value: 1.0e6
+  suggested_range:
+  - 1.0e3
+  - 1.0e12
+  book_reference:
+    value: '1.0e6'
+    figure: 'Figure 6.49'
+- name: load_increments
+  global_token_index: 39
+  line: 6
+  type: int
+  description: Number of load increments
+  unit_category: count
+  current_value: '8'
+  suggested_range:
+  - 1
+  - 1000
+  book_reference:
+    value: '8'
+    figure: 'Figure 6.49'
+verification:
+  book_figure: 'Figure 6.49'
 input_schema:
   file_type: .dat
   total_tokens: 40
