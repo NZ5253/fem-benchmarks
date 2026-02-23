@@ -10,7 +10,7 @@ authors:
     dataset: p43_1
   entry:
     created_by: Naeem
-    created_on: '2026-01-22'
+    created_on: '2026-02-23'
     verified_platform: Linux (gfortran)
 code:
   language: Fortran (F2003)
@@ -55,8 +55,18 @@ tunable_parameters:
   unit_category: stress
   current_value: 4.0e4
   suggested_range:
-  - 10000.0
+  - 1000.0
   - 1000000000000.0
+- name: poisson_ratio_nu
+  global_token_index: 5
+  line: 2
+  type: real
+  description: Poisson's ratio
+  unit_category: dimensionless
+  current_value: 2.0e4
+  suggested_range:
+  - 0.0
+  - 0.49
 - name: nels_or_nxe
   global_token_index: 1
   line: 1
@@ -64,6 +74,7 @@ tunable_parameters:
   description: Number of elements (nels) or x-divisions (nxe)
   unit_category: count
   current_value: '4'
+  note: 'WARNING: changing this invalidates coordinate arrays'
 - name: np_types_or_nye
   global_token_index: 2
   line: 1
@@ -71,6 +82,7 @@ tunable_parameters:
   description: Material types (np_types) or y-divisions (nye)
   unit_category: count
   current_value: '1'
+  note: 'WARNING: changing this invalidates coordinate arrays'
 input_schema:
   file_type: .dat
   total_tokens: 40

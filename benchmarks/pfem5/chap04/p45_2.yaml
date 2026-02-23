@@ -10,7 +10,7 @@ authors:
     dataset: p45_2
   entry:
     created_by: Naeem
-    created_on: '2026-01-22'
+    created_on: '2026-02-23'
     verified_platform: Linux (gfortran)
 code:
   language: Fortran (F2003)
@@ -53,36 +53,36 @@ units:
   system: consistent
   notes: PFEM assumes consistent units.
 tunable_parameters:
-- name: youngs_modulus_E
+- name: stiffness_E_or_EI
+  global_token_index: 6
+  line: 2
+  type: real
+  description: Young's modulus E or flexural stiffness EI
+  unit_category: stress
+  current_value: '1.0'
+  suggested_range:
+  - 1.0e-06
+  - 1000000000000.0
+- name: mass_per_length_rhoA
   global_token_index: 7
   line: 2
   type: real
-  description: Young's modulus
-  unit_category: stress
+  description: Mass per unit length (rho * area)
+  unit_category: density
   current_value: 1.e4
   suggested_range:
-  - 10000.0
-  - 1000000000000.0
-- name: poisson_ratio_nu
-  global_token_index: 117
-  line: 12
+  - 1.0e-06
+  - 1000000.0
+- name: newmark_gamma
+  global_token_index: 8
+  line: 2
   type: real
-  description: Poisson's ratio
+  description: Newmark gamma (0.5=linear acceleration)
   unit_category: dimensionless
-  current_value: '0.00001'
+  current_value: 1.e4
   suggested_range:
   - 0.0
-  - 0.49
-- name: permeability_k
-  global_token_index: 118
-  line: 13
-  type: real
-  description: Permeability or conductivity
-  unit_category: permeability
-  current_value: '5'
-  suggested_range:
-  - 1.0e-06
-  - 100.0
+  - 1.0
 - name: nels_or_nxe
   global_token_index: 1
   line: 1
@@ -90,6 +90,7 @@ tunable_parameters:
   description: Number of elements (nels) or x-divisions (nxe)
   unit_category: count
   current_value: '12'
+  note: 'WARNING: changing this invalidates coordinate arrays'
 - name: np_types_or_nye
   global_token_index: 2
   line: 1
@@ -97,6 +98,7 @@ tunable_parameters:
   description: Material types (np_types) or y-divisions (nye)
   unit_category: count
   current_value: '10'
+  note: 'WARNING: changing this invalidates coordinate arrays'
 input_schema:
   file_type: .dat
   total_tokens: 123

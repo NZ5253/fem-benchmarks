@@ -10,7 +10,7 @@ authors:
     dataset: p811
   entry:
     created_by: Naeem
-    created_on: '2026-01-22'
+    created_on: '2026-02-23'
     verified_platform: Linux (gfortran)
 code:
   language: Fortran (F2003)
@@ -55,36 +55,66 @@ units:
   system: consistent
   notes: PFEM assumes consistent units.
 tunable_parameters:
-- name: youngs_modulus_E
+- name: conductivity_kx
+  global_token_index: 6
+  line: 3
+  type: real
+  description: Thermal conductivity (x)
+  unit_category: conductivity
+  current_value: '17.4'
+  suggested_range:
+  - 1.0e-06
+  - 1000.0
+- name: conductivity_ky
+  global_token_index: 7
+  line: 3
+  type: real
+  description: Thermal conductivity (y)
+  unit_category: conductivity
+  current_value: '17.4'
+  suggested_range:
+  - 1.0e-06
+  - 1000.0
+- name: heat_capacity_rhoc
   global_token_index: 8
   line: 3
   type: real
-  description: Young's modulus
-  unit_category: stress
+  description: Volumetric heat capacity (rho*c)
+  unit_category: heat_capacity
   current_value: '4155400.0'
   suggested_range:
-  - 10000.0
-  - 1000000000000.0
-- name: poisson_ratio_nu
-  global_token_index: 10
-  line: 4
-  type: real
-  description: Poisson's ratio
-  unit_category: dimensionless
-  current_value: '0.005'
-  suggested_range:
-  - 0.0
-  - 0.49
-- name: permeability_k
-  global_token_index: 11
-  line: 4
-  type: real
-  description: Permeability or conductivity
-  unit_category: permeability
-  current_value: '0.01'
-  suggested_range:
   - 1.0e-06
-  - 100.0
+  - 100000000.0
+- name: time_step_dtim
+  global_token_index: 25
+  line: 6
+  type: real
+  description: Time step size
+  unit_category: time
+  current_value: '1.0'
+  suggested_range:
+  - 1.0e-08
+  - 10.0
+- name: number_of_steps
+  global_token_index: 26
+  line: 6
+  type: int
+  description: Number of time steps
+  unit_category: count
+  current_value: '180'
+  suggested_range:
+  - 10
+  - 100000
+- name: theta_integration
+  global_token_index: 27
+  line: 6
+  type: real
+  description: Time integration parameter (0.5=Crank-Nicolson, 1.0=backward Euler)
+  unit_category: dimensionless
+  current_value: '0.5'
+  suggested_range:
+  - 0.5
+  - 1.0
 - name: nels_or_nxe
   global_token_index: 3
   line: 2
@@ -92,6 +122,7 @@ tunable_parameters:
   description: Number of elements (nels) or x-divisions (nxe)
   unit_category: count
   current_value: '8'
+  note: 'WARNING: changing this invalidates coordinate arrays'
 - name: np_types_or_nye
   global_token_index: 4
   line: 2
@@ -99,6 +130,7 @@ tunable_parameters:
   description: Material types (np_types) or y-divisions (nye)
   unit_category: count
   current_value: '6'
+  note: 'WARNING: changing this invalidates coordinate arrays'
 input_schema:
   file_type: .dat
   total_tokens: 159

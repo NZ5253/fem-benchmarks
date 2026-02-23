@@ -99,4 +99,6 @@ function [status, out] = pfem_run_from_yaml(repo_root, pfem_root, yaml_path, ove
     out.original_dat = original_dat;
     out.run_name = run_name;
     out.overrides = overrides;
+    out.yaml_path = yaml_path;
+    out.case = base;
 end

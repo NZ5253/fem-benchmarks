@@ -10,7 +10,7 @@ authors:
     dataset: p46_1
   entry:
     created_by: Naeem
-    created_on: '2026-01-22'
+    created_on: '2026-02-23'
     verified_platform: Linux (gfortran)
 code:
   language: Fortran (F2003)
@@ -41,6 +41,46 @@ units:
   system: consistent
   notes: PFEM assumes consistent units.
 tunable_parameters:
+- name: stiffness_E_or_EI
+  global_token_index: 4
+  line: 2
+  type: real
+  description: Young's modulus E or flexural stiffness EI
+  unit_category: stress
+  current_value: '1.0'
+  suggested_range:
+  - 1.0e-06
+  - 1000000000000.0
+- name: mass_per_length_rhoA
+  global_token_index: 5
+  line: 3
+  type: real
+  description: Mass per unit length (rho * area)
+  unit_category: density
+  current_value: '0.25'
+  suggested_range:
+  - 1.0e-06
+  - 1000000.0
+- name: iteration_limit
+  global_token_index: 14
+  line: 5
+  type: int
+  description: Maximum number of iterations
+  unit_category: count
+  current_value: '0'
+  suggested_range:
+  - 10
+  - 10000
+- name: convergence_tolerance
+  global_token_index: 15
+  line: 5
+  type: real
+  description: Convergence tolerance for nonlinear iteration
+  unit_category: dimensionless
+  current_value: '0'
+  suggested_range:
+  - 1.0e-12
+  - 0.1
 - name: nels_or_nxe
   global_token_index: 1
   line: 1
@@ -48,6 +88,7 @@ tunable_parameters:
   description: Number of elements (nels) or x-divisions (nxe)
   unit_category: count
   current_value: '4'
+  note: 'WARNING: changing this invalidates coordinate arrays'
 - name: np_types_or_nye
   global_token_index: 2
   line: 1
@@ -55,6 +96,7 @@ tunable_parameters:
   description: Material types (np_types) or y-divisions (nye)
   unit_category: count
   current_value: '1'
+  note: 'WARNING: changing this invalidates coordinate arrays'
 input_schema:
   file_type: .dat
   total_tokens: 17

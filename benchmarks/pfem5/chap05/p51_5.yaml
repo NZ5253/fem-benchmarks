@@ -10,7 +10,7 @@ authors:
     dataset: p51_5
   entry:
     created_by: Naeem
-    created_on: '2026-01-22'
+    created_on: '2026-02-23'
     verified_platform: Linux (gfortran)
 code:
   language: Fortran (F2003)
@@ -48,35 +48,25 @@ units:
   notes: PFEM assumes consistent units.
 tunable_parameters:
 - name: youngs_modulus_E
-  global_token_index: 11
-  line: 5
+  global_token_index: 9
+  line: 4
   type: real
   description: Young's modulus
   unit_category: stress
-  current_value: '1000.0'
+  current_value: '100.0'
   suggested_range:
-  - 10000.0
+  - 1000.0
   - 1000000000000.0
 - name: poisson_ratio_nu
-  global_token_index: 12
-  line: 5
+  global_token_index: 10
+  line: 4
   type: real
   description: Poisson's ratio
   unit_category: dimensionless
-  current_value: '0.45'
+  current_value: '0.3'
   suggested_range:
   - 0.0
   - 0.49
-- name: permeability_k
-  global_token_index: 13
-  line: 6
-  type: real
-  description: Permeability or conductivity
-  unit_category: permeability
-  current_value: '1'
-  suggested_range:
-  - 1.0e-06
-  - 100.0
 - name: nels_or_nxe
   global_token_index: 3
   line: 2
@@ -84,6 +74,7 @@ tunable_parameters:
   description: Number of elements (nels) or x-divisions (nxe)
   unit_category: count
   current_value: '4'
+  note: 'WARNING: changing this invalidates coordinate arrays'
 - name: np_types_or_nye
   global_token_index: 5
   line: 3
@@ -91,6 +82,7 @@ tunable_parameters:
   description: Material types (np_types) or y-divisions (nye)
   unit_category: count
   current_value: '3'
+  note: 'WARNING: changing this invalidates coordinate arrays'
 input_schema:
   file_type: .dat
   total_tokens: 61

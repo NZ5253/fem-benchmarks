@@ -105,162 +105,539 @@ def find_read_statements(source_file):
 
 
 # =============================================================================
-# TUNABLE PARAMETER DETECTION
+# TUNABLE PARAMETER DETECTION - COMPREHENSIVE
 # =============================================================================
 
-def detect_tunables_conservative(tokens, token_positions, read_stmts):
-    """
-    Detect tunable parameters with conservative heuristics.
+# Known scalar tunables that appear directly in READ statements
+SCALAR_TUNABLE_DB = {
+    # Time stepping
+    'dtim':     {'name': 'time_step_dtim',          'type': 'real', 'unit_category': 'time',
+                 'description': 'Time step size',
+                 'suggested_range': [1e-8, 10.0]},
+    'nstep':    {'name': 'number_of_steps',          'type': 'int',  'unit_category': 'count',
+                 'description': 'Number of time steps',
+                 'suggested_range': [10, 100000]},
+    'theta':    {'name': 'theta_integration',        'type': 'real', 'unit_category': 'dimensionless',
+                 'description': 'Time integration parameter (0.5=Crank-Nicolson, 1.0=backward Euler)',
+                 'suggested_range': [0.5, 1.0]},
+    # Fluid/material properties (standalone, not in prop array)
+    'visc':     {'name': 'dynamic_viscosity',        'type': 'real', 'unit_category': 'viscosity',
+                 'description': 'Dynamic viscosity of fluid',
+                 'suggested_range': [1e-6, 100.0]},
+    'rho':      {'name': 'density_rho',              'type': 'real', 'unit_category': 'density',
+                 'description': 'Fluid or solid density',
+                 'suggested_range': [0.001, 100000.0]},
+    # Iteration / solver control
+    'tol':      {'name': 'convergence_tolerance',    'type': 'real', 'unit_category': 'dimensionless',
+                 'description': 'Convergence tolerance for nonlinear iteration',
+                 'suggested_range': [1e-12, 0.1]},
+    'limit':    {'name': 'iteration_limit',          'type': 'int',  'unit_category': 'count',
+                 'description': 'Maximum number of iterations',
+                 'suggested_range': [10, 10000]},
+    'incs':     {'name': 'load_increments',          'type': 'int',  'unit_category': 'count',
+                 'description': 'Number of load increments',
+                 'suggested_range': [1, 1000]},
+    'cg_tol':   {'name': 'cg_tolerance',             'type': 'real', 'unit_category': 'dimensionless',
+                 'description': 'Conjugate gradient convergence tolerance',
+                 'suggested_range': [1e-14, 0.01]},
+    'cg_limit': {'name': 'cg_iteration_limit',       'type': 'int',  'unit_category': 'count',
+                 'description': 'CG maximum iterations',
+                 'suggested_range': [100, 1000000]},
+    # Newmark dynamics
+    'beta':     {'name': 'newmark_beta',             'type': 'real', 'unit_category': 'dimensionless',
+                 'description': 'Newmark beta (0.25=constant average acceleration)',
+                 'suggested_range': [0.0, 0.5]},
+    'gamma':    {'name': 'newmark_gamma',            'type': 'real', 'unit_category': 'dimensionless',
+                 'description': 'Newmark gamma (0.5=linear acceleration)',
+                 'suggested_range': [0.0, 1.0]},
+    'fm':       {'name': 'mass_damping_factor',      'type': 'real', 'unit_category': 'dimensionless',
+                 'description': 'Mass matrix Rayleigh damping factor (alpha)',
+                 'suggested_range': [0.0, 10.0]},
+    'fk':       {'name': 'stiffness_damping_factor', 'type': 'real', 'unit_category': 'dimensionless',
+                 'description': 'Stiffness matrix Rayleigh damping factor (beta)',
+                 'suggested_range': [0.0, 1.0]},
+    'dr':       {'name': 'damping_ratio',            'type': 'real', 'unit_category': 'dimensionless',
+                 'description': 'Modal damping ratio',
+                 'suggested_range': [0.0, 1.0]},
+    'omega':    {'name': 'natural_frequency',        'type': 'real', 'unit_category': 'frequency',
+                 'description': 'Natural frequency (rad/s)',
+                 'suggested_range': [0.001, 10000.0]},
+    # Eigenvalue analysis
+    'nmodes':   {'name': 'number_of_modes',          'type': 'int',  'unit_category': 'count',
+                 'description': 'Number of eigenmodes to extract',
+                 'suggested_range': [1, 100]},
+    'nev':      {'name': 'num_eigenvalues',          'type': 'int',  'unit_category': 'count',
+                 'description': 'Number of eigenvalues to compute (Arnoldi)',
+                 'suggested_range': [1, 100]},
+    'ncv':      {'name': 'krylov_subspace_size',     'type': 'int',  'unit_category': 'count',
+                 'description': 'Krylov subspace size for Arnoldi solver',
+                 'suggested_range': [5, 500]},
+    'maxitr':   {'name': 'max_arnoldi_iterations',   'type': 'int',  'unit_category': 'count',
+                 'description': 'Maximum Arnoldi iterations',
+                 'suggested_range': [100, 100000]},
+}
 
-    Strategy:
-    1. Find READ statements containing 'prop' to locate material properties
-    2. First large numeric value after mesh params is likely E (Young's modulus)
-    3. Value in (0, 0.5) after E is likely nu (Poisson's ratio)
-    4. Mesh parameters (integer tokens early in file)
 
-    Returns list of tunable dicts with global_token_index.
+def extract_source_constants(source_file):
+    """Extract hardcoded integer constants from Fortran source declarations (e.g. nprops=3)."""
+    constants = {'nprops': 2, 'nodof': 2, 'ndim': 2, 'nst': 3}
+    try:
+        with open(source_file, 'r', errors='ignore') as f:
+            for line in f:
+                clean = line.strip().upper()
+                for key in ('NPROPS', 'NODOF', 'NDIM', 'NST'):
+                    m = re.search(rf'\b{key}\s*=\s*(\d+)', clean)
+                    if m:
+                        constants[key.lower()] = int(m.group(1))
+    except Exception:
+        pass
+    return constants
+
+
+def split_top_level(text):
+    """Split text on commas that are NOT inside parentheses."""
+    result, current, depth = [], [], 0
+    for ch in text:
+        if ch == '(':
+            depth += 1
+        elif ch == ')':
+            depth -= 1
+        if ch == ',' and depth == 0:
+            tok = ''.join(current).strip()
+            if tok:
+                result.append(tok)
+            current = []
+        else:
+            current.append(ch)
+    tok = ''.join(current).strip()
+    if tok:
+        result.append(tok)
+    return result
+
+
+def extract_read_var_part(stmt):
+    """Extract the variable list from a READ(10,*) statement string."""
+    m = re.search(r'READ\s*\(\s*10\s*,\s*\*\s*\)\s*(.+)', stmt, re.IGNORECASE)
+    if not m:
+        return ''
+    var_part = m.group(1).strip()
+    if '!' in var_part:
+        var_part = var_part.split('!')[0].strip()
+    return var_part
+
+
+def estimate_token_count(var_spec, symbol_table, constants):
     """
-    tunables = []
+    Estimate how many flat tokens the variable specification consumes.
+    Returns -1 if size cannot be determined (caller should abort token walking).
+    """
+    vs = var_spec.lower().strip()
+    vn = vs.split('(')[0].strip()
+
+    nels     = int(symbol_table.get('nels',    1))
+    nxe      = int(symbol_table.get('nxe',    1))
+    nye      = int(symbol_table.get('nye',    1))
+    nze      = int(symbol_table.get('nze',    1))
+    nr       = int(symbol_table.get('nr',     0))
+    np_types = int(symbol_table.get('np_types', 1))
+    nn       = int(symbol_table.get('nn',     1))
+    loaded_nodes = int(symbol_table.get('loaded_nodes', 0))
+    fixed_ff = int(symbol_table.get('fixed_freedoms', 0))
+    nlfp     = int(symbol_table.get('nlfp',   0))
+    incs     = int(symbol_table.get('incs',   1))
+    ncon     = int(symbol_table.get('ncon',   0))
+    nof      = int(symbol_table.get('nof',    0))
+    nsrf     = int(symbol_table.get('nsrf',   1))
+
+    nprops = constants.get('nprops', 2)
+    nodof  = constants.get('nodof',  2)
+    ndim   = constants.get('ndim',   2)
+
+    # Implied-do patterns (start with '(')
+    if vs.startswith('('):
+        if 'nf(' in vs and 'nr' in vs:
+            return nr * (1 + nodof)
+        if 'val(i,:)' in vs and ('loaded_nodes' in vs or 'no(i)' in vs):
+            return loaded_nodes * (1 + ndim)
+        if 'val(i)' in vs and ('loaded_nodes' in vs or 'no(i)' in vs):
+            return loaded_nodes * 2
+        if 'value(i)' in vs and 'fixed_freedoms' in vs:
+            return fixed_ff * 2
+        if 'sense(i)' in vs and 'value(i)' in vs:
+            return fixed_ff * 3
+        if 'sense(i)' in vs and 'nof' in vs:
+            return nof * 2
+        if 'rt(' in vs or 'rl(' in vs:
+            return nlfp * 2
+        if 'srf' in vs:
+            return nsrf
+        if 'econn' in vs or 'econv' in vs:
+            return ncon * 4
+        return -1   # Unknown implied-do
+
+    # Known named arrays
+    ARRAY_SIZES = {
+        'prop':     nprops * max(1, np_types),
+        'ell':      nels,
+        'etype':    nels,
+        'x_coords': nxe + 1,
+        'y_coords': nye + 1,
+        'z_coords': nze + 1,
+        'qinc':     incs,
+        'lf':       nlfp * 2,
+        'g_coord':  -1,
+        'g_num':    -1,
+    }
+    if vn in ARRAY_SIZES:
+        sz = ARRAY_SIZES[vn]
+        return sz if sz >= 0 else -1
+
+    if vn == 'loads' or vs.startswith('loads('):
+        return nn + 1
+
+    return 1
+
+
+def classify_prop_structure(nprops, prop_tokens, constants, symbol_table=None):
+    """
+    Determine the physical meaning of each element in the prop array.
+
+    Uses (nprops, actual values, symbol_table context) to disambiguate:
+      nprops=1: [k or cv]
+      nprops=2: [E, nu]  OR  [kx, ky] (2D seepage)  OR  [EI, rhoA] (1D beam)
+      nprops=3: [sigma_y, E, nu] (ch6)  OR  [E, nu, rho] (ch10/11)  OR  [kx, ky, rho_c] (ch8 thermal)
+      nprops=4: [kx, ky, E, nu] (ch9 Biot)  OR  [E, nu, rho, sigma_y] (ch11 explicit)
+      nprops>=5: Mohr-Coulomb or complex coupled
+
+    symbol_table is used to detect 1D context:
+      - 'nels' present but 'nxe'/'nye' absent  →  1D elements (beam/rod/bar)
+      - 'nxe'/'nye' present                    →  2D/3D structured mesh
+    """
+    if symbol_table is None:
+        symbol_table = {}
+
+    vals = []
+    for (_, raw) in prop_tokens:
+        try:
+            vals.append(float(raw))
+        except (ValueError, TypeError):
+            vals.append(None)
+
+    def v(i):
+        return vals[i] if i < len(vals) else None
+
+    # Context flags
+    is_1d = ('nels' in symbol_table and
+              'nxe' not in symbol_table and
+              'nye' not in symbol_table)
+
+    if nprops == 1:
+        v0 = v(0)
+        if v0 is not None and v0 < 100:
+            return [{'name': 'permeability_k_or_cv',
+                     'description': 'Permeability k or consolidation cv',
+                     'unit_category': 'permeability', 'suggested_range': [1e-10, 100.0]}]
+        return [{'name': 'material_prop_1',
+                 'description': 'Material property 1',
+                 'unit_category': 'mixed', 'suggested_range': [1e-10, 1e12]}]
+
+    if nprops == 2:
+        v0, v1 = v(0), v(1)
+        # Large first value → [E, nu] regardless of mesh type
+        if v0 is not None and v0 > 100:
+            return [
+                {'name': 'youngs_modulus_E',
+                 'description': "Young's modulus",
+                 'unit_category': 'stress',        'suggested_range': [1e3, 1e12]},
+                {'name': 'poisson_ratio_nu',
+                 'description': "Poisson's ratio",
+                 'unit_category': 'dimensionless', 'suggested_range': [0.0, 0.49]},
+            ]
+        # 1D beam/rod context (nels in symbol_table, no nxe/nye) → [EI or E, rhoA]
+        if is_1d:
+            return [
+                {'name': 'stiffness_E_or_EI',
+                 'description': "Young's modulus E or flexural stiffness EI",
+                 'unit_category': 'stress',  'suggested_range': [1e-6, 1e12]},
+                {'name': 'mass_per_length_rhoA',
+                 'description': 'Mass per unit length (rho * area)',
+                 'unit_category': 'density', 'suggested_range': [1e-6, 1e6]},
+            ]
+        # 2D with both values < 10 → [kx, ky] seepage
+        if v0 is not None and v1 is not None and v0 < 10 and v1 < 10:
+            return [
+                {'name': 'permeability_kx',
+                 'description': 'Permeability (x-direction)',
+                 'unit_category': 'permeability',  'suggested_range': [1e-8, 100.0]},
+                {'name': 'permeability_ky',
+                 'description': 'Permeability (y-direction)',
+                 'unit_category': 'permeability',  'suggested_range': [1e-8, 100.0]},
+            ]
+        return [
+            {'name': 'youngs_modulus_E',
+             'description': "Young's modulus",
+             'unit_category': 'stress',        'suggested_range': [1e3, 1e12]},
+            {'name': 'poisson_ratio_nu',
+             'description': "Poisson's ratio",
+             'unit_category': 'dimensionless', 'suggested_range': [0.0, 0.49]},
+        ]
+
+    if nprops == 3:
+        v0, v1, v2 = v(0), v(1), v(2)
+        if v1 is not None and v1 > 100:
+            # v1 is E → v0 is yield_stress (ch6 von Mises [sigma_y, E, nu])
+            return [
+                {'name': 'yield_stress',
+                 'description': 'von Mises yield stress',
+                 'unit_category': 'stress',        'suggested_range': [10.0, 1e6]},
+                {'name': 'youngs_modulus_E',
+                 'description': "Young's modulus",
+                 'unit_category': 'stress',        'suggested_range': [1e3, 1e12]},
+                {'name': 'poisson_ratio_nu',
+                 'description': "Poisson's ratio",
+                 'unit_category': 'dimensionless', 'suggested_range': [0.0, 0.49]},
+            ]
+        # v1 in [0, 0.5) → v1 is Poisson's ratio → [E, nu, rho] dynamics/eigenvalue.
+        # This also catches normalized (E=1) cases where v0 is NOT > 100.
+        # Thermal [kx, ky, rho_c] is the fallback because ky (v1) is typically > 0.5.
+        if v1 is not None and 0.0 <= v1 < 0.5:
+            return [
+                {'name': 'youngs_modulus_E',
+                 'description': "Young's modulus (or stiffness)",
+                 'unit_category': 'stress',        'suggested_range': [1e-6, 1e12]},
+                {'name': 'poisson_ratio_nu',
+                 'description': "Poisson's ratio",
+                 'unit_category': 'dimensionless', 'suggested_range': [0.0, 0.49]},
+                {'name': 'density_rho',
+                 'description': 'Mass density',
+                 'unit_category': 'density',       'suggested_range': [1e-8, 100000.0]},
+            ]
+        # [kx, ky, rho_c] thermal (ch8 p811) — ky (v1) is NOT in [0, 0.5)
+        return [
+            {'name': 'conductivity_kx',
+             'description': 'Thermal conductivity (x)',
+             'unit_category': 'conductivity',  'suggested_range': [1e-6, 1000.0]},
+            {'name': 'conductivity_ky',
+             'description': 'Thermal conductivity (y)',
+             'unit_category': 'conductivity',  'suggested_range': [1e-6, 1000.0]},
+            {'name': 'heat_capacity_rhoc',
+             'description': 'Volumetric heat capacity (rho*c)',
+             'unit_category': 'heat_capacity', 'suggested_range': [1e-6, 1e8]},
+        ]
+
+    if nprops == 4:
+        v0, v1, v2, v3 = v(0), v(1), v(2), v(3)
+        # [E, nu, rho, sigma_y] ch11 explicit — E (v0) is large
+        if v0 is not None and v0 > 100 and v1 is not None and 0.0 <= v1 < 0.5:
+            return [
+                {'name': 'youngs_modulus_E',
+                 'description': "Young's modulus",
+                 'unit_category': 'stress',        'suggested_range': [1e3, 1e12]},
+                {'name': 'poisson_ratio_nu',
+                 'description': "Poisson's ratio",
+                 'unit_category': 'dimensionless', 'suggested_range': [0.0, 0.49]},
+                {'name': 'density_rho',
+                 'description': 'Mass density',
+                 'unit_category': 'density',       'suggested_range': [0.001, 100000.0]},
+                {'name': 'yield_stress',
+                 'description': 'Yield stress',
+                 'unit_category': 'stress',        'suggested_range': [10.0, 1e6]},
+            ]
+        # [kx, ky, E, nu] ch9 Biot — detect by E (v2) large OR nu (v3) in [0, 0.5)
+        if (v2 is not None and v2 > 100) or (v3 is not None and 0.0 <= v3 < 0.5):
+            return [
+                {'name': 'permeability_kx',
+                 'description': 'Permeability (x)',
+                 'unit_category': 'permeability',  'suggested_range': [1e-12, 100.0]},
+                {'name': 'permeability_ky',
+                 'description': 'Permeability (y)',
+                 'unit_category': 'permeability',  'suggested_range': [1e-12, 100.0]},
+                {'name': 'youngs_modulus_E',
+                 'description': "Young's modulus",
+                 'unit_category': 'stress',        'suggested_range': [1e-6, 1e12]},
+                {'name': 'poisson_ratio_nu',
+                 'description': "Poisson's ratio",
+                 'unit_category': 'dimensionless', 'suggested_range': [0.0, 0.49]},
+            ]
+        return [{'name': f'material_prop_{i+1}',
+                 'description': f'Material property {i+1}',
+                 'unit_category': 'mixed', 'suggested_range': [0.0, 1e12]} for i in range(4)]
+
+    # nprops >= 5: Mohr-Coulomb or complex coupled (e.g. p65: [phi,c,psi,E,nu,...])
+    # Use value thresholds, but treat very small values as permeability/coefficient,
+    # not Poisson's ratio (nu is always >= 0.01 in practice).
+    result = []
+    for i in range(nprops):
+        vi = v(i)
+        if vi is not None and vi > 100:
+            result.append({'name': f'youngs_modulus_E_prop{i+1}',
+                           'description': f"Young's modulus (prop {i+1})",
+                           'unit_category': 'stress',        'suggested_range': [1e3, 1e12]})
+        elif vi is not None and 0.01 <= vi < 0.5:
+            # Realistic Poisson's ratio range (exclude tiny permeability values)
+            result.append({'name': f'poisson_ratio_nu_prop{i+1}',
+                           'description': f"Poisson's ratio (prop {i+1})",
+                           'unit_category': 'dimensionless', 'suggested_range': [0.0, 0.49]})
+        elif vi is not None and 1.0 <= vi <= 90.0:
+            result.append({'name': f'angle_or_prop_{i+1}',
+                           'description': f'Friction/dilation angle or material property {i+1}',
+                           'unit_category': 'angle',         'suggested_range': [0.0, 90.0]})
+        elif vi is not None and vi < 0.01 and vi > 0.0:
+            result.append({'name': f'permeability_or_coeff_{i+1}',
+                           'description': f'Permeability or small coefficient (prop {i+1})',
+                           'unit_category': 'permeability',  'suggested_range': [1e-12, 0.01]})
+        else:
+            result.append({'name': f'material_prop_{i+1}',
+                           'description': f'Material property {i+1}',
+                           'unit_category': 'mixed',         'suggested_range': [0.0, 1e12]})
+    return result
+
+
+def detect_tunables_comprehensive(tokens, token_positions, read_stmts, source_file):
+    """
+    Detect tunable parameters by walking READ statements in order and matching variable names.
+
+    Algorithm:
+    1. Extract nprops, nodof, ndim from source file declarations
+    2. Walk READ statements, consuming the correct number of tokens per variable
+    3. Record scalar variables that appear in SCALAR_TUNABLE_DB
+    4. For 'prop' arrays, classify each element using classify_prop_structure()
+    5. Add first-READ integer tokens as mesh parameters
+
+    Returns list of tunable dicts with correct global_token_index values.
+    """
+    constants    = extract_source_constants(source_file)
+    tunables     = []
     seen_indices = set()
+    symbol_table = {}   # variable name → scalar value (for array-size computation)
+    token_idx    = 0    # 0-based index into flat token list
+    uncertain    = False  # True once we lose track of exact token position
 
-    # Find which READ statement reads 'prop' (material properties)
-    prop_read_idx = None
-    for i, stmt in enumerate(read_stmts):
-        vars_lower = [v.lower() for v in stmt.get('variables', [])]
-        if 'prop' in vars_lower:
-            prop_read_idx = i
-            break
+    for read_stmt in read_stmts:
+        stmt = read_stmt['stmt']
 
-    # Count tokens consumed by first records to estimate where prop starts
-    # Heuristic: first READ usually has mesh params (integers)
-    mesh_token_count = 0
-    for idx, tok in enumerate(tokens[:15]):  # First 15 tokens max
-        try:
-            tok_clean = tok.strip("'")
-            val = float(tok_clean)
-            # If it's a large number or has decimal, likely not mesh param
-            if val > 100 or '.' in tok_clean or 'e' in tok_clean.lower():
+        # Handle conditional READ (e.g. IF(np_types>1)READ(10,*)etype)
+        if read_stmt.get('conditional'):
+            cond_false = False
+            m = re.search(r'IF\s*\(\s*(\w+)\s*([><=!]+)\s*(\d+)\s*\)', stmt, re.IGNORECASE)
+            if m:
+                var, op, rhs = m.group(1).lower(), m.group(2), int(m.group(3))
+                lhs = symbol_table.get(var)
+                if lhs is not None:
+                    lhs_int = int(float(lhs))
+                    cond_false = not eval(f'{lhs_int}{op}{rhs}')  # noqa: S307
+            if cond_false:
+                continue
+
+        var_part = extract_read_var_part(stmt)
+        if not var_part:
+            continue
+        variables = split_top_level(var_part)
+
+        for var_spec in variables:
+            vn = var_spec.lower().split('(')[0].strip()
+
+            n = estimate_token_count(var_spec, symbol_table, constants)
+
+            if n < 0:
+                uncertain = True
                 break
-            mesh_token_count = idx + 1
-        except ValueError:
-            # String token (like 'plane') - might be mesh param too
-            mesh_token_count = idx + 1
 
-    # Material properties typically start after mesh parameters
-    prop_start_idx = mesh_token_count
+            # Record scalar tunables
+            if n == 1 and not uncertain and vn in SCALAR_TUNABLE_DB:
+                if token_idx < len(tokens):
+                    gidx = token_idx + 1
+                    if gidx not in seen_indices:
+                        db = SCALAR_TUNABLE_DB[vn]
+                        tunables.append({
+                            'name':               db['name'],
+                            'global_token_index': gidx,
+                            'line':               token_positions[token_idx][0],
+                            'type':               db['type'],
+                            'description':        db['description'],
+                            'unit_category':      db['unit_category'],
+                            'current_value':      tokens[token_idx],
+                            'suggested_range':    db['suggested_range'],
+                        })
+                        seen_indices.add(gidx)
 
-    e_found = False
-    nu_found = False
+            # Handle prop array
+            elif vn == 'prop' and not uncertain:
+                nprops   = constants.get('nprops', 2)
+                np_types = max(1, int(symbol_table.get('np_types', 1)))
+                prop_tokens = []
+                for i in range(nprops):
+                    gi = token_idx + i
+                    if gi < len(tokens):
+                        prop_tokens.append((gi + 1, tokens[gi]))
+                structure = classify_prop_structure(nprops, prop_tokens, constants, symbol_table)
+                for i, param in enumerate(structure):
+                    gi = token_idx + i
+                    if gi < len(tokens):
+                        gidx = gi + 1
+                        if gidx not in seen_indices:
+                            tunables.append({
+                                'name':               param['name'],
+                                'global_token_index': gidx,
+                                'line':               token_positions[gi][0],
+                                'type':               'real',
+                                'description':        param['description'],
+                                'unit_category':      param['unit_category'],
+                                'current_value':      tokens[gi],
+                                'suggested_range':    param['suggested_range'],
+                            })
+                            seen_indices.add(gidx)
 
-    for idx, tok in enumerate(tokens):
-        global_idx = idx + 1  # 1-based
-        line_num, tok_in_line = token_positions[idx]
+            # Update symbol table for scalar values
+            if n == 1 and token_idx < len(tokens):
+                raw = tokens[token_idx]
+                try:
+                    symbol_table[vn] = float(raw.strip("'"))
+                except ValueError:
+                    symbol_table[vn] = raw.strip("'")
 
-        # Skip if already added
-        if global_idx in seen_indices:
-            continue
+            token_idx += n
 
-        # Try to parse as number
-        try:
-            tok_clean = tok.strip("'")
-            val = float(tok_clean)
-            is_numeric = True
-        except ValueError:
-            is_numeric = False
-            val = None
-
-        if not is_numeric:
-            continue
-
-        # Heuristic 1: First large numeric value (> 100) after mesh params is likely E
-        # Use lower threshold (100) to catch cases like E=2000
-        if not e_found and val is not None and idx >= prop_start_idx and val > 100 and val < 1e15:
-            tunables.append({
-                'name': 'youngs_modulus_E',
-                'global_token_index': global_idx,
-                'line': line_num,
-                'type': 'real',
-                'description': "Young's modulus",
-                'unit_category': 'stress',
-                'current_value': tok,
-                'suggested_range': [1.0e4, 1.0e12]
-            })
-            seen_indices.add(global_idx)
-            e_found = True
-            continue
-
-        # Heuristic 2: Value in (0, 0.5) after E is likely Poisson's ratio
-        if e_found and not nu_found and val is not None and 0 < val < 0.5:
-            tunables.append({
-                'name': 'poisson_ratio_nu',
-                'global_token_index': global_idx,
-                'line': line_num,
-                'type': 'real',
-                'description': "Poisson's ratio",
-                'unit_category': 'dimensionless',
-                'current_value': tok,
-                'suggested_range': [0.0, 0.49]
-            })
-            seen_indices.add(global_idx)
-            nu_found = True
-            continue
-
-        # Heuristic 3: Small positive values (< 100) after nu might be permeability
-        if e_found and nu_found and val is not None and 0 < val < 100:
-            if 'permeability_k' not in [t['name'] for t in tunables]:
-                tunables.append({
-                    'name': 'permeability_k',
-                    'global_token_index': global_idx,
-                    'line': line_num,
-                    'type': 'real',
-                    'description': 'Permeability or conductivity',
-                    'unit_category': 'permeability',
-                    'current_value': tok,
-                    'suggested_range': [1.0e-6, 100.0]
-                })
-                seen_indices.add(global_idx)
-                # Don't continue - might be other props
-                break  # Stop after first few material properties
-
-    # Add mesh parameters (first few integer tokens)
-    mesh_params_added = 0
-    for idx, tok in enumerate(tokens[:10]):  # Only first 10 tokens
-        global_idx = idx + 1
-        if global_idx in seen_indices:
+    # Mesh parameters — first READ's integer tokens (document but warn about topology change)
+    mesh_count = 0
+    for idx, tok in enumerate(tokens[:12]):
+        gidx = idx + 1
+        if gidx in seen_indices:
             continue
         try:
-            tok_clean = tok.strip("'")
-            val = int(float(tok_clean))
-            # Integer > 0 and < 1000 is likely a mesh parameter
-            if 0 < val < 1000 and float(tok_clean) == val:
+            val = float(tok.strip("'"))
+            if val == int(val) and 0 < val < 10000:
                 line_num, _ = token_positions[idx]
-                name = f'mesh_param_{mesh_params_added + 1}'
-                if mesh_params_added == 0:
-                    name = 'nels_or_nxe'
-                    desc = 'Number of elements (nels) or x-divisions (nxe)'
-                elif mesh_params_added == 1:
-                    name = 'np_types_or_nye'
-                    desc = 'Material types (np_types) or y-divisions (nye)'
+                if mesh_count == 0:
+                    name, desc = 'nels_or_nxe', 'Number of elements (nels) or x-divisions (nxe)'
+                elif mesh_count == 1:
+                    name, desc = 'np_types_or_nye', 'Material types (np_types) or y-divisions (nye)'
                 else:
-                    desc = f'Mesh parameter {mesh_params_added + 1}'
-
+                    break
                 tunables.append({
-                    'name': name,
-                    'global_token_index': global_idx,
-                    'line': line_num,
-                    'type': 'int',
-                    'description': desc,
-                    'unit_category': 'count',
-                    'current_value': tok
+                    'name':               name,
+                    'global_token_index': gidx,
+                    'line':               line_num,
+                    'type':               'int',
+                    'description':        desc,
+                    'unit_category':      'count',
+                    'current_value':      tok,
+                    'note':               'WARNING: changing this invalidates coordinate arrays',
                 })
-                seen_indices.add(global_idx)
-                mesh_params_added += 1
-                if mesh_params_added >= 2:
+                seen_indices.add(gidx)
+                mesh_count += 1
+                if mesh_count >= 2:
                     break
         except ValueError:
-            continue
+            pass
 
     return tunables
+
+
+# Backwards compatibility alias
+def detect_tunables_conservative(tokens, token_positions, read_stmts):
+    """Legacy alias — calls detect_tunables_comprehensive with empty source path."""
+    return detect_tunables_comprehensive(tokens, token_positions, read_stmts, '')
 
 
 # =============================================================================
@@ -340,7 +717,7 @@ def generate_yaml(case, chapter, program, source_file, dat_file):
     tokens, token_positions, dat_lines = tokenize_dat_file(dat_file)
 
     # Detect tunable parameters
-    tunables = detect_tunables_conservative(tokens, token_positions, read_stmts)
+    tunables = detect_tunables_comprehensive(tokens, token_positions, read_stmts, source_file)
 
     # Get metadata
     metadata = analyze_source_for_metadata(source_file)

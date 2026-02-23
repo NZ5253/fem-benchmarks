@@ -10,7 +10,7 @@ authors:
     dataset: p92
   entry:
     created_by: Naeem
-    created_on: '2026-01-22'
+    created_on: '2026-02-23'
     verified_platform: Linux (gfortran)
 code:
   language: Fortran (F2003)
@@ -41,36 +41,66 @@ units:
   system: consistent
   notes: PFEM assumes consistent units.
 tunable_parameters:
-- name: youngs_modulus_E
-  global_token_index: 8
-  line: 2
+- name: convergence_tolerance
+  global_token_index: 3
+  line: 1
   type: real
-  description: Young's modulus
-  unit_category: stress
-  current_value: '200'
-  suggested_range:
-  - 10000.0
-  - 1000000000000.0
-- name: poisson_ratio_nu
-  global_token_index: 13
-  line: 3
-  type: real
-  description: Poisson's ratio
+  description: Convergence tolerance for nonlinear iteration
   unit_category: dimensionless
-  current_value: '0.2'
+  current_value: '0.001'
   suggested_range:
-  - 0.0
-  - 0.49
-- name: permeability_k
-  global_token_index: 14
-  line: 3
+  - 1.0e-12
+  - 0.1
+- name: iteration_limit
+  global_token_index: 4
+  line: 1
+  type: int
+  description: Maximum number of iterations
+  unit_category: count
+  current_value: '30'
+  suggested_range:
+  - 10
+  - 10000
+- name: dynamic_viscosity
+  global_token_index: 5
+  line: 1
   type: real
-  description: Permeability or conductivity
-  unit_category: permeability
-  current_value: '0.4'
+  description: Dynamic viscosity of fluid
+  unit_category: viscosity
+  current_value: '0.01'
   suggested_range:
   - 1.0e-06
   - 100.0
+- name: density_rho
+  global_token_index: 6
+  line: 1
+  type: real
+  description: Fluid or solid density
+  unit_category: density
+  current_value: '1.0'
+  suggested_range:
+  - 0.001
+  - 100000.0
+- name: cg_tolerance
+  global_token_index: 7
+  line: 2
+  type: real
+  description: Conjugate gradient convergence tolerance
+  unit_category: dimensionless
+  current_value: '1.0e-5'
+  suggested_range:
+  - 1.0e-14
+  - 0.01
+- name: cg_iteration_limit
+  global_token_index: 8
+  line: 2
+  type: int
+  description: CG maximum iterations
+  unit_category: count
+  current_value: '200'
+  suggested_range:
+  - 100
+  - 1000000
 - name: nels_or_nxe
   global_token_index: 1
   line: 1
@@ -78,6 +108,7 @@ tunable_parameters:
   description: Number of elements (nels) or x-divisions (nxe)
   unit_category: count
   current_value: '5'
+  note: 'WARNING: changing this invalidates coordinate arrays'
 - name: np_types_or_nye
   global_token_index: 2
   line: 1
@@ -85,6 +116,7 @@ tunable_parameters:
   description: Material types (np_types) or y-divisions (nye)
   unit_category: count
   current_value: '5'
+  note: 'WARNING: changing this invalidates coordinate arrays'
 input_schema:
   file_type: .dat
   total_tokens: 382

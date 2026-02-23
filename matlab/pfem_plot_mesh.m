@@ -24,7 +24,7 @@ function pfem_plot_mesh(out, varargin)
     end
 
     % Single mesh visualization
-    [nodes, disp, elem_centers, stresses] = parse_mesh_data(out);
+    [nodes, disp, elem_centers, stresses, ndim] = parse_mesh_data(out);
 
     if isempty(nodes)
         fprintf('Could not extract mesh data.\n');
@@ -34,12 +34,22 @@ function pfem_plot_mesh(out, varargin)
     % Auto-scale deformation
     if isempty(scale_factor)
         max_disp = max(abs(disp(:)));
-        mesh_size = max(range(nodes(:,1)), range(nodes(:,2)));
+        if ndim == 1
+            mesh_size = range(nodes(:,1));
+        elseif ndim >= 2
+            mesh_size = max(range(nodes(:,1)), range(nodes(:,2)));
+        end
         if max_disp > 0
             scale_factor = 0.1 * mesh_size / max_disp;
         else
             scale_factor = 1;
         end
+    end
+
+    % Handle 1D case
+    if ndim == 1
+        plot_1d_mesh(nodes, disp, scale_factor, out, custom_title);
+        return;
     end
 
     % Create figure
@@ -183,12 +193,13 @@ function plot_mesh_comparison(results, scale_factor)
 end
 
 
-function [nodes, disp, elem_centers, stresses] = parse_mesh_data(out)
-% Parse mesh data from .res file
+function [nodes, disp, elem_centers, stresses, ndim] = parse_mesh_data(out)
+% Parse mesh data from .res file and YAML
     nodes = [];
     disp = [];
     elem_centers = [];
     stresses = [];
+    ndim = 2;  % Default to 2D
 
     % Find .res file
     res_files = out.files(endsWith(out.files, '.res'));
@@ -211,14 +222,23 @@ function [nodes, disp, elem_centers, stresses] = parse_mesh_data(out)
     fclose(fid);
     lines = content{1};
 
-    % Parse displacements to get node count
+    % Detect displacement format and parse
     disp_start = 0;
     stress_start = 0;
+    disp_cols = 2;  % Default number of displacement columns
 
     for i = 1:numel(lines)
         line = strtrim(lines{i});
         if contains(line, 'Node') && contains(line, 'disp')
             disp_start = i + 1;
+            % Detect number of displacement columns from header
+            if contains(line, 'z-disp')
+                disp_cols = 3;
+                ndim = 3;
+            elseif ~contains(line, 'y-disp')
+                disp_cols = 1;
+                ndim = 1;
+            end
         elseif contains(line, 'Element') && contains(line, 'sig')
             stress_start = i + 1;
         end
@@ -233,8 +253,8 @@ function [nodes, disp, elem_centers, stresses] = parse_mesh_data(out)
                 break;
             end
             vals = sscanf(line, '%f');
-            if numel(vals) >= 3
-                disp_data(end+1, :) = vals(2:3)';
+            if numel(vals) >= 1 + disp_cols
+                disp_data(end+1, :) = vals(2:(1+disp_cols))';
             end
         end
     end
@@ -261,8 +281,55 @@ function [nodes, disp, elem_centers, stresses] = parse_mesh_data(out)
         end
     end
 
-    % Generate approximate node coordinates using element centers
-    nodes = generate_approx_nodes(n_nodes, out, elem_centers);
+    % Try to get exact coordinates from YAML
+    [nodes, yaml_ndim] = extract_coords_from_yaml(out, n_nodes);
+
+    % Update ndim if YAML provided it
+    if ~isempty(yaml_ndim)
+        ndim = yaml_ndim;
+    end
+
+    % Fallback to approximation if YAML extraction failed
+    if isempty(nodes)
+        nodes = generate_approx_nodes(n_nodes, out, elem_centers);
+    end
+end
+
+
+function [nodes, ndim] = extract_coords_from_yaml(out, n_nodes)
+% Extract exact node coordinates from YAML tokens
+    nodes = [];
+    ndim = [];
+
+    % Check for YAML path in output struct
+    yaml_path = '';
+    if isfield(out, 'yaml_path')
+        yaml_path = out.yaml_path;
+    elseif isfield(out, 'yaml')
+        yaml_path = out.yaml;
+    end
+
+    if isempty(yaml_path) || ~exist(yaml_path, 'file')
+        return;
+    end
+
+    try
+        [yaml_nodes, ~, meta] = pfem_extract_coords(yaml_path);
+
+        % Verify node count matches
+        if ~isempty(yaml_nodes) && size(yaml_nodes, 1) == n_nodes
+            nodes = yaml_nodes;
+            ndim = size(yaml_nodes, 2);
+            fprintf('  [Mesh] Using exact coordinates from YAML (%s, %d nodes, %dD)\n', ...
+                    meta.program, n_nodes, ndim);
+        elseif ~isempty(yaml_nodes)
+            fprintf('  [Mesh] Node count mismatch: YAML=%d, res=%d. Using approximation.\n', ...
+                    size(yaml_nodes, 1), n_nodes);
+        end
+    catch ME
+        % Silently fall back to approximation
+        fprintf('  [Mesh] YAML extraction failed: %s\n', ME.message);
+    end
 end
 
 
@@ -340,5 +407,67 @@ function nodes = generate_approx_nodes(n_nodes, out, elem_centers)
         while size(nodes, 1) < n_nodes
             nodes(end+1, :) = nodes(end, :);
         end
+    end
+end
+
+
+function plot_1d_mesh(nodes, disp, scale_factor, out, custom_title)
+% Plot 1D mesh visualization
+    figure('Name', 'PFEM 1D Mesh Visualization', 'Position', [100 100 1000 400]);
+
+    % Get parameter info
+    param_str = '';
+    if isfield(out, 'overrides') && ~isempty(out.overrides) && ~isempty(fieldnames(out.overrides))
+        fnames = fieldnames(out.overrides);
+        parts = {};
+        for i = 1:numel(fnames)
+            parts{end+1} = sprintf('%s=%.4g', fnames{i}, out.overrides.(fnames{i}));
+        end
+        param_str = strjoin(parts, ', ');
+    end
+
+    case_name = '';
+    if isfield(out, 'case')
+        case_name = out.case;
+    end
+
+    % Subplot 1: Original vs Deformed
+    subplot(1, 2, 1);
+    hold on;
+
+    y_orig = zeros(size(nodes));
+    y_def = scale_factor * disp;
+
+    % Plot original
+    plot(nodes, y_orig, 'bo-', 'MarkerSize', 8, 'MarkerFaceColor', 'b', 'LineWidth', 2);
+
+    % Plot deformed
+    plot(nodes, y_def, 'rs-', 'MarkerSize', 8, 'MarkerFaceColor', 'r', 'LineWidth', 2);
+
+    % Connect original to deformed
+    for i = 1:length(nodes)
+        plot([nodes(i), nodes(i)], [y_orig(i), y_def(i)], 'k-', 'LineWidth', 0.5);
+    end
+
+    hold off;
+    grid on;
+    xlabel('Position (m)', 'FontSize', 11, 'FontWeight', 'bold');
+    ylabel('Displacement (scaled)', 'FontSize', 11, 'FontWeight', 'bold');
+    title(sprintf('1D Mesh (scale: %.0fx)', scale_factor), 'FontSize', 12, 'FontWeight', 'bold');
+    legend({'Original', 'Deformed'}, 'Location', 'best');
+
+    % Subplot 2: Displacement along length
+    subplot(1, 2, 2);
+    bar(nodes, disp, 0.6, 'FaceColor', [0.3 0.6 0.9]);
+    grid on;
+    xlabel('Position (m)', 'FontSize', 11, 'FontWeight', 'bold');
+    ylabel('Displacement (m)', 'FontSize', 11, 'FontWeight', 'bold');
+    title('Nodal Displacements', 'FontSize', 12, 'FontWeight', 'bold');
+
+    % Main title
+    if ~isempty(custom_title)
+        sgtitle(custom_title, 'FontSize', 14, 'FontWeight', 'bold');
+    else
+        sgtitle(sprintf('PFEM 1D: %s\n%s', case_name, param_str), 'FontSize', 14, 'FontWeight', 'bold');
     end
 end
