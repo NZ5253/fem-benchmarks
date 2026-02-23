@@ -88,14 +88,14 @@ function draw_diagram(ax, mesh)
     W = xmax - xmin; H = ymax - ymin;
     pad = 0.18 * max(W, H);
 
-    % ---- Draw element outlines ----
-    draw_elements(ax, nodes, elem_conn, meta, opts);
+    % ---- Draw load arrows first (elements + nodes drawn on top) ----
+    draw_loads_arrows(ax, nodes, loads, W, H);
 
     % ---- Draw boundary conditions ----
     draw_bcs(ax, nodes, bcs, xmin, xmax, ymin, ymax, W, H);
 
-    % ---- Draw loads ----
-    draw_loads_arrows(ax, nodes, loads, W, H);
+    % ---- Draw element outlines (on top of arrows so numbers are readable) ----
+    draw_elements(ax, nodes, elem_conn, meta, opts);
 
     % ---- Draw node dots ----
     plot(ax, nodes(:,1), nodes(:,2), 'k.', 'MarkerSize', 8);
@@ -160,7 +160,8 @@ function draw_elements(ax, nodes, elem_conn, meta, opts)
                 cx = mean(nodes(corners, 1));
                 cy = mean(nodes(corners, 2));
                 % Estimate element size from corner spread
-                elem_sz = max(range(nodes(corners,1)), range(nodes(corners,2)));
+                elem_sz = max(max(nodes(corners,1))-min(nodes(corners,1)), ...
+                              max(nodes(corners,2))-min(nodes(corners,2)));
                 draw_circled_number(ax, cx, cy, e, meta, elem_sz);
             end
         end
@@ -198,8 +199,8 @@ function draw_circled_number(ax, cx, cy, num, meta, elem_size)
 % elem_size: approximate element side length (optional)
     if nargin < 6 || isempty(elem_size)
         if isfield(meta, 'x_coords') && isfield(meta, 'nxe')
-            W = range(meta.x_coords);
-            H = range(meta.y_coords);
+            W = max(meta.x_coords) - min(meta.x_coords);
+            H = max(meta.y_coords) - min(meta.y_coords);
             elem_size = min(W/meta.nxe, H/meta.nye);
         elseif isfield(meta, 'nels')
             % Rough estimate from domain and element count
@@ -390,16 +391,23 @@ function draw_loads_arrows(ax, nodes, loads, W, H)
         end
     end
 
-    % Label with approximate total load
-    max_load_node = loads.nodes(1);
-    mx = nodes(max_load_node, 1);
-    my = nodes(max_load_node, 2);
-    max_fy = max(abs(loads.fy));
-    if max_fy > 0
-        text(ax, mx + 0.02*W, my + scale*max_fy + 0.03*H, ...
-             sprintf('%.4g', max_fy), ...
-             'FontSize', 9, 'Color', [0.7 0 0], ...
-             'HorizontalAlignment', 'left');
+    % Label: place load magnitude beside the largest arrow
+    [max_fy_val, max_fy_idx] = max(abs(loads.fy));
+    [max_fx_val, max_fx_idx] = max(abs(loads.fx));
+    if max_fy_val > 0
+        ni  = loads.nodes(max_fy_idx);
+        lx  = nodes(ni,1) + 0.025*W;
+        ly  = nodes(ni,2);   % arrow starts here and goes down
+        text(ax, lx, ly, sprintf('  %.4g', max_fy_val), ...
+             'FontSize', 8, 'Color', [0.7 0 0], ...
+             'VerticalAlignment', 'middle');
+    elseif max_fx_val > 0
+        ni  = loads.nodes(max_fx_idx);
+        lx  = nodes(ni,1);
+        ly  = nodes(ni,2) + 0.025*H;
+        text(ax, lx, ly, sprintf('%.4g', max_fx_val), ...
+             'FontSize', 8, 'Color', [0.7 0 0], ...
+             'HorizontalAlignment', 'center');
     end
 end
 
@@ -531,6 +539,7 @@ function create_param_panel(fig, yaml_path, ax_main, opts)
 
         eh = uicontrol('Parent', pan, 'Style', 'edit', ...
                        'String', val_str, ...
+                       'Tag', tp.name, ...
                        'Units', 'normalized', ...
                        'Position', [x_edit, row_top - row_h, edit_w, row_h*0.72], ...
                        'FontSize', 8, ...
@@ -583,31 +592,41 @@ end
 function apply_params(yaml_path, tparams, edit_handles, param_names, ax_main, opts)
 % Called when user edits a param and presses Enter or Apply
 
-    % Build overrides struct from edit fields
+    % Build overrides from ALL edit fields (for token patching)
+    % and track only CHANGED params (for title display)
+    yaml = pfem_yaml_load(yaml_path);
     overrides = struct();
+    changed   = struct();
+
     for k = 1:numel(edit_handles)
         str = strtrim(get(edit_handles{k}, 'String'));
         v   = str2double(str);
-        if ~isnan(v)
-            overrides.(param_names{k}) = v;
+        if isnan(v), continue; end
+
+        overrides.(param_names{k}) = v;
+
+        % Compare to original value
+        tp_orig = tparams{k};
+        if isnumeric(tp_orig.current_value)
+            orig = tp_orig.current_value;
+        else
+            orig = str2double(tp_orig.current_value);
+        end
+        if isnan(orig) || abs(v - orig) > 1e-10 * max(abs(v), 1)
+            changed.(param_names{k}) = v;
         end
     end
 
     % Patch tokens
-    yaml = pfem_yaml_load(yaml_path);
     tokens = yaml.inputs.all_tokens;
-
     for k = 1:numel(tparams)
-        tp = tparams{k};
-        fn = tp.name;
+        fn = tparams{k}.name;
         if isfield(overrides, fn)
-            idx = tp.global_token_index;   % 1-based
-            tokens{idx} = overrides.(fn);
+            tokens{tparams{k}.global_token_index} = overrides.(fn);
         end
     end
 
-    % Rebuild mesh with patched tokens (without writing to disk)
-    yaml.inputs.all_tokens = tokens;
+    % Rebuild mesh (geometry unchanged for material param edits)
     [nodes, elem_conn, meta] = pfem_extract_coords(yaml_path);
 
     % Re-parse bcs/loads with updated tokens
@@ -618,14 +637,17 @@ function apply_params(yaml_path, tparams, edit_handles, param_names, ax_main, op
     % Build prop display from overrides + originals
     [prop_names, prop_values] = build_prop_display(tparams, overrides);
 
+    % Title: base title + only the changed parameters
     title_str = yaml.title;
-    if ~isempty(fieldnames(overrides))
+    if ~isempty(fieldnames(changed))
         parts = {};
-        fns = fieldnames(overrides);
+        fns = fieldnames(changed);
         for i = 1:numel(fns)
-            parts{end+1} = sprintf('%s=%.4g', fns{i}, overrides.(fns{i})); %#ok<AGROW>
+            lbl = format_prop_label(fns{i});
+            plain_lbl = regexprep(lbl, '\\(\w+)', '$1');   % \nu→nu, \rho→rho
+        parts{end+1} = sprintf('%s=%.4g', plain_lbl, changed.(fns{i})); %#ok<AGROW>
         end
-        title_str = [title_str ' (' strjoin(parts, ', ') ')'];
+        title_str = [title_str '  (' strjoin(parts, ',  ') ')'];
     end
 
     mesh = struct('nodes', nodes, 'elem_conn', elem_conn, 'meta', meta, ...
