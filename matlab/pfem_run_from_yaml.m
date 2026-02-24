@@ -57,9 +57,12 @@ function [status, out] = pfem_run_from_yaml(repo_root, pfem_root, yaml_path, ove
     end
 
     % copy compiled binary so the run dir is self-contained
+    % chmod +x needed because MATLAB copyfile strips the execute bit on Linux
     exe_src = fullfile(pfem_root, 'build', 'bin', program);
+    exe_dst = fullfile(run_dir, program);
     if exist(exe_src, 'file')
-        copyfile(exe_src, fullfile(run_dir, program));
+        copyfile(exe_src, exe_dst);
+        system(sprintf('chmod +x "%s"', exe_dst));
     end
 
     % parameter snapshots
@@ -76,6 +79,7 @@ function [status, out] = pfem_run_from_yaml(repo_root, pfem_root, yaml_path, ove
 
     % ---- annotate output struct ----
     out.original_dat = dat_src;
+    out.original_res = fullfile(pfem_root, 'executable', chap, [base '.res']); % for pfem_compare_results
     out.param_key    = param_key;
     out.overrides    = overrides;
     out.yaml_path    = yaml_path;
