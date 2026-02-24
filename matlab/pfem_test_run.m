@@ -16,12 +16,7 @@ fprintf('============================================================\n\n');
 
 % Configuration
 repo_root = pwd;  % Assumes running from fem-benchmarks root
-pfem_root = '~/Downloads/pfem5/5th_ed';
-
-% Expand ~
-if startsWith(pfem_root, '~')
-    pfem_root = replace(pfem_root, '~', getenv('HOME'));
-end
+pfem_root = fullfile(repo_root, 'pfem');
 
 % Add MATLAB paths
 addpath(fullfile(repo_root, 'matlab'));

@@ -22,7 +22,7 @@ function pfem_studio(yaml_path, pfem_root)
 
     repo_root = fullfile(getenv('HOME'), 'projects', 'fem-benchmarks');
     if nargin < 2 || isempty(pfem_root)
-        pfem_root = fullfile(getenv('HOME'), 'Downloads', 'pfem5', '5th_ed');
+        pfem_root = fullfile(repo_root, 'pfem');
     end
 
     % ---- YAML selection ----
@@ -442,7 +442,7 @@ function run_sweep(yaml_path, pfem_root, repo_root, yaml, tparams, ...
         try
             [status, out] = pfem_run_from_yaml(repo_root, pfem_root, yaml_path, overrides);
         catch ME
-            status = -1; out = struct('files',{{}},'run_name',''); %#ok<AGROW>
+            status = -1; out = struct('files',{{}},'param_key',''); %#ok<AGROW>
             fprintf('[Sweep %d/%d] Error: %s\n', i, n, ME.message);
         end
 
@@ -683,8 +683,8 @@ function txt = build_stats(disp_mat, stresses, changed, out)
             lines{end+1}=sprintf('  max|%s| = %+.4e',slbl{d},max(abs(stresses(:,d))));
         end
     end
-    if isfield(out,'run_name')&&~isempty(out.run_name)
-        lines{end+1}=''; lines{end+1}=['  run: ' out.run_name];
+    if isfield(out,'param_key')&&~isempty(out.param_key)
+        lines{end+1}=''; lines{end+1}=['  run: ' out.param_key];
     end
     txt=strjoin(lines,newline);
 end

@@ -17,7 +17,7 @@ This repository provides:
 - Linux environment with `gfortran`
 - Python 3 with `pyyaml`
 - MATLAB (optional, for parametric studies)
-- PFEM 5th edition source code at `~/Downloads/pfem5/5th_ed`
+- PFEM 5th edition source code (place at `pfem/` inside the repo — see below)
 
 ### Installation
 ```bash
@@ -27,12 +27,16 @@ cd fem-benchmarks
 
 # Install Python dependencies
 pip install pyyaml
+
+# Place PFEM source at pfem/ (not included due to licensing)
+# e.g. move from wherever you have it:
+mv ~/Downloads/pfem5/5th_ed pfem/
 ```
 
 ### Running a Benchmark
 ```bash
 # Build and run a specific case
-scripts/pfem_build_and_run.sh ~/Downloads/pfem5/5th_ed chap05 p51 p51_3 --rebuild
+scripts/pfem_build_and_run.sh pfem chap05 p51 p51_3 --rebuild
 ```
 
 ### From MATLAB — PFEM Studio (interactive)
@@ -46,7 +50,8 @@ pfem_studio('benchmarks/pfem5/chap06/p61.yaml')
 
 ### From MATLAB — programmatic runner
 ```matlab
-pfem_root = '~/Downloads/pfem5/5th_ed';
+repo_root = fullfile(getenv('HOME'), 'projects', 'fem-benchmarks');
+pfem_root = fullfile(repo_root, 'pfem');
 [status, outputs] = pfem_runner(pfem_root, 'chap05', 'p51', 'p51_3');
 ```
 
@@ -54,6 +59,10 @@ pfem_root = '~/Downloads/pfem5/5th_ed';
 
 ```
 fem-benchmarks/
+├── pfem/                # PFEM 5th ed. source/executables (not in git — obtain separately)
+│   ├── source/          # Fortran source code
+│   ├── build/           # Compiled binaries (build/bin/, build/mod/, build/obj/)
+│   └── executable/      # Working directories for each chapter
 ├── benchmarks/           # YAML benchmark catalogue
 │   └── pfem5/
 │       ├── chap04/      # Chapter 4: 13 cases
@@ -183,10 +192,10 @@ pfem_studio('benchmarks/pfem5/chap06/p61.yaml')
 
 > **Note**: build p61 first if not already compiled:
 > ```bash
-> gfortran -O2 ~/Downloads/pfem5/5th_ed/source/chap06/p61.f03 \
->   -o ~/Downloads/pfem5/5th_ed/build/bin/p61 \
->   -I ~/Downloads/pfem5/5th_ed/build/mod \
->   ~/Downloads/pfem5/5th_ed/build/obj/libpfem.a
+> gfortran -O2 pfem/source/chap06/p61.f03 \
+>   -o pfem/build/bin/p61 \
+>   -I pfem/build/mod \
+>   pfem/build/obj/libpfem.a
 > ```
 
 ## Key Features
@@ -212,7 +221,10 @@ The `generate_perfect_yamls.py` script creates comprehensive benchmark files:
 | `pfem_smart_sweep` | Auto-discovery parametric sweep |
 | `pfem_compare_results` | Compare original vs modified results with plots |
 
-Runs are saved to `runs/single/<chap>/<program>/<case>/<timestamp>/` with the parameter values embedded in the folder name.
+Runs are saved to `runs/<chap>/<case>/<param_key>/`, for example:
+- `runs/chap06/p61/default/` — baseline run
+- `runs/chap06/p61/sy_200/` — yield stress = 200
+- `runs/chap06/p61/sy_50_incs_20/` — multi-parameter override
 
 ## Documentation
 
@@ -238,7 +250,7 @@ Runs are saved to `runs/single/<chap>/<program>/<case>/<timestamp>/` with the pa
 
 ⚠️ **Important**: This repository contains YAML metadata and utility scripts ONLY.
 PFEM source code and datasets are NOT included due to licensing restrictions.
-Users must obtain PFEM 5th edition separately.
+Users must obtain PFEM 5th edition separately and place it at `pfem/` inside the repo.
 
 ## Contributing
 

@@ -1,3 +1,16 @@
+# PFEM third-party source/executables (obtain separately from pfem.org.uk)
+pfem/
+
+# Run outputs
+runs/
+
+# PFEM output files
+*.res
+*.msh
+*.vec
+*.dis
+*.con
+
 # Fortran build artifacts
 *.o
 *.obj
@@ -7,37 +20,13 @@
 *.dll
 *.exe
 
-# Typical FEM outputs (adjust as needed)
-*.res
-*.msh
-*.vec
-*.dis
-*.con
-*.out
-*.log
-
 # MATLAB junk
 *.asv
 *.m~
 slprj/
 
-# PFEM bundle packs (generated, not for commit)
+# PFEM bundle packs (generated)
 pfem_yaml_bundle/
-
-# Run outputs
-runs/
-
-!runs/
-!runs/single/
-!runs/single/chap05/
-!runs/single/chap05/p51/
-!runs/single/chap05/p51/p51_3/
-!runs/single/chap05/p51/p51_3/205320/
-!runs/single/chap05/p51/p51_3/205319/
-
-# Build directories
-build/
-**/build/
 
 # Python cache
 __pycache__/
@@ -50,6 +39,8 @@ __pycache__/
 *.swp
 *.swo
 *~
-runs/
-# simpler: just unignore the exact two foldersRUN1/
-.gitignoreRUN2/
+
+# Misc
+*.log
+*.out
+*.pdf

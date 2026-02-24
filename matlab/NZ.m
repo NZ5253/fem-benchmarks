@@ -3,7 +3,7 @@ clear; clc; close all;
 
 % Setup Paths
 repo_root = fullfile(getenv('HOME'), 'projects', 'fem-benchmarks');
-pfem_root = fullfile(getenv('HOME'), 'Downloads', 'pfem5', '5th_ed');
+pfem_root = fullfile(repo_root, 'pfem');
 addpath(fullfile(repo_root, 'matlab'));
 addpath(fullfile(repo_root, 'matlab', 'utils'));
 
