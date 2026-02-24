@@ -17,19 +17,20 @@ function results = pfem_smart_sweep(yaml_path, param_name, values, varargin)
 %   values     - Array of values to sweep, or number of points for 'auto'
 %
 % Optional:
-%   'pfem_root' - PFEM installation path (default: ~/Downloads/pfem5/5th_ed)
+%   'pfem_root' - PFEM installation path (default: <repo>/pfem)
 %
 % Returns:
 %   results - Struct array with .param_value, .status, .run_dir, .files
 
+    % Setup paths
+    repo_root = fileparts(fileparts(mfilename('fullpath')));
+
     % Parse inputs
     p = inputParser;
-    addParameter(p, 'pfem_root', fullfile(getenv('HOME'), 'Downloads', 'pfem5', '5th_ed'));
+    addParameter(p, 'pfem_root', fullfile(repo_root, 'pfem'));
     parse(p, varargin{:});
     pfem_root = p.Results.pfem_root;
 
-    % Setup paths
-    repo_root = fileparts(fileparts(mfilename('fullpath')));
     addpath(fullfile(repo_root, 'matlab'));
     addpath(fullfile(repo_root, 'matlab', 'utils'));
 

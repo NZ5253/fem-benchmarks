@@ -2,11 +2,11 @@
 # Build all PFEM programs for a specific chapter
 #
 # Usage:
-#   ./scripts/pfem_build_chapter.sh <pfem_root> <chapter> [--rebuild]
+#   ./scripts/pfem_build_chapter.sh [pfem_root] <chapter> [--rebuild]
 #
-# Example:
-#   ./scripts/pfem_build_chapter.sh ~/Downloads/pfem5/5th_ed chap04
-#   ./scripts/pfem_build_chapter.sh ~/Downloads/pfem5/5th_ed chap04 --rebuild
+# Example (pfem/ is inside the repo):
+#   ./scripts/pfem_build_chapter.sh chap04
+#   ./scripts/pfem_build_chapter.sh pfem chap04 --rebuild
 #
 # This script:
 # 1. Finds all unique programs needed for a chapter (from .dat filenames)
@@ -15,7 +15,9 @@
 
 set -e
 
-PFEM_ROOT="${1:-$HOME/Downloads/pfem5/5th_ed}"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+PFEM_ROOT="${1:-$REPO_ROOT/pfem}"
 CHAPTER="${2:-chap05}"
 REBUILD="${3:-}"
 

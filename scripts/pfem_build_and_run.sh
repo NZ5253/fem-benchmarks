@@ -4,8 +4,8 @@ set -euo pipefail
 # Usage:
 #   scripts/pfem_build_and_run.sh <PFEM_ROOT> <chapXX> <program> <case_basename> [--rebuild]
 #
-# Example:
-#   scripts/pfem_build_and_run.sh ~/Downloads/pfem5/5th_ed chap05 p51 p51_3 --rebuild
+# Example (pfem/ is inside the repo):
+#   scripts/pfem_build_and_run.sh pfem chap05 p51 p51_3 --rebuild
 
 PFEM_ROOT="${1:-}"
 CHAP="${2:-}"

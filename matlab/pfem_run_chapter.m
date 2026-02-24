@@ -7,7 +7,7 @@ function results = pfem_run_chapter(repo_root, pfem_root, chapter, overrides_map
 %
 % Arguments:
 %   repo_root     - Path to fem-benchmarks repository
-%   pfem_root     - Path to PFEM source (e.g., ~/Downloads/pfem5/5th_ed)
+%   pfem_root     - Path to PFEM source (default: <repo>/pfem)
 %   chapter       - Chapter name (e.g., 'chap04', 'chap05')
 %   overrides_map - (Optional) containers.Map with case_name -> override_struct
 %
@@ -21,8 +21,8 @@ function results = pfem_run_chapter(repo_root, pfem_root, chapter, overrides_map
 %
 % Example:
 %   % Run all chap05 cases with no overrides
-%   results = pfem_run_chapter('~/projects/fem-benchmarks', ...
-%                              '~/Downloads/pfem5/5th_ed', 'chap05');
+%   repo_root = fullfile(getenv('HOME'), 'projects', 'fem-benchmarks');
+%   results = pfem_run_chapter(repo_root, fullfile(repo_root,'pfem'), 'chap05');
 %
 %   % Run with specific overrides for some cases
 %   overrides_map = containers.Map();

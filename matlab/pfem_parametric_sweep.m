@@ -24,7 +24,7 @@ function results = pfem_parametric_sweep(pfem_root, chapter, program, base_case,
 %   param_ranges.nu = [0.2, 0.3, 0.4];     % Poisson's ratio values
 %
 % Example usage:
-%   pfem_root = '~/Downloads/pfem5/5th_ed';
+%   pfem_root = fullfile(getenv('HOME'), 'projects', 'fem-benchmarks', 'pfem');
 %   param_ranges.E = [1e5, 5e5, 1e6];
 %   param_ranges.nu = [0.25, 0.30, 0.35];
 %   results = pfem_parametric_sweep(pfem_root, 'chap05', 'p51', 'p51_3', param_ranges);

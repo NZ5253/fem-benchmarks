@@ -23,7 +23,7 @@ Complete guide for working with the PFEM benchmark catalogue.
 pip install pyyaml
 
 # Verify PFEM source location (default)
-ls ~/Downloads/pfem5/5th_ed/source/
+ls ~/projects/fem-benchmarks/pfem/source/
 ```
 
 ### Basic Workflow
@@ -85,7 +85,7 @@ python3 scripts/generate_perfect_yamls.py --chapter chap05 --dry-run
 --chapter CHAP      Chapter to process (e.g., chap05)
 --case CASE         Specific case (optional, default: all cases)
 --all-chapters      Process all chapters 4-11 at once
---pfem-root PATH    PFEM source directory (default: ~/Downloads/pfem5/5th_ed)
+--pfem-root PATH    PFEM source directory (default: ~/projects/fem-benchmarks/pfem)
 --dry-run           Preview only
 ```
 
@@ -123,7 +123,7 @@ Each generated YAML includes:
 Use the build script to compile and run cases:
 
 ```bash
-scripts/pfem_build_and_run.sh ~/Downloads/pfem5/5th_ed chap05 p51 p51_3 --rebuild
+scripts/pfem_build_and_run.sh ~/projects/fem-benchmarks/pfem chap05 p51 p51_3 --rebuild
 ```
 
 This will:
@@ -135,7 +135,7 @@ This will:
 ### Manual Execution
 
 ```bash
-cd ~/Downloads/pfem5/5th_ed/executable/chap05
+cd ~/projects/fem-benchmarks/pfem/executable/chap05
 printf "p51_3\n" | ../../build/bin/p51
 ```
 
@@ -145,10 +145,10 @@ Build all programs for a chapter at once:
 
 ```bash
 # Build all chap04 programs
-./scripts/pfem_build_chapter.sh ~/Downloads/pfem5/5th_ed chap04
+./scripts/pfem_build_chapter.sh ~/projects/fem-benchmarks/pfem chap04
 
 # Force rebuild
-./scripts/pfem_build_chapter.sh ~/Downloads/pfem5/5th_ed chap04 --rebuild
+./scripts/pfem_build_chapter.sh ~/projects/fem-benchmarks/pfem chap04 --rebuild
 ```
 
 ---
@@ -158,7 +158,7 @@ Build all programs for a chapter at once:
 ### Single Case Execution
 
 ```matlab
-pfem_root = '~/Downloads/pfem5/5th_ed';
+pfem_root = '~/projects/fem-benchmarks/pfem';
 [status, outputs] = pfem_runner(pfem_root, 'chap05', 'p51', 'p51_3');
 ```
 
@@ -470,7 +470,7 @@ fem-benchmarks/
 
 **Error: "Source file not found"**
 - Check PFEM root path with `--pfem-root` flag
-- Default: `/home/naeem/Downloads/pfem5/5th_ed`
+- Default: `~/projects/fem-benchmarks/pfem`
 
 **Error: "Template YAML not found"**
 - Ensure `benchmarks/pfem5/chap05/p54_1.yaml` exists

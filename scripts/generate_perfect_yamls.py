@@ -295,11 +295,11 @@ def generate_yaml_from_source(case, chapter, program, source_file, dat_file, rea
 
         'how_to_run': {
             'linux': [
-                f'cd ~/Downloads/pfem5/5th_ed/executable/{chapter}',
-                f'printf "{case}\\n" | ~/Downloads/pfem5/5th_ed/build/bin/{program}'
+                f'cd ~/projects/fem-benchmarks/pfem/executable/{chapter}',
+                f'printf "{case}\\n" | ~/projects/fem-benchmarks/pfem/build/bin/{program}'
             ],
             'matlab': [
-                f'pfem_root = \'~/Downloads/pfem5/5th_ed\';',
+                f"pfem_root = fullfile(getenv('HOME'), 'projects', 'fem-benchmarks', 'pfem');",
                 f'[status, outputs] = pfem_runner(pfem_root, \'{chapter}\', \'{program}\', \'{case}\');'
             ]
         },
@@ -362,7 +362,7 @@ def main():
     parser.add_argument('--chapter', help='Chapter to process (e.g., chap05)')
     parser.add_argument('--case', help='Specific case (e.g., p54_1)')
     parser.add_argument('--all-chapters', action='store_true', help='Process all chapters 4-11')
-    parser.add_argument('--pfem-root', default='/home/naeem/Downloads/pfem5/5th_ed',
+    parser.add_argument('--pfem-root', default=str(Path(__file__).parent.parent / 'pfem'),
                        help='Root directory of PFEM source code')
     parser.add_argument('--dry-run', action='store_true', help='Show what would be done')
 

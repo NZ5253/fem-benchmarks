@@ -384,10 +384,10 @@ outputs:
   - p96_1.msh
 how_to_run:
   linux:
-  - cd ~/Downloads/pfem5/5th_ed/executable/chap09
-  - printf "p96_1\n" | ~/Downloads/pfem5/5th_ed/build/bin/p96
+  - cd ~/projects/fem-benchmarks/pfem/executable/chap09
+  - printf "p96_1\n" | ~/projects/fem-benchmarks/pfem/build/bin/p96
   matlab:
-  - pfem_root = '~/Downloads/pfem5/5th_ed';
+  - pfem_root = '~/projects/fem-benchmarks/pfem';
   - '[status, out] = pfem_run_from_yaml(repo_root, pfem_root, yaml_path, struct());'
 notes:
 - Use global_token_index from tunable_parameters for patching.

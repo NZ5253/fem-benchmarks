@@ -10,7 +10,7 @@ This directory contains MATLAB scripts for running PFEM benchmarks and performin
 Basic runner for executing a single PFEM case from MATLAB.
 
 ```matlab
-pfem_root = '~/Downloads/pfem5/5th_ed';
+pfem_root = '~/projects/fem-benchmarks/pfem';
 [status, outputs] = pfem_runner(pfem_root, 'chap05', 'p51', 'p51_3');
 ```
 
@@ -113,7 +113,7 @@ end
 1. **PFEM must be compiled:**
    ```bash
    cd ~/projects/fem-benchmarks
-   scripts/pfem_build_and_run.sh ~/Downloads/pfem5/5th_ed chap05 p51 p51_3 --rebuild
+   scripts/pfem_build_and_run.sh ~/projects/fem-benchmarks/pfem chap05 p51 p51_3 --rebuild
    ```
 
 2. **Dataset files must exist** in `pfem_root/executable/chapXX/`
@@ -122,7 +122,7 @@ end
 
 ### Single Run
 ```matlab
-pfem_root = '~/Downloads/pfem5/5th_ed';
+pfem_root = '~/projects/fem-benchmarks/pfem';
 [status, outputs] = pfem_runner(pfem_root, 'chap05', 'p51', 'p51_3');
 ```
 
