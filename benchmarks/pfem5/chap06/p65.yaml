@@ -10,7 +10,7 @@ authors:
     dataset: p65
   entry:
     created_by: Naeem
-    created_on: '2026-02-23'
+    created_on: '2026-02-24'
     verified_platform: Linux (gfortran)
 code:
   language: Fortran (F2003)
@@ -47,76 +47,116 @@ units:
   system: consistent
   notes: PFEM assumes consistent units.
 tunable_parameters:
-- name: angle_or_prop_1
+- name: friction_angle_phi
   global_token_index: 4
   line: 2
   type: real
-  description: Friction/dilation angle or material property 1
+  description: Friction angle (degrees)
   unit_category: angle
   current_value: '30.0'
   suggested_range:
   - 0.0
-  - 90.0
-- name: material_prop_2
+  - 45.0
+- name: cohesion_c
   global_token_index: 5
   line: 2
   type: real
-  description: Material property 2
-  unit_category: mixed
+  description: Cohesion (shear strength intercept)
+  unit_category: stress
   current_value: '0.0'
   suggested_range:
   - 0.0
-  - 1000000000000.0
-- name: angle_or_prop_3
+  - 1000000.0
+- name: dilation_angle_psi
   global_token_index: 6
   line: 2
   type: real
-  description: Friction/dilation angle or material property 3
+  description: Dilation angle (degrees)
   unit_category: angle
   current_value: '30.0'
   suggested_range:
   - 0.0
-  - 90.0
-- name: angle_or_prop_4
+  - 45.0
+- name: unit_weight_gamma
   global_token_index: 7
   line: 2
   type: real
-  description: Friction/dilation angle or material property 4
-  unit_category: angle
+  description: Unit weight (body force per unit volume)
+  unit_category: force_density
   current_value: '20.0'
   suggested_range:
   - 0.0
-  - 90.0
-- name: angle_or_prop_5
+  - 100.0
+- name: earth_pressure_coeff_k0
   global_token_index: 8
   line: 2
   type: real
-  description: Friction/dilation angle or material property 5
-  unit_category: angle
+  description: Coefficient of earth pressure at rest (K₀)
+  unit_category: dimensionless
   current_value: '1.0'
   suggested_range:
   - 0.0
-  - 90.0
-- name: youngs_modulus_E_prop6
+  - 2.0
+- name: youngs_modulus_E
   global_token_index: 9
   line: 2
   type: real
-  description: Young's modulus (prop 6)
+  description: Young's modulus
   unit_category: stress
   current_value: 1.0e5
   suggested_range:
   - 1000.0
   - 1000000000000.0
-- name: poisson_ratio_nu_prop7
+- name: poisson_ratio_nu
   global_token_index: 10
   line: 2
   type: real
-  description: Poisson's ratio (prop 7)
+  description: Poisson's ratio
   unit_category: dimensionless
   current_value: '0.3'
   suggested_range:
   - 0.0
   - 0.49
+- name: convergence_tolerance
+  global_token_index: 134
+  line: 14
+  type: real
+  description: Convergence tolerance for nonlinear iteration
+  unit_category: dimensionless
+  current_value: '0.001'
+  suggested_range:
+  - 1.0e-12
+  - 0.1
+- name: iteration_limit
+  global_token_index: 135
+  line: 14
+  type: int
+  description: Maximum number of iterations
+  unit_category: count
+  current_value: '75'
+  suggested_range:
+  - 10
+  - 10000
+- name: load_increments
+  global_token_index: 136
+  line: 14
+  type: int
+  description: Number of load increments
+  unit_category: count
+  current_value: '35'
+  suggested_range:
+  - 1
+  - 1000
+- name: prescribed_increment
+  global_token_index: 137
+  line: 14
+  type: real
+  description: Prescribed displacement or load increment magnitude per step
+  unit_category: mixed
+  current_value: '2.0e-5'
+  suggested_range:
+  - -1000000.0
+  - 1000000.0
 - name: nels_or_nxe
   global_token_index: 1
   line: 1
@@ -336,7 +376,7 @@ how_to_run:
   - cd ~/projects/fem-benchmarks/pfem/executable/chap06
   - printf "p65\n" | ~/projects/fem-benchmarks/pfem/build/bin/p65
   matlab:
-  - pfem_root = '~/projects/fem-benchmarks/pfem';
+  - pfem_root = fullfile(getenv('HOME'), 'projects', 'fem-benchmarks', 'pfem');
   - '[status, out] = pfem_run_from_yaml(repo_root, pfem_root, yaml_path, struct());'
 notes:
 - Use global_token_index from tunable_parameters for patching.

@@ -10,7 +10,7 @@ authors:
     dataset: p57
   entry:
     created_by: Naeem
-    created_on: '2026-02-23'
+    created_on: '2026-02-24'
     verified_platform: Linux (gfortran)
 code:
   language: Fortran (F2003)
@@ -59202,7 +59202,7 @@ how_to_run:
   - cd ~/projects/fem-benchmarks/pfem/executable/chap05
   - printf "p57\n" | ~/projects/fem-benchmarks/pfem/build/bin/p57
   matlab:
-  - pfem_root = '~/projects/fem-benchmarks/pfem';
+  - pfem_root = fullfile(getenv('HOME'), 'projects', 'fem-benchmarks', 'pfem');
   - '[status, out] = pfem_run_from_yaml(repo_root, pfem_root, yaml_path, struct());'
 notes:
 - Use global_token_index from tunable_parameters for patching.

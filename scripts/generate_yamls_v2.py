@@ -194,6 +194,72 @@ SCALAR_TUNABLE_DB = {
     'maxitr':   {'name': 'max_arnoldi_iterations',   'type': 'int',  'unit_category': 'count',
                  'description': 'Maximum Arnoldi iterations',
                  'suggested_range': [100, 100000]},
+    # Mohr-Coulomb material properties — appear as individual scalars in p611-style reads
+    'phi':    {'name': 'friction_angle_phi',     'type': 'real', 'unit_category': 'angle',
+               'description': 'Friction angle (degrees)',
+               'suggested_range': [0.0, 45.0]},
+    'c':      {'name': 'cohesion_c',             'type': 'real', 'unit_category': 'stress',
+               'description': 'Cohesion (shear strength intercept)',
+               'suggested_range': [0.0, 1e6]},
+    'psi':    {'name': 'dilation_angle_psi',     'type': 'real', 'unit_category': 'angle',
+               'description': 'Dilation angle (degrees)',
+               'suggested_range': [0.0, 45.0]},
+    'e':      {'name': 'youngs_modulus_E',       'type': 'real', 'unit_category': 'stress',
+               'description': "Young's modulus",
+               'suggested_range': [1e3, 1e12]},
+    'v':      {'name': 'poisson_ratio_nu',       'type': 'real', 'unit_category': 'dimensionless',
+               'description': "Poisson's ratio",
+               'suggested_range': [0.0, 0.49]},
+    'bulk':   {'name': 'bulk_modulus_ke',        'type': 'real', 'unit_category': 'stress',
+               'description': 'Bulk modulus (apparent fluid/skeleton bulk modulus Ke)',
+               'suggested_range': [1.0, 1e12]},
+    'cons':   {'name': 'initial_effective_stress', 'type': 'real', 'unit_category': 'stress',
+               'description': 'Initial effective/consolidation stress',
+               'suggested_range': [-1e9, 0.0]},
+    'k0':     {'name': 'earth_pressure_coeff_k0', 'type': 'real', 'unit_category': 'dimensionless',
+               'description': 'Coefficient of earth pressure at rest (K₀)',
+               'suggested_range': [0.0, 2.0]},
+    # Two-material (fill/embankment) properties — appear in p69-style combined reads
+    'e_f':    {'name': 'youngs_modulus_fill',        'type': 'real', 'unit_category': 'stress',
+               'description': "Young's modulus (fill material)",
+               'suggested_range': [1e3, 1e12]},
+    'v_f':    {'name': 'poisson_ratio_fill',         'type': 'real', 'unit_category': 'dimensionless',
+               'description': "Poisson's ratio (fill material)",
+               'suggested_range': [0.0, 0.49]},
+    'c_f':    {'name': 'cohesion_fill',              'type': 'real', 'unit_category': 'stress',
+               'description': 'Cohesion (fill material)',
+               'suggested_range': [0.0, 1e6]},
+    'phi_f':  {'name': 'friction_angle_fill',        'type': 'real', 'unit_category': 'angle',
+               'description': 'Friction angle — fill (degrees)',
+               'suggested_range': [0.0, 45.0]},
+    'psi_f':  {'name': 'dilation_angle_fill',        'type': 'real', 'unit_category': 'angle',
+               'description': 'Dilation angle — fill (degrees)',
+               'suggested_range': [0.0, 45.0]},
+    'gama_f': {'name': 'unit_weight_fill',           'type': 'real', 'unit_category': 'force_density',
+               'description': 'Unit weight (fill material, kN/m³ or consistent units)',
+               'suggested_range': [0.0, 100.0]},
+    'e_e':    {'name': 'youngs_modulus_embankment',  'type': 'real', 'unit_category': 'stress',
+               'description': "Young's modulus (embankment material)",
+               'suggested_range': [1e3, 1e12]},
+    'v_e':    {'name': 'poisson_ratio_embankment',   'type': 'real', 'unit_category': 'dimensionless',
+               'description': "Poisson's ratio (embankment material)",
+               'suggested_range': [0.0, 0.49]},
+    'c_e':    {'name': 'cohesion_embankment',        'type': 'real', 'unit_category': 'stress',
+               'description': 'Cohesion (embankment material)',
+               'suggested_range': [0.0, 1e6]},
+    'phi_e':  {'name': 'friction_angle_embankment',  'type': 'real', 'unit_category': 'angle',
+               'description': 'Friction angle — embankment (degrees)',
+               'suggested_range': [0.0, 45.0]},
+    'psi_e':  {'name': 'dilation_angle_embankment',  'type': 'real', 'unit_category': 'angle',
+               'description': 'Dilation angle — embankment (degrees)',
+               'suggested_range': [0.0, 45.0]},
+    'gama_e': {'name': 'unit_weight_embankment',     'type': 'real', 'unit_category': 'force_density',
+               'description': 'Unit weight (embankment material, kN/m³ or consistent units)',
+               'suggested_range': [0.0, 100.0]},
+    # Prescribed displacement/load magnitude per increment (Mohr-Coulomb p63/p65/p611)
+    'presc':  {'name': 'prescribed_increment',       'type': 'real', 'unit_category': 'mixed',
+               'description': 'Prescribed displacement or load increment magnitude per step',
+               'suggested_range': [-1e6, 1e6]},
 }
 
 
@@ -297,6 +363,9 @@ def estimate_token_count(var_spec, symbol_table, constants):
             return fixed_ff * 3
         if 'sense(i)' in vs and 'nof' in vs:
             return nof * 2
+        if 'node(' in vs and 'sense(i)' in vs:
+            # (node(i),sense(i),i=1,fixed_freedoms) — prescribed fixed DOFs
+            return fixed_ff * 2
         if 'rt(' in vs or 'rl(' in vs:
             return nlfp * 2
         if 'srf' in vs:
@@ -493,9 +562,70 @@ def classify_prop_structure(nprops, prop_tokens, constants, symbol_table=None):
                  'description': f'Material property {i+1}',
                  'unit_category': 'mixed', 'suggested_range': [0.0, 1e12]} for i in range(4)]
 
-    # nprops >= 5: Mohr-Coulomb or complex coupled (e.g. p65: [phi,c,psi,E,nu,...])
-    # Use value thresholds, but treat very small values as permeability/coefficient,
-    # not Poisson's ratio (nu is always >= 0.01 in practice).
+    # nprops == 6 or 7: Mohr-Coulomb patterns.
+    # PFEM 5th ed. standard: [phi, c, psi, gamma, (k0,) E, nu]
+    # Detect by checking that the last two props are E (>100) and nu (0..0.5).
+
+    _MC_PROPS = [
+        {'name': 'friction_angle_phi',
+         'description': 'Friction angle (degrees)',
+         'unit_category': 'angle',         'suggested_range': [0.0, 45.0]},
+        {'name': 'cohesion_c',
+         'description': 'Cohesion (shear strength intercept)',
+         'unit_category': 'stress',        'suggested_range': [0.0, 1e6]},
+        {'name': 'dilation_angle_psi',
+         'description': 'Dilation angle (degrees)',
+         'unit_category': 'angle',         'suggested_range': [0.0, 45.0]},
+        {'name': 'unit_weight_gamma',
+         'description': 'Unit weight (body force per unit volume)',
+         'unit_category': 'force_density', 'suggested_range': [0.0, 100.0]},
+    ]
+    _E_PROP  = {'name': 'youngs_modulus_E',
+                'description': "Young's modulus",
+                'unit_category': 'stress',        'suggested_range': [1e3, 1e12]}
+    _NU_PROP = {'name': 'poisson_ratio_nu',
+                'description': "Poisson's ratio",
+                'unit_category': 'dimensionless', 'suggested_range': [0.0, 0.49]}
+    _K0_PROP = {'name': 'earth_pressure_coeff_k0',
+                'description': 'Coefficient of earth pressure at rest (K₀)',
+                'unit_category': 'dimensionless', 'suggested_range': [0.0, 2.0]}
+
+    if nprops == 6:
+        v4, v5 = v(4), v(5)
+        # [phi, c, psi, gamma, E, nu]
+        if v4 is not None and v4 > 100 and v5 is not None and 0.0 <= v5 < 0.5:
+            return _MC_PROPS + [_E_PROP, _NU_PROP]
+
+    if nprops == 7:
+        v0, v1, v2, v3, v4, v5, v6 = v(0), v(1), v(2), v(3), v(4), v(5), v(6)
+        # Biot + Mohr-Coulomb: [kx, ky, E, nu, phi, c, psi]  (e.g. p96)
+        # Detected by first two being permeability-like (< 0.01) and next two being E, nu
+        if (v0 is not None and v0 < 0.01 and
+                v1 is not None and v1 < 0.01 and
+                v2 is not None and v2 > 100 and
+                v3 is not None and 0.0 <= v3 < 0.5):
+            _KX_PROP = {'name': 'permeability_kx',
+                        'description': 'Permeability (x)',
+                        'unit_category': 'permeability', 'suggested_range': [1e-12, 100.0]}
+            _KY_PROP = {'name': 'permeability_ky',
+                        'description': 'Permeability (y)',
+                        'unit_category': 'permeability', 'suggested_range': [1e-12, 100.0]}
+            return [_KX_PROP, _KY_PROP, _E_PROP, _NU_PROP,
+                    {'name': 'friction_angle_phi',  'description': 'Friction angle (degrees)',
+                     'unit_category': 'angle',  'suggested_range': [0.0, 45.0]},
+                    {'name': 'cohesion_c',  'description': 'Cohesion (shear strength intercept)',
+                     'unit_category': 'stress', 'suggested_range': [0.0, 1e6]},
+                    {'name': 'dilation_angle_psi', 'description': 'Dilation angle (degrees)',
+                     'unit_category': 'angle',  'suggested_range': [0.0, 45.0]}]
+        # [phi, c, psi, gamma, k0, E, nu]  — k0 between gamma and E
+        if v5 is not None and v5 > 100 and v6 is not None and 0.0 <= v6 < 0.5:
+            return _MC_PROPS + [_K0_PROP, _E_PROP, _NU_PROP]
+        # [phi, c, psi, gamma, E, nu, k0]  — k0 after nu
+        if v4 is not None and v4 > 100 and v5 is not None and 0.0 <= v5 < 0.5:
+            return _MC_PROPS + [_E_PROP, _NU_PROP, _K0_PROP]
+
+    # nprops >= 5 generic fallback: use value thresholds.
+    # Treat very small values as permeability/coefficient (nu is always >= 0.01 in practice).
     result = []
     for i in range(nprops):
         vi = v(i)

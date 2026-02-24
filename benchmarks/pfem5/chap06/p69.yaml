@@ -10,7 +10,7 @@ authors:
     dataset: p69
   entry:
     created_by: Naeem
-    created_on: '2026-02-23'
+    created_on: '2026-02-24'
     verified_platform: Linux (gfortran)
 code:
   language: Fortran (F2003)
@@ -67,6 +67,136 @@ tunable_parameters:
   suggested_range:
   - 1.0e-12
   - 0.1
+- name: earth_pressure_coeff_k0
+  global_token_index: 11
+  line: 2
+  type: real
+  description: Coefficient of earth pressure at rest (K₀)
+  unit_category: dimensionless
+  current_value: '1.0'
+  suggested_range:
+  - 0.0
+  - 2.0
+- name: youngs_modulus_fill
+  global_token_index: 12
+  line: 3
+  type: real
+  description: Young's modulus (fill material)
+  unit_category: stress
+  current_value: 1.0e5
+  suggested_range:
+  - 1000.0
+  - 1000000000000.0
+- name: poisson_ratio_fill
+  global_token_index: 13
+  line: 3
+  type: real
+  description: Poisson's ratio (fill material)
+  unit_category: dimensionless
+  current_value: '0.49'
+  suggested_range:
+  - 0.0
+  - 0.49
+- name: cohesion_fill
+  global_token_index: 14
+  line: 3
+  type: real
+  description: Cohesion (fill material)
+  unit_category: stress
+  current_value: '14.0'
+  suggested_range:
+  - 0.0
+  - 1000000.0
+- name: friction_angle_fill
+  global_token_index: 15
+  line: 3
+  type: real
+  description: Friction angle — fill (degrees)
+  unit_category: angle
+  current_value: '0.0'
+  suggested_range:
+  - 0.0
+  - 45.0
+- name: dilation_angle_fill
+  global_token_index: 16
+  line: 3
+  type: real
+  description: Dilation angle — fill (degrees)
+  unit_category: angle
+  current_value: '0.0'
+  suggested_range:
+  - 0.0
+  - 45.0
+- name: unit_weight_fill
+  global_token_index: 17
+  line: 3
+  type: real
+  description: Unit weight (fill material, kN/m³ or consistent units)
+  unit_category: force_density
+  current_value: '20.0'
+  suggested_range:
+  - 0.0
+  - 100.0
+- name: youngs_modulus_embankment
+  global_token_index: 18
+  line: 4
+  type: real
+  description: Young's modulus (embankment material)
+  unit_category: stress
+  current_value: 1.0e5
+  suggested_range:
+  - 1000.0
+  - 1000000000000.0
+- name: poisson_ratio_embankment
+  global_token_index: 19
+  line: 4
+  type: real
+  description: Poisson's ratio (embankment material)
+  unit_category: dimensionless
+  current_value: '0.49'
+  suggested_range:
+  - 0.0
+  - 0.49
+- name: cohesion_embankment
+  global_token_index: 20
+  line: 4
+  type: real
+  description: Cohesion (embankment material)
+  unit_category: stress
+  current_value: '14.0'
+  suggested_range:
+  - 0.0
+  - 1000000.0
+- name: friction_angle_embankment
+  global_token_index: 21
+  line: 4
+  type: real
+  description: Friction angle — embankment (degrees)
+  unit_category: angle
+  current_value: '0.0'
+  suggested_range:
+  - 0.0
+  - 45.0
+- name: dilation_angle_embankment
+  global_token_index: 22
+  line: 4
+  type: real
+  description: Dilation angle — embankment (degrees)
+  unit_category: angle
+  current_value: '0.0'
+  suggested_range:
+  - 0.0
+  - 45.0
+- name: unit_weight_embankment
+  global_token_index: 23
+  line: 4
+  type: real
+  description: Unit weight (embankment material, kN/m³ or consistent units)
+  unit_category: force_density
+  current_value: '20.0'
+  suggested_range:
+  - 0.0
+  - 100.0
 - name: nels_or_nxe
   global_token_index: 1
   line: 1
@@ -348,7 +478,7 @@ how_to_run:
   - cd ~/projects/fem-benchmarks/pfem/executable/chap06
   - printf "p69\n" | ~/projects/fem-benchmarks/pfem/build/bin/p69
   matlab:
-  - pfem_root = '~/projects/fem-benchmarks/pfem';
+  - pfem_root = fullfile(getenv('HOME'), 'projects', 'fem-benchmarks', 'pfem');
   - '[status, out] = pfem_run_from_yaml(repo_root, pfem_root, yaml_path, struct());'
 notes:
 - Use global_token_index from tunable_parameters for patching.

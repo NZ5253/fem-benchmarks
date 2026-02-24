@@ -10,7 +10,7 @@ authors:
     dataset: p64
   entry:
     created_by: Naeem
-    created_on: '2026-02-23'
+    created_on: '2026-02-24'
     verified_platform: Linux (gfortran)
 code:
   language: Fortran (F2003)
@@ -41,61 +41,61 @@ units:
   system: consistent
   notes: PFEM assumes consistent units.
 tunable_parameters:
-- name: angle_or_prop_1
+- name: friction_angle_phi
   global_token_index: 11
   line: 4
   type: real
-  description: Friction/dilation angle or material property 1
+  description: Friction angle (degrees)
   unit_category: angle
   current_value: '20.0'
   suggested_range:
   - 0.0
-  - 90.0
-- name: angle_or_prop_2
+  - 45.0
+- name: cohesion_c
   global_token_index: 12
   line: 4
   type: real
-  description: Friction/dilation angle or material property 2
-  unit_category: angle
+  description: Cohesion (shear strength intercept)
+  unit_category: stress
   current_value: '15.0'
   suggested_range:
   - 0.0
-  - 90.0
-- name: material_prop_3
+  - 1000000.0
+- name: dilation_angle_psi
   global_token_index: 13
   line: 4
   type: real
-  description: Material property 3
-  unit_category: mixed
+  description: Dilation angle (degrees)
+  unit_category: angle
   current_value: '0.0'
   suggested_range:
   - 0.0
-  - 1000000000000.0
-- name: angle_or_prop_4
+  - 45.0
+- name: unit_weight_gamma
   global_token_index: 14
   line: 4
   type: real
-  description: Friction/dilation angle or material property 4
-  unit_category: angle
+  description: Unit weight (body force per unit volume)
+  unit_category: force_density
   current_value: '20.0'
   suggested_range:
   - 0.0
-  - 90.0
-- name: youngs_modulus_E_prop5
+  - 100.0
+- name: youngs_modulus_E
   global_token_index: 15
   line: 4
   type: real
-  description: Young's modulus (prop 5)
+  description: Young's modulus
   unit_category: stress
   current_value: 1.0e5
   suggested_range:
   - 1000.0
   - 1000000000000.0
-- name: poisson_ratio_nu_prop6
+- name: poisson_ratio_nu
   global_token_index: 16
   line: 4
   type: real
-  description: Poisson's ratio (prop 6)
+  description: Poisson's ratio
   unit_category: dimensionless
   current_value: '0.3'
   suggested_range:
@@ -213,7 +213,7 @@ how_to_run:
   - cd ~/projects/fem-benchmarks/pfem/executable/chap06
   - printf "p64\n" | ~/projects/fem-benchmarks/pfem/build/bin/p64
   matlab:
-  - pfem_root = '~/projects/fem-benchmarks/pfem';
+  - pfem_root = fullfile(getenv('HOME'), 'projects', 'fem-benchmarks', 'pfem');
   - '[status, out] = pfem_run_from_yaml(repo_root, pfem_root, yaml_path, struct());'
 notes:
 - Use global_token_index from tunable_parameters for patching.

@@ -1,67 +1,77 @@
-id: pfem5_ch05_p53_p53
-title: PFEM Program p53 — case p53
-purpose: Linear Elasticity analysis in 3D.
+id: pfem5_ch06_p61_p61_sy200
+title: PFEM Program p61 — case p61_sy200
+purpose: Elastic-Plastic analysis in 2D.
 authors:
   source:
     book: Programming the Finite Element Method
     edition: 5th
-    chapter: 5
-    program: p53
-    dataset: p53
+    chapter: 6
+    program: p61
+    dataset: p61_sy200
   entry:
     created_by: Naeem
     created_on: '2026-02-24'
     verified_platform: Linux (gfortran)
 code:
   language: Fortran (F2003)
-  source_file: source/chap05/p53.f03
+  source_file: source/chap06/p61.f03
   uses_modules:
   - main
   - geom
   io_reads_from_unit10:
-  - line: 26
-    stmt: READ(10,*)nod,nxe,nye,nze,nip,np_types
-  - line: 35
+  - line: 32
+    stmt: READ(10,*)nxe,nye,np_types
+  - line: 41
     stmt: READ(10,*)prop
-  - line: 37
+  - line: 43
     stmt: IF(np_types>1)READ(10,*)etype
-  - line: 38
-    stmt: READ(10,*)x_coords,y_coords,z_coords
-  - line: 40
+  - line: 44
+    stmt: READ(10,*)x_coords,y_coords
+  - line: 46
     stmt: READ(10,*)nr,(k,nf(:,k),i=1,nr)
-  - line: 81
+  - line: 90
     stmt: READ(10,*)loaded_nodes
-  - line: 82
-    stmt: IF(loaded_nodes/=0)READ(10,*)(k,loads(nf(:,k)),i=1,loaded_nodes)
-  - line: 83
-    stmt: READ(10,*)fixed_freedoms
-  - line: 87
-    stmt: READ(10,*)(node(i),sense(i),value(i),i=1,fixed_freedoms)
+  - line: 92
+    stmt: READ(10,*)(node(i),val(i,:),i=1,loaded_nodes)
+  - line: 95
+    stmt: READ(10,*)tol,limit,incs
+  - line: 97
+    stmt: READ(10,*)qinc
 fem:
-  dimension: 3
+  dimension: 2
   dof:
-    per_node: 3
+    per_node: 2
 analysis:
-  physics: linear elasticity
-  type: linear
+  physics: elastic-plastic
+  type: nonlinear
   regime: steady-state
 units:
   system: consistent
   notes: PFEM assumes consistent units.
 tunable_parameters:
+- name: yield_stress
+  global_token_index: 4
+  line: 2
+  type: real
+  description: von Mises yield stress
+  unit_category: stress
+  current_value: '200.0'
+  suggested_range:
+  - 10.0
+  - 1000000.0
 - name: youngs_modulus_E
-  global_token_index: 7
-  line: 3
+  global_token_index: 5
+  line: 2
   type: real
   description: Young's modulus
   unit_category: stress
-  current_value: '100.0'
+  current_value: 1.0e5
   suggested_range:
   - 1000.0
   - 1000000000000.0
 - name: poisson_ratio_nu
-  global_token_index: 8
-  line: 3
+  global_token_index: 6
+  line: 2
   type: real
   description: Poisson's ratio
   unit_category: dimensionless
@@ -69,34 +79,61 @@ tunable_parameters:
   suggested_range:
   - 0.0
   - 0.49
+- name: convergence_tolerance
+  global_token_index: 137
+  line: 15
+  type: real
+  description: Convergence tolerance for nonlinear iteration
+  unit_category: dimensionless
+  current_value: '0.001'
+  suggested_range:
+  - 1.0e-12
+  - 0.1
+- name: iteration_limit
+  global_token_index: 138
+  line: 15
+  type: int
+  description: Maximum number of iterations
+  unit_category: count
+  current_value: '250'
+  suggested_range:
+  - 10
+  - 10000
+- name: load_increments
+  global_token_index: 139
+  line: 16
+  type: int
+  description: Number of load increments
+  unit_category: count
+  current_value: '10'
+  suggested_range:
+  - 1
+  - 1000
 - name: nels_or_nxe
   global_token_index: 1
   line: 1
   type: int
   description: Number of elements (nels) or x-divisions (nxe)
   unit_category: count
-  current_value: '20'
+  current_value: '8'
   note: 'WARNING: changing this invalidates coordinate arrays'
 - name: np_types_or_nye
   global_token_index: 2
-  line: 2
+  line: 1
   type: int
   description: Material types (np_types) or y-divisions (nye)
   unit_category: count
-  current_value: '1'
+  current_value: '4'
   note: 'WARNING: changing this invalidates coordinate arrays'
 input_schema:
   file_type: .dat
-  total_tokens: 244
+  total_tokens: 149
   reads_in_order:
   - record: 1
-    fortran_read: READ(10,*)nod,nxe,nye,nze,nip,np_types
+    fortran_read: READ(10,*)nxe,nye,np_types
     variables:
-    - nod
     - nxe
     - nye
-    - nze
-    - nip
     - np_types
   - record: 2
     fortran_read: READ(10,*)prop
@@ -108,11 +145,10 @@ input_schema:
     - etype
     conditional: true
   - record: 4
-    fortran_read: READ(10,*)x_coords,y_coords,z_coords
+    fortran_read: READ(10,*)x_coords,y_coords
     variables:
     - x_coords
     - y_coords
-    - z_coords
   - record: 5
     fortran_read: READ(10,*)nr,(k,nf(:,k),i=1,nr)
     variables:
@@ -127,288 +163,190 @@ input_schema:
     variables:
     - loaded_nodes
   - record: 7
-    fortran_read: IF(loaded_nodes/=0)READ(10,*)(k,loads(nf(:,k)),i=1,loaded_nodes)
-    variables:
-    - (k
-    - 'loads(nf(:'
-    - k))
-    - i=1
-    - loaded_nodes)
-    conditional: true
-  - record: 8
-    fortran_read: READ(10,*)fixed_freedoms
-    variables:
-    - fixed_freedoms
-  - record: 9
-    fortran_read: READ(10,*)(node(i),sense(i),value(i),i=1,fixed_freedoms)
+    fortran_read: READ(10,*)(node(i),val(i,:),i=1,loaded_nodes)
     variables:
     - (node(i)
-    - sense(i)
-    - value(i)
+    - val(i
+    - :)
     - i=1
-    - fixed_freedoms)
+    - loaded_nodes)
+  - record: 8
+    fortran_read: READ(10,*)tol,limit,incs
+    variables:
+    - tol
+    - limit
+    - incs
+  - record: 9
+    fortran_read: READ(10,*)qinc
+    variables:
+    - qinc
 inputs:
-  working_directory: executable/chap05
-  basename: p53
-  dat_file: executable/chap05/p53.dat
+  working_directory: executable/chap06
+  basename: p61_sy200
+  dat_file: executable/chap06/p61_sy200.dat
   all_tokens:
-  - '20'
-  - '1'
-  - '3'
-  - '2'
   - '8'
-  - '2'
-  - '100.0'
+  - '4'
+  - '1'
+  - '200.0'
+  - 1.0e5
   - '0.3'
-  - '50.0'
-  - '0.3'
-  - '1'
-  - '2'
-  - '1'
-  - '2'
-  - '1'
-  - '2'
-  - '0.0'
-  - '0.5'
   - '0.0'
   - '1.0'
   - '2.0'
   - '3.0'
+  - '4.0'
+  - '5.5'
+  - '7.0'
+  - '9.0'
+  - '12.0'
   - '0.0'
-  - '-1.0'
-  - '-2.0'
-  - '46'
+  - '-1.25'
+  - '-2.5'
+  - '-3.75'
+  - '-5.0'
+  - '33'
   - '1'
-  - '0'
   - '0'
   - '1'
   - '2'
-  - '1'
   - '0'
   - '1'
   - '3'
-  - '1'
   - '0'
   - '1'
   - '4'
   - '0'
-  - '0'
   - '1'
   - '5'
-  - '1'
   - '0'
   - '1'
   - '6'
   - '0'
-  - '0'
   - '1'
   - '7'
-  - '1'
   - '0'
   - '1'
   - '8'
-  - '1'
   - '0'
   - '1'
   - '9'
   - '0'
   - '0'
-  - '1'
-  - '10'
-  - '1'
-  - '0'
-  - '1'
-  - '11'
-  - '0'
-  - '0'
-  - '0'
-  - '12'
-  - '0'
-  - '0'
-  - '0'
-  - '13'
-  - '0'
-  - '0'
-  - '0'
   - '14'
   - '0'
-  - '1'
-  - '1'
-  - '16'
   - '0'
-  - '1'
-  - '1'
-  - '18'
-  - '0'
-  - '0'
-  - '0'
-  - '19'
-  - '0'
-  - '0'
-  - '0'
-  - '20'
-  - '0'
-  - '1'
-  - '1'
   - '23'
   - '0'
-  - '1'
-  - '1'
-  - '25'
   - '0'
-  - '1'
-  - '1'
   - '28'
   - '0'
-  - '1'
-  - '1'
-  - '30'
   - '0'
-  - '0'
-  - '0'
-  - '31'
-  - '0'
-  - '0'
-  - '0'
-  - '32'
-  - '0'
-  - '0'
-  - '0'
-  - '33'
-  - '0'
-  - '1'
-  - '1'
-  - '35'
-  - '0'
-  - '1'
-  - '1'
   - '37'
   - '0'
   - '0'
-  - '0'
-  - '38'
-  - '0'
-  - '0'
-  - '0'
-  - '39'
-  - '0'
-  - '1'
-  - '1'
   - '42'
-  - '0'
-  - '1'
-  - '1'
-  - '44'
-  - '0'
-  - '1'
-  - '1'
-  - '47'
-  - '0'
-  - '1'
-  - '1'
-  - '49'
-  - '0'
-  - '0'
-  - '0'
-  - '50'
-  - '0'
   - '0'
   - '0'
   - '51'
   - '0'
   - '0'
-  - '0'
-  - '52'
-  - '0'
-  - '1'
-  - '1'
-  - '54'
-  - '0'
-  - '1'
-  - '1'
   - '56'
   - '0'
   - '0'
-  - '0'
-  - '57'
-  - '0'
-  - '0'
-  - '0'
-  - '58'
-  - '0'
-  - '1'
-  - '1'
-  - '61'
-  - '0'
-  - '1'
-  - '1'
-  - '63'
-  - '0'
-  - '1'
-  - '1'
-  - '66'
-  - '0'
-  - '1'
-  - '1'
-  - '68'
-  - '0'
-  - '0'
-  - '0'
-  - '69'
-  - '0'
+  - '65'
   - '0'
   - '0'
   - '70'
   - '0'
   - '0'
+  - '79'
   - '0'
-  - '8'
+  - '0'
+  - '84'
+  - '0'
+  - '0'
+  - '93'
+  - '0'
+  - '0'
+  - '98'
+  - '0'
+  - '0'
+  - '107'
+  - '0'
+  - '0'
+  - '112'
+  - '0'
+  - '0'
+  - '113'
+  - '0'
+  - '1'
+  - '114'
+  - '0'
+  - '1'
+  - '115'
+  - '0'
+  - '1'
+  - '116'
+  - '0'
+  - '1'
+  - '117'
+  - '0'
+  - '1'
+  - '118'
+  - '0'
+  - '1'
+  - '119'
+  - '0'
+  - '1'
+  - '120'
+  - '0'
+  - '1'
+  - '121'
+  - '0'
+  - '0'
+  - '5'
   - '1'
   - '0.0'
+  - '-0.166667'
+  - '10'
   - '0.0'
-  - '0.0417'
-  - '2'
-  - '0.0'
-  - '0.0'
-  - '-0.1667'
-  - '3'
-  - '0.0'
-  - '0.0'
-  - '0.0417'
-  - '14'
-  - '0.0'
-  - '0.0'
-  - '-0.1667'
+  - '-0.666667'
   - '15'
   - '0.0'
+  - '-0.333333'
+  - '24'
   - '0.0'
-  - '-0.1667'
-  - '20'
+  - '-0.666667'
+  - '29'
   - '0.0'
-  - '0.0'
-  - '0.0417'
-  - '21'
-  - '0.0'
-  - '0.0'
-  - '-0.1667'
-  - '22'
-  - '0.0'
-  - '0.0'
-  - '0.0417'
-  - '0'
+  - '-0.166667'
+  - '0.001'
+  - '250'
+  - '10'
+  - '200.0'
+  - '100.0'
+  - '50.0'
+  - '50.0'
+  - '50.0'
+  - '30.0'
+  - '20.0'
+  - '10.0'
+  - '5.0'
+  - '4.0'
 outputs:
-  output_directory: executable/chap05
+  output_directory: executable/chap06
   files_expected:
-  - p53.res
-  - p53.msh
+  - p61_sy200.res
+  - p61_sy200.msh
 how_to_run:
   linux:
-  - cd ~/projects/fem-benchmarks/pfem/executable/chap05
-  - printf "p53\n" | ~/projects/fem-benchmarks/pfem/build/bin/p53
+  - cd ~/projects/fem-benchmarks/pfem/executable/chap06
+  - printf "p61_sy200\n" | ~/projects/fem-benchmarks/pfem/build/bin/p61
   matlab:
   - pfem_root = fullfile(getenv('HOME'), 'projects', 'fem-benchmarks', 'pfem');
   - '[status, out] = pfem_run_from_yaml(repo_root, pfem_root, yaml_path, struct());'
 notes:
 - Use global_token_index from tunable_parameters for patching.
 - The patcher replaces tokens by their 1-based index in the flat token list.
-- This file has 244 tokens and 9 READ statements.
+- This file has 149 tokens and 9 READ statements.
