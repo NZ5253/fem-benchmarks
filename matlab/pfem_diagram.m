@@ -2,26 +2,23 @@ function pfem_diagram(yaml_path, varargin)
 % PFEM_DIAGRAM  Textbook-style FEM mesh diagram with interactive parameters
 %
 % Usage:
-%   pfem_diagram('benchmarks/pfem5/chap05/p54_1.yaml')
+%   pfem_diagram(yaml_path)
 %   pfem_diagram(yaml_path, 'node_numbers', true)
-%   pfem_diagram(yaml_path, 'elem_numbers', true)
+%   pfem_diagram(yaml_path, 'axes', ax)   % draw on existing axes (no new figure/panel)
+%   pfem_diagram(yaml_path, 'overrides', struct('youngs_modulus_E', 2e5))
 %
-% Shows a pre-run FEM problem diagram with:
-%   - Element outlines + circled element numbers
-%   - Node dots (+ optional node numbers)
-%   - Boundary conditions (hatching = fixed, arrows = roller)
-%   - Applied loads (arrows)
-%   - Dimension annotations
-%   - Material properties text
-%   - Right-panel: interactive tunable parameter editor
-%     -> Edit a value and press Enter (or click Apply) to redraw
+% The 'axes' option is used by pfem_studio to embed the diagram.
 
     p = inputParser;
     addParameter(p, 'node_numbers', false);
     addParameter(p, 'elem_numbers', true);
+    addParameter(p, 'axes',      []);        % external axes handle
+    addParameter(p, 'overrides', struct());  % parameter overrides
     parse(p, varargin{:});
     opts.node_numbers = p.Results.node_numbers;
     opts.elem_numbers = p.Results.elem_numbers;
+    ext_ax   = p.Results.axes;
+    overrides = p.Results.overrides;
 
     % Expand ~ in path
     if startsWith(yaml_path, '~')
@@ -38,28 +35,59 @@ function pfem_diagram(yaml_path, varargin)
         error('Could not extract mesh data from %s', yaml_path);
     end
 
-    % ---- Parse BCs and loads ----
+    % ---- Apply overrides to token list ----
     tokens = yaml.inputs.all_tokens;
-    vals   = tokens_to_vals(tokens);
-    bcs    = parse_bcs(vals, meta, yaml);
-    loads  = parse_loads(vals, meta, yaml, bcs);
+    if ~isempty(fieldnames(overrides)) && isfield(yaml, 'tunable_parameters')
+        for k = 1:numel(yaml.tunable_parameters)
+            fn = yaml.tunable_parameters{k}.name;
+            if isfield(overrides, fn)
+                tokens{yaml.tunable_parameters{k}.global_token_index} = overrides.(fn);
+            end
+        end
+    end
 
-    % ---- Build mesh struct ----
-    mesh = build_mesh(nodes, elem_conn, meta, bcs, loads, yaml, opts);
+    % ---- Parse BCs and loads ----
+    vals  = tokens_to_vals(tokens);
+    bcs   = parse_bcs(vals, meta, yaml);
+    loads = parse_loads(vals, meta, yaml, bcs);
 
-    % ---- Create figure ----
+    % ---- Build prop display (overrides take precedence) ----
+    [prop_names, prop_values] = build_prop_display(yaml.tunable_parameters, overrides);
+
+    title_str = yaml.title;
+    if ~isempty(fieldnames(overrides))
+        fns = fieldnames(overrides);
+        parts = {};
+        for i = 1:numel(fns)
+            lbl = format_prop_label(fns{i});
+            plain = regexprep(lbl, '\\(\w+)', '$1');
+            parts{end+1} = sprintf('%s=%.4g', plain, overrides.(fns{i})); %#ok<AGROW>
+        end
+        title_str = [title_str '  (' strjoin(parts, ',  ') ')'];
+    end
+
+    mesh = struct('nodes', nodes, 'elem_conn', elem_conn, 'meta', meta, ...
+                  'bcs', bcs, 'loads', loads, ...
+                  'prop_names', {prop_names}, 'prop_values', prop_values, ...
+                  'title', title_str, 'opts', opts);
+
+    % ---- Embedded mode: draw on provided axes, no figure/panel ----
+    if ~isempty(ext_ax)
+        draw_diagram(ext_ax, mesh);
+        title(ext_ax, title_str, 'FontSize', 10, 'FontWeight', 'bold', ...
+              'Interpreter', 'none');
+        return;
+    end
+
+    % ---- Standalone mode: create figure + interactive panel ----
     fig = figure('Name', sprintf('PFEM Diagram — %s', mesh.title), ...
                  'Position', [60 60 1100 650], ...
                  'Color', [0.97 0.97 0.97]);
 
-    % Main axes (left 68%)
-    ax = axes('Parent', fig, ...
-              'Position', [0.03 0.06 0.64 0.88]);
+    ax = axes('Parent', fig, 'Position', [0.03 0.06 0.64 0.88]);
     axis(ax, 'equal'); axis(ax, 'off'); hold(ax, 'on');
 
     draw_diagram(ax, mesh);
-
-    % Parameter panel (right 30%)
     create_param_panel(fig, yaml_path, ax, opts);
 
     title(ax, mesh.title, 'FontSize', 11, 'FontWeight', 'bold', ...

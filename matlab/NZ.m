@@ -100,38 +100,8 @@ for i = 1:length(results)
     end
 end
 
-%% Plot Sweep Summary (parameter vs displacement/stress)
-if length(sweep_values) > 1
-    fprintf('\n============================================================\n');
-    fprintf('Generating Sweep Summary Plot...\n');
-    fprintf('============================================================\n');
-    pfem_compare_results(results, 'plot', true, 'save', false);
-end
-
-%% Plot Individual Comparisons for ALL Runs
-fprintf('\n============================================================\n');
-fprintf('Generating Individual Comparison Plots for ALL Runs...\n');
-fprintf('============================================================\n');
-
-for i = 1:length(results)
-    if results(i).status == 0
-        fprintf('Plotting Run %d/%d: %s = %.4g\n', i, length(results), sweep_param, results(i).value);
-        pfem_compare_results(results(i).out, 'plot', true, 'text', false, 'save', false);
-    end
-end
-
-%% Plot Mesh Visualization (deformed shape)
-fprintf('\n============================================================\n');
-fprintf('Generating Mesh Visualization...\n');
-fprintf('============================================================\n');
-
-% Show mesh comparison across sweep values
-pfem_plot_mesh(results);
-
-% Show detailed mesh for first and last run
-if results(1).status == 0
-    pfem_plot_mesh(results(1).out, 'title', sprintf('First: %s = %.4g', sweep_param, results(1).value));
-end
-if results(end).status == 0 && length(results) > 1
-    pfem_plot_mesh(results(end).out, 'title', sprintf('Last: %s = %.4g', sweep_param, results(end).value));
-end
+%% Open Studio with sweep results
+% pfem_studio shows: parameter vs max|u| curve + tiled deformed meshes for each run.
+% It also lets you interactively re-run with different parameters.
+fprintf('\nLaunching PFEM Studio...\n');
+pfem_studio(yaml_path, pfem_root);

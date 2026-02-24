@@ -35,7 +35,16 @@ pip install pyyaml
 scripts/pfem_build_and_run.sh ~/Downloads/pfem5/5th_ed chap05 p51 p51_3 --rebuild
 ```
 
-### From MATLAB
+### From MATLAB — PFEM Studio (interactive)
+```matlab
+% Open the interactive study environment (file picker opens)
+pfem_studio()
+
+% Or load a specific case directly
+pfem_studio('benchmarks/pfem5/chap06/p61.yaml')
+```
+
+### From MATLAB — programmatic runner
 ```matlab
 pfem_root = '~/Downloads/pfem5/5th_ed';
 [status, outputs] = pfem_runner(pfem_root, 'chap05', 'p51', 'p51_3');
@@ -61,13 +70,19 @@ fem-benchmarks/
 │   ├── generate_yamls_v2.py         # YAML generator (token-based)
 │   └── verify_yamls.py              # YAML validation
 ├── matlab/              # MATLAB interface
+│   ├── pfem_studio.m              # Interactive study environment (main UI)
+│   ├── pfem_diagram.m             # Textbook-style mesh diagram renderer
 │   ├── pfem_runner.m              # Single case runner
-│   ├── pfem_run_from_yaml.m       # YAML-driven runner
+│   ├── pfem_run_from_yaml.m       # YAML-driven runner with overrides
+│   ├── pfem_plot_mesh.m           # Deformed mesh visualisation
 │   ├── pfem_show_tunables.m       # Display available tunables
 │   ├── pfem_smart_sweep.m         # Auto-discovery sweep
 │   ├── pfem_compare_results.m     # Result comparison & plotting
-│   ├── NZ.m                       # Example sweep script
+│   ├── NZ.m                       # Example sweep script (launches studio)
 │   └── utils/                     # Utility functions
+│       ├── pfem_yaml_load.m       # YAML parser
+│       ├── pfem_extract_coords.m  # Node coordinate extraction
+│       └── pfem_patch_dat_using_yaml.m  # Token-based .dat patcher
 ├── docs/                # Documentation
 │   └── GUIDE.md                   # Complete usage guide
 └── README.md            # This file
@@ -103,26 +118,76 @@ python3 scripts/verify_yamls.py benchmarks/pfem5/chap05/*.yaml
 
 See [docs/GUIDE.md](docs/GUIDE.md) for complete instructions.
 
-### Parametric Study Example
+### Parametric Study — Interactive (recommended)
 
 ```matlab
-% Discover available tunables
-pfem_show_tunables('benchmarks/pfem5/chap05/p51_4.yaml');
+% Open studio with file picker
+pfem_studio()
 
-% Run parameter sweep
-yaml_path = 'benchmarks/pfem5/chap05/p51_4.yaml';
-for E = [500, 1000, 5000, 10000]
-    overrides.youngs_modulus_E = E;
-    [status, out] = pfem_run_from_yaml(repo_root, pfem_root, yaml_path, overrides);
-    results(end+1).out = out;
-end
-
-% Compare results (text and plots)
-for i = 1:length(results)
-    pfem_compare_results(results(i).out, 'plot', false);  % Text comparison
-end
-pfem_compare_results(results, 'plot', true);  % Sweep summary plot
+% Or specify a case
+pfem_studio('benchmarks/pfem5/chap06/p61.yaml')
+% → Edit yield_stress to: 50, 100, 200, 500
+% → Press Run → sweep figure opens automatically
 ```
+
+### Parametric Study — Scripted
+
+```matlab
+% Via NZ.m: edit yaml_path + sweep_param + sweep_values, then run.
+% The script runs the sweep and opens pfem_studio for visualisation.
+```
+
+## PFEM Studio
+
+`pfem_studio` is the primary interactive interface — it replaces manual scripting in `NZ.m`.
+
+```
+┌─────────────────────────────┬──────────────────────────────────────┐
+│  Undeformed mesh            │  Tunable Parameters                  │
+│  (updates after each run)   │  ┌───────────────────┬────────────┐  │
+│                             │  │ von Mises yield σ │  100.0     │  │
+│     ┌───┬───┬───┐           │  │ Young's modulus E │  1e5       │  │
+│     │   │   │   │           │  │ Poisson ratio ν   │  0.3       │  │
+│     ├───┼───┼───┤           │  │ load increments   │  10        │  │
+│     │   │   │   │           │  └───────────────────┴────────────┘  │
+│     └───┴───┴───┘           │                                      │
+│                             │     [ Run Simulation ]               │
+├─────────────────────────────┼──────────────────────────────────────┤
+│                             │  Results Summary                     │
+│   Deformed mesh             │  max|ux| = +1.23e-02  (node 45)     │
+│   coloured by |u|           │  max|uy| = -7.14e-02  (node 10)     │
+│                             │  max|u|  = +7.24e-02  (node 10)     │
+└─────────────────────────────┴──────────────────────────────────────┘
+```
+
+**Sweep mode** — type comma-separated values in any edit field:
+
+```matlab
+% In the yield_stress field, type:   50, 100, 200, 500
+% Press Run → runs all four, opens sweep summary figure with:
+%   - Load–displacement curve for each value
+%   - Tiled deformed mesh panels
+```
+
+### Recommended test case: p61 (elastic-plastic bearing capacity)
+
+```matlab
+pfem_studio('benchmarks/pfem5/chap06/p61.yaml')
+```
+
+| Parameter | Default | Interesting sweep | Physical effect |
+|---|---|---|---|
+| `yield_stress` | 100 | `50, 100, 200, 500` | Controls when plasticity activates; σ_y=50 collapses at load 300, σ_y=500 stays elastic |
+| `youngs_modulus_E` | 1e5 | `5e4, 1e5, 2e5` | Linear scaling of all displacements |
+| `load_increments` | 10 | `5, 10, 20` | More steps = more accurate plastic zone |
+
+> **Note**: build p61 first if not already compiled:
+> ```bash
+> gfortran -O2 ~/Downloads/pfem5/5th_ed/source/chap06/p61.f03 \
+>   -o ~/Downloads/pfem5/5th_ed/build/bin/p61 \
+>   -I ~/Downloads/pfem5/5th_ed/build/mod \
+>   ~/Downloads/pfem5/5th_ed/build/obj/libpfem.a
+> ```
 
 ## Key Features
 
@@ -135,12 +200,19 @@ The `generate_perfect_yamls.py` script creates comprehensive benchmark files:
 - Includes input_schema, tunable_parameters, and parsed inputs sections
 
 ### 2. MATLAB Integration
-- **pfem_runner.m**: Execute any PFEM case from MATLAB
-- **pfem_run_from_yaml.m**: YAML-driven runner with parameter overrides
-- **pfem_show_tunables.m**: Discover available parameters for any case
-- **pfem_smart_sweep.m**: Auto-discovery parameter sweeps
-- **pfem_compare_results.m**: Compare original vs modified results with plots
-- Organized output folders with parameter values in names
+
+| Function | Purpose |
+|---|---|
+| `pfem_studio` | Interactive GUI — load YAML, edit params, run, see deformed mesh |
+| `pfem_diagram` | Standalone textbook-style mesh diagram with BC/load annotations |
+| `pfem_run_from_yaml` | Programmatic runner: patches .dat from YAML overrides, runs PFEM |
+| `pfem_extract_coords` | Extract exact node coordinates from YAML tokens (all chapters) |
+| `pfem_plot_mesh` | Visualise deformed mesh + displacement vectors from run output |
+| `pfem_show_tunables` | Print tunable parameters for any YAML case |
+| `pfem_smart_sweep` | Auto-discovery parametric sweep |
+| `pfem_compare_results` | Compare original vs modified results with plots |
+
+Runs are saved to `runs/single/<chap>/<program>/<case>/<timestamp>/` with the parameter values embedded in the folder name.
 
 ## Documentation
 
