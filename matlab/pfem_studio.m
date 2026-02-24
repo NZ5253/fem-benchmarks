@@ -105,7 +105,7 @@ function pfem_studio(yaml_path, pfem_root)
                         'ForegroundColor', [0.85 0.85 0.85]);
 
     % ---- Draw initial undeformed mesh ----
-    draw_undeformed(ax_mesh, yaml_path, yaml);
+    draw_undeformed(ax_mesh, yaml_path, yaml, struct());
 
     % ---- Build parameter editor ----
     [edit_handles, param_names] = ...
@@ -158,7 +158,7 @@ function reload_yaml(fig, repo_root, pfem_root)
     delete(get(param_pan, 'Children'));
     set(param_pan, 'Title', 'Tunable Parameters');
 
-    draw_undeformed(ax_mesh, yaml_path, yaml);
+    draw_undeformed(ax_mesh, yaml_path, yaml, struct());
 
     [edit_handles, param_names] = ...
         build_param_ui(param_pan, ax_mesh, ax_def, stats_txt, ...
@@ -171,13 +171,15 @@ end
 
 
 % ==========================================================================
-function draw_undeformed(ax, yaml_path, yaml)
-% Draw undeformed mesh from YAML-derived coordinates
+function draw_undeformed(ax, yaml_path, yaml, overrides)
+% Draw undeformed mesh from YAML-derived coordinates.
+% Pass overrides so topology changes (nxe/nye) are reflected immediately.
+    if nargin < 4, overrides = struct(); end
 
     cla(ax); hold(ax, 'on'); axis(ax, 'equal'); axis(ax, 'off');
     set(ax, 'Color', [0.08 0.08 0.10]);
 
-    [nodes, elem_conn, meta] = pfem_extract_coords(yaml_path);
+    [nodes, elem_conn, meta] = pfem_extract_coords(yaml_path, overrides);
 
     if isempty(nodes)
         text(ax, 0.5, 0.5, 'Could not extract mesh coordinates', ...
@@ -398,17 +400,18 @@ function run_single(yaml_path, pfem_root, repo_root, yaml, tparams, ...
         show_error(ax_def, stats_txt, 'Simulation returned non-zero status.'); return;
     end
 
-    draw_undeformed(ax_mesh, yaml_path, yaml);
+    draw_undeformed(ax_mesh, yaml_path, yaml, overrides);
 
-    [nodes, disp_mat, elem_conn, meta] = parse_pfem_results(out, yaml_path);
+    [nodes, disp_mat, elem_conn, meta] = parse_pfem_results(out, yaml_path, overrides);
     [~, stresses] = parse_stresses(out);
 
     if ~isempty(nodes) && ~isempty(disp_mat)
         plot_deformed(ax_def, nodes, disp_mat, elem_conn, meta, overrides);
     else
         cla(ax_def); axis(ax_def,'off');
-        text(ax_def, 0.5,0.5,'No mesh data in output', ...
-             'HorizontalAlignment','center','Color',[0.5 0.5 0.5],'FontSize',11,'Units','normalized');
+        msg = deformed_fallback_msg(yaml_path, out);
+        text(ax_def, 0.5, 0.5, msg, 'HorizontalAlignment','center', ...
+             'Color',[0.5 0.5 0.5], 'FontSize',10, 'Units','normalized');
     end
 
     set(stats_txt, 'String', build_stats(disp_mat, stresses, changed, out));
@@ -451,7 +454,7 @@ function run_sweep(yaml_path, pfem_root, repo_root, yaml, tparams, ...
         results(i).out    = out;
 
         if status == 0
-            [nd, dm, ec, mt] = parse_pfem_results(out, yaml_path);
+            [nd, dm, ec, mt] = parse_pfem_results(out, yaml_path, overrides);
             results(i).nodes     = nd;
             results(i).disp_mat  = dm;
             results(i).elem_conn = ec;
@@ -466,11 +469,17 @@ function run_sweep(yaml_path, pfem_root, repo_root, yaml, tparams, ...
         end
     end
 
-    % Update left panel with default mesh
-    draw_undeformed(ax_mesh, yaml_path, yaml);
+    % Update left panel — show mesh at last successful sweep topology
+    last_ok = find([results.status]==0, 1, 'last');
+    if ~isempty(last_ok)
+        last_overrides = base_overrides;
+        last_overrides.(sweep_param) = results(last_ok).value;
+    else
+        last_overrides = struct();
+    end
+    draw_undeformed(ax_mesh, yaml_path, yaml, last_overrides);
 
     % Show last successful result on the deformed axis
-    last_ok = find([results.status]==0, 1, 'last');
     if ~isempty(last_ok) && ~isempty(results(last_ok).nodes)
         plot_deformed(ax_def, results(last_ok).nodes, results(last_ok).disp_mat, ...
                       results(last_ok).elem_conn, results(last_ok).meta, ...
@@ -591,8 +600,9 @@ end
 
 
 % ==========================================================================
-function [nodes, disp_mat, elem_conn, meta] = parse_pfem_results(out, yaml_path)
+function [nodes, disp_mat, elem_conn, meta] = parse_pfem_results(out, yaml_path, overrides)
     nodes=[]; disp_mat=[]; elem_conn=[]; meta=struct();
+    if nargin < 3, overrides = struct(); end
     if ~isfield(out,'files') || isempty(out.files), return; end
     is_res    = cellfun(@(f) endsWith(f,'.res'), out.files);
     res_files = out.files(is_res);
@@ -611,7 +621,7 @@ function [nodes, disp_mat, elem_conn, meta] = parse_pfem_results(out, yaml_path)
             break;
         end
     end
-    if disp_start==0, return; end
+    if disp_start==0, return; end   % load table or eigenvalue output — no per-node displacements
 
     disp_data=[];
     for i=disp_start:numel(lines)
@@ -626,11 +636,37 @@ function [nodes, disp_mat, elem_conn, meta] = parse_pfem_results(out, yaml_path)
     disp_mat=disp_data;
 
     n_nodes=size(disp_mat,1);
-    [ny, ec, mt] = pfem_extract_coords(yaml_path);
+    % Pass overrides so topology changes (nxe/nye) produce the correct coordinates
+    [ny, ec, mt] = pfem_extract_coords(yaml_path, overrides);
     if ~isempty(ny) && size(ny,1)==n_nodes
         nodes=ny; elem_conn=ec; meta=mt;
     else
+        % Node count mismatch (topology changed) — fall back to index positions
         nodes=[(1:n_nodes)' zeros(n_nodes,1)];
+    end
+end
+
+
+function msg = deformed_fallback_msg(yaml_path, out)
+% Return an informative message when no per-node displacement data exists.
+    msg = 'No per-node displacements in output.';
+    try
+        y = pfem_yaml_load(yaml_path);
+        ch = y.authors.source.chapter;
+        if ch == 10
+            msg = sprintf('Chapter 10 eigenvalue analysis.\nOutput contains frequencies,\nnot nodal displacements.');
+        elseif isfield(out,'files') && ~isempty(out.files)
+            % Likely a load-step table (e.g. p61) — check .res first lines
+            is_res = cellfun(@(f) endsWith(f,'.res'), out.files);
+            res_files = out.files(is_res);
+            if ~isempty(res_files) && exist(res_files{1},'file')
+                lines = read_lines(res_files{1});
+                if numel(lines)>=2 && contains(lines{1},'step','IgnoreCase',true)
+                    msg = 'Load-step table output (elastic-plastic).\nNo per-node displacement field.';
+                end
+            end
+        end
+    catch
     end
 end
 

@@ -1,9 +1,14 @@
-function [nodes, elem_conn, meta] = pfem_extract_coords(yaml_or_out)
+function [nodes, elem_conn, meta] = pfem_extract_coords(yaml_or_out, overrides)
 % PFEM_EXTRACT_COORDS  Extract node coordinates from YAML tokens
 %
 % Usage:
 %   [nodes, elem_conn, meta] = pfem_extract_coords(yaml_path)
+%   [nodes, elem_conn, meta] = pfem_extract_coords(yaml_path, overrides)
 %   [nodes, elem_conn, meta] = pfem_extract_coords(out_struct)
+%
+% overrides: struct from pfem_run_from_yaml.  When topology params
+%   'nels_or_nxe' or 'np_types_or_nye' are present the function keeps the
+%   original domain bounds but regenerates the node grid at the new size.
 %
 % Returns:
 %   nodes     - [nn x ndim] node coordinates
@@ -15,6 +20,10 @@ function [nodes, elem_conn, meta] = pfem_extract_coords(yaml_or_out)
 %   - Structured 3D: p53, p56, p57
 %   - Explicit mesh: p42, p44, p45, p54, p74, p75, p88, p610
 %   - 1D elements:   p41, p43, p46, p71, p81-p83, p93, p101, p111
+
+    if nargin < 2
+        overrides = struct();
+    end
 
     nodes = [];
     elem_conn = [];
@@ -65,24 +74,33 @@ function [nodes, elem_conn, meta] = pfem_extract_coords(yaml_or_out)
     meta.program = program;
     meta.chapter = chapter;
 
+    % Extract topology overrides: map YAML tunable names → mesh dimensions
+    % 'nels_or_nxe'  → new nxe (2-D) or nels (1-D)
+    % 'np_types_or_nye' → new nye (2-D only)
+    topo = struct();
+    if isfield(overrides, 'nels_or_nxe'),       topo.nxe  = overrides.nels_or_nxe;  end
+    if isfield(overrides, 'np_types_or_nye'),   topo.nye  = overrides.np_types_or_nye; end
+
     % Detect format from io_reads and parse accordingly
     if has_g_coord_read(yaml)
         % Explicit mesh (p42, p44, p45, p54, p74, p75, p88, p610)
+        % Explicit meshes encode geometry in g_coord — topology changes not supported
         [nodes, elem_conn, meta] = parse_explicit_mesh(vals, yaml, meta);
     elseif has_ell_read(yaml)
         % 1D mesh (p41, p43, p46, p71, p81-p83, p93, p101, p111)
-        [nodes, elem_conn, meta] = parse_1d_mesh(vals, yaml, meta);
+        [nodes, elem_conn, meta] = parse_1d_mesh(vals, yaml, meta, topo);
     elseif has_x_y_coords_read(yaml)
         % Structured mesh (most programs)
-        [nodes, elem_conn, meta] = parse_structured_mesh_generic(vals, yaml, meta);
+        [nodes, elem_conn, meta] = parse_structured_mesh_generic(vals, yaml, meta, topo);
     end
 end
 
 
-function [nodes, elem_conn, meta] = parse_structured_mesh_generic(vals, yaml, meta)
+function [nodes, elem_conn, meta] = parse_structured_mesh_generic(vals, yaml, meta, topo)
 % Parse structured mesh by detecting header format from io_reads
     nodes = [];
     elem_conn = [];
+    if nargin < 4, topo = struct(); end
 
     program = meta.program;
     chapter = meta.chapter;
@@ -90,22 +108,11 @@ function [nodes, elem_conn, meta] = parse_structured_mesh_generic(vals, yaml, me
     % Get first READ statement to determine header format
     first_read = get_first_read(yaml);
 
-    % Detect header type and extract parameters
+    % Detect header type and extract parameters (uses original vals)
     [nxe, nye, nze, nod, dir, np_types, header_tokens] = detect_header_format(first_read, vals, program, chapter);
 
     if isempty(nxe) || isempty(nye)
         return;
-    end
-
-    meta.nxe = nxe;
-    meta.nye = nye;
-    meta.nod = nod;
-    meta.dir = dir;
-    meta.ndim = 2;
-
-    if ~isempty(nze) && nze > 0
-        meta.nze = nze;
-        meta.ndim = 3;
     end
 
     % Determine prop count based on program/chapter
@@ -117,19 +124,48 @@ function [nodes, elem_conn, meta] = parse_structured_mesh_generic(vals, yaml, me
 
     % Check for etype (conditional read)
     if np_types > 1
-        % etype uses nels tokens (nxe*nye for 2D)
-        nels = nxe * nye;
-        if meta.ndim == 3
-            nels = nxe * nye * nze;
-        end
-        coord_start = coord_start + nels;
+        nels_orig = nxe * nye;
+        if ~isempty(nze) && nze > 0, nels_orig = nxe * nye * nze; end
+        coord_start = coord_start + nels_orig;
     end
 
-    % Extract coordinates
-    if meta.ndim == 2
-        [nodes, meta] = generate_2d_nodes(vals, coord_start, nxe, nye, nod, dir, meta);
+    % Extract domain bounds using ORIGINAL nxe/nye (to read correct token range)
+    if isempty(nze) || nze == 0
+        [nodes_orig, meta] = generate_2d_nodes(vals, coord_start, nxe, nye, nod, dir, meta);
     else
-        [nodes, meta] = generate_3d_nodes(vals, coord_start, nxe, nye, nze, nod, meta);
+        [nodes_orig, meta] = generate_3d_nodes(vals, coord_start, nxe, nye, nze, nod, meta);
+    end
+
+    % Apply topology overrides — keep domain bounds, regenerate grid at new size
+    if isfield(topo, 'nxe') && topo.nxe ~= nxe
+        x0 = meta.x_coords(1);  x1 = meta.x_coords(end);
+        nxe = round(topo.nxe);
+        meta.x_coords = linspace(x0, x1, nxe + 1);
+    end
+    if isfield(topo, 'nye') && topo.nye ~= nye
+        y0 = meta.y_coords(1);  y1 = meta.y_coords(end);
+        nye = round(topo.nye);
+        meta.y_coords = linspace(y0, y1, nye + 1);
+    end
+
+    meta.nxe  = nxe;
+    meta.nye  = nye;
+    meta.nod  = nod;
+    meta.dir  = dir;
+    meta.ndim = 2;
+
+    if ~isempty(nze) && nze > 0
+        meta.nze  = nze;
+        meta.ndim = 3;
+    end
+
+    % If topology changed, regenerate nodes with new dimensions
+    if isfield(topo,'nxe') || isfield(topo,'nye')
+        if meta.ndim == 2
+            [nodes, meta] = generate_2d_nodes_from_coords(meta.x_coords, meta.y_coords, nxe, nye, nod, dir, meta);
+        end
+    else
+        nodes = nodes_orig;
     end
 end
 
@@ -237,6 +273,101 @@ function nprops = get_nprops(program, chapter)
         nprops = 2;  % Parallel: E, rho
     else
         nprops = 2;  % Default
+    end
+end
+
+
+function [nodes, meta] = generate_2d_nodes_from_coords(x_coords, y_coords, nxe, nye, nod, dir, meta)
+% Generate 2D node coordinates from already-extracted x_coords/y_coords arrays.
+% Used when topology overrides change nxe/nye so vals-based extraction is invalid.
+    meta.x_coords = x_coords;
+    meta.y_coords = y_coords;
+
+    if nod == 4
+        meta.nn = (nxe + 1) * (nye + 1);
+    elseif nod == 8
+        meta.nn = (2*nxe + 1) * (nye + 1) + (nxe + 1) * nye;
+    elseif nod == 9
+        meta.nn = (2*nxe + 1) * (2*nye + 1);
+    else
+        meta.nn = (nxe + 1) * (nye + 1);
+    end
+    meta.nels = nxe * nye;
+
+    x_fine = zeros(1, 2*nxe + 1);
+    for i = 1:nxe
+        x_fine(2*i-1) = x_coords(i);
+        x_fine(2*i)   = (x_coords(i) + x_coords(i+1)) / 2;
+    end
+    x_fine(2*nxe+1) = x_coords(end);
+
+    y_fine = zeros(1, 2*nye + 1);
+    for i = 1:nye
+        y_fine(2*i-1) = y_coords(i);
+        y_fine(2*i)   = (y_coords(i) + y_coords(i+1)) / 2;
+    end
+    y_fine(2*nye+1) = y_coords(end);
+
+    nodes = zeros(meta.nn, 2);
+    node_idx = 1;
+    dir_clean = lower(strrep(char(dir), '''', ''));
+
+    if nod == 4
+        if dir_clean == 'x'
+            for j = 1:(nye+1)
+                for i = 1:(nxe+1)
+                    nodes(node_idx,:) = [x_coords(i), y_coords(j)];
+                    node_idx = node_idx + 1;
+                end
+            end
+        else
+            for i = 1:(nxe+1)
+                for j = 1:(nye+1)
+                    nodes(node_idx,:) = [x_coords(i), y_coords(j)];
+                    node_idx = node_idx + 1;
+                end
+            end
+        end
+    elseif nod == 8
+        if dir_clean == 'x'
+            for j = 1:(2*nye+1)
+                if mod(j,2)==1
+                    for i = 1:(2*nxe+1)
+                        nodes(node_idx,:) = [x_fine(i), y_fine(j)]; node_idx=node_idx+1;
+                    end
+                else
+                    for i = 1:(nxe+1)
+                        nodes(node_idx,:) = [x_coords(i), y_fine(j)]; node_idx=node_idx+1;
+                    end
+                end
+            end
+        else
+            for i = 1:(2*nxe+1)
+                if mod(i,2)==1
+                    for j = 1:(2*nye+1)
+                        nodes(node_idx,:) = [x_fine(i), y_fine(j)]; node_idx=node_idx+1;
+                    end
+                else
+                    for j = 1:(nye+1)
+                        nodes(node_idx,:) = [x_fine(i), y_coords(j)]; node_idx=node_idx+1;
+                    end
+                end
+            end
+        end
+    elseif nod == 9
+        if dir_clean == 'x'
+            for j = 1:(2*nye+1)
+                for i = 1:(2*nxe+1)
+                    nodes(node_idx,:) = [x_fine(i), y_fine(j)]; node_idx=node_idx+1;
+                end
+            end
+        else
+            for i = 1:(2*nxe+1)
+                for j = 1:(2*nye+1)
+                    nodes(node_idx,:) = [x_fine(i), y_fine(j)]; node_idx=node_idx+1;
+                end
+            end
+        end
     end
 end
 
@@ -521,10 +652,11 @@ function [nodes, elem_conn, meta] = parse_explicit_mesh(vals, yaml, meta)
 end
 
 
-function [nodes, elem_conn, meta] = parse_1d_mesh(vals, yaml, meta)
+function [nodes, elem_conn, meta] = parse_1d_mesh(vals, yaml, meta, topo)
 % Parse 1D mesh using element lengths
     nodes = [];
     elem_conn = [];
+    if nargin < 4, topo = struct(); end
 
     first_read = get_first_read(yaml);
     if isempty(first_read)
@@ -532,43 +664,50 @@ function [nodes, elem_conn, meta] = parse_1d_mesh(vals, yaml, meta)
     end
 
     % 1D format: nels, np_types; prop; etype (optional); ell
-    nels = to_num(vals{1});
-    np_types = to_num(vals{2});
-    nn = nels + 1;
+    nels_orig = to_num(vals{1});
+    np_types  = to_num(vals{2});
 
-    meta.nels = nels;
-    meta.nn = nn;
-    meta.nod = 2;
-    meta.ndim = 1;
-
-    nprops = 1;
+    nprops    = 1;
     prop_count = nprops * np_types;
 
     % ell starts after header + prop + possible etype
     ell_start = 3 + prop_count;
     if np_types > 1
-        ell_start = ell_start + nels;  % etype array
+        ell_start = ell_start + nels_orig;
     end
 
-    % Extract element lengths
-    ell = zeros(1, nels);
-    for i = 1:nels
+    % Extract original element lengths
+    ell = zeros(1, nels_orig);
+    for i = 1:nels_orig
         idx = ell_start + i - 1;
         if idx <= numel(vals)
             ell(i) = to_num(vals{idx});
         end
     end
+    total_length = sum(ell);
+
+    % Apply topology override — keep total length, redistribute uniformly
+    if isfield(topo, 'nxe')
+        nels = round(topo.nxe);
+        ell  = repmat(total_length / nels, 1, nels);
+    else
+        nels = nels_orig;
+    end
+
+    nn = nels + 1;
+    meta.nels = nels;
+    meta.nn   = nn;
+    meta.nod  = 2;
+    meta.ndim = 1;
+    meta.ell  = ell;
 
     % Generate node positions (cumulative lengths)
     nodes = zeros(nn, 1);
-    nodes(1) = 0;
     for i = 1:nels
         nodes(i + 1) = nodes(i) + ell(i);
     end
 
-    meta.ell = ell;
-
-    % Generate simple connectivity
+    % Generate connectivity
     elem_conn = zeros(nels, 2);
     for e = 1:nels
         elem_conn(e, :) = [e, e + 1];
