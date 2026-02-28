@@ -110,7 +110,7 @@ if exist(fig_dir, 'dir')
     saved_pngs = dir(fullfile(fig_dir, sprintf('%s_*.png', case_name)));
     for pi = 1:numel(saved_pngs)
         png_full = fullfile(saved_pngs(pi).folder, saved_pngs(pi).name);
-        if strcmp(png_full, fig_path), continue; end   % skip the one we just saved
+        if startsWith(png_full, fig_prefix), continue; end   % skip figures just saved
         figure('Name', saved_pngs(pi).name, 'NumberTitle', 'off');
         imshow(imread(png_full));
         title(strrep(saved_pngs(pi).name, '_', ' '), 'Interpreter', 'none');
