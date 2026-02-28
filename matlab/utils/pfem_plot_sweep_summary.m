@@ -42,23 +42,31 @@ function fig = pfem_plot_sweep_summary(results, sweep_param, yaml_path, varargin
     n    = numel(results);
     vals = arrayfun(@(r) r.value, results);
 
-    % Parse displacement results for each run
-    nodes_arr = cell(n,1);
-    disp_arr  = cell(n,1);
-    ec_arr    = cell(n,1);
-    maxu_vec  = NaN(n,1);
+    % Parse displacement results for each run.
+    % parse_run returns either per-node displacements (Format A: elastic/structural)
+    % or a [load, max_disp] table (Format B: load-step nonlinear, e.g. p61 von Mises).
+    nodes_arr     = cell(n,1);
+    disp_arr      = cell(n,1);
+    ec_arr        = cell(n,1);
+    load_disp_arr = cell(n,1);
+    maxu_vec      = NaN(n,1);
 
     for i = 1:n
         if results(i).status ~= 0, continue; end
         ov = struct();
         ov.(sweep_param) = results(i).value;
-        [nd, dm, ec] = parse_run(results(i).out, yaml_path, ov);
-        nodes_arr{i} = nd;
-        disp_arr{i}  = dm;
-        ec_arr{i}    = ec;
+        [nd, dm, ec, ld] = parse_run(results(i).out, yaml_path, ov);
+        nodes_arr{i}     = nd;
+        disp_arr{i}      = dm;
+        ec_arr{i}        = ec;
+        load_disp_arr{i} = ld;
         if ~isempty(dm)
+            % Format A: per-node displacements
             nc = min(2, size(dm, 2));
             maxu_vec(i) = max(sqrt(sum(dm(:,1:nc).^2, 2)));
+        elseif ~isempty(ld)
+            % Format B: load-step table — use max|disp| at final step
+            maxu_vec(i) = max(abs(ld(:, 2)));
         end
     end
 
@@ -88,27 +96,38 @@ function fig = pfem_plot_sweep_summary(results, sweep_param, yaml_path, varargin
     if any(~ok)
         plot(ax_c, vals(~ok), zeros(1,sum(~ok)), 'rx', 'MarkerSize', 12, 'LineWidth', 2);
     end
+    has_ld = any(cellfun(@(x) ~isempty(x), load_disp_arr));
+    ylbl = 'max|u|';
+    if has_ld && ~any(cellfun(@(x) ~isempty(x), disp_arr))
+        ylbl = 'max displacement at final step';
+    end
     xlabel(ax_c, sweep_label, 'Color', [0.75 0.75 0.75], 'FontSize', 9);
-    ylabel(ax_c, 'max|u|',   'Color', [0.75 0.75 0.75], 'FontSize', 9);
+    ylabel(ax_c, ylbl,        'Color', [0.75 0.75 0.75], 'FontSize', 9);
     title(ax_c, sprintf('%s  —  sweep of  %s', case_title, sweep_label), ...
           'Color', [0.88 0.88 0.88], 'FontSize', 10, 'Interpreter', 'none');
     hold(ax_c, 'off');
 
-    % ---- Tiled deformed mesh panels ----
+    % ---- Tiled panels: deformed mesh (Format A) or load-disp curve (Format B) ----
     for i = 1:n
         ax  = subplot(rows+1, cols, cols+i, 'Parent', fig);
         set(ax, 'Color', [0.08 0.08 0.10]);
         nd = nodes_arr{i};
         dm = disp_arr{i};
         ec = ec_arr{i};
+        ld = load_disp_arr{i};
 
         if results(i).status == 0 && ~isempty(nd) && ~isempty(dm)
+            % Format A: draw deformed mesh
             draw_deformed(ax, nd, dm, ec);
             if isnan(maxu_vec(i))
                 lbl = sprintf('%s = %.4g', sweep_label, vals(i));
             else
                 lbl = sprintf('%s = %.4g\nmax|u| = %.3e', sweep_label, vals(i), maxu_vec(i));
             end
+        elseif results(i).status == 0 && ~isempty(ld)
+            % Format B: draw load-displacement curve
+            draw_load_disp(ax, ld, sweep_label, vals(i));
+            lbl = sprintf('%s = %.4g\nmax|u| = %.3e', sweep_label, vals(i), maxu_vec(i));
         else
             axis(ax, 'off');
             text(ax, 0.5, 0.5, sprintf('%s = %.4g\nN/A', sweep_label, vals(i)), ...
@@ -125,6 +144,24 @@ function fig = pfem_plot_sweep_summary(results, sweep_param, yaml_path, varargin
         if ~isempty(d) && ~exist(d, 'dir'), mkdir(d); end
         print(fig, save_path, '-dpng', '-r120');
     end
+end
+
+
+% ==========================================================================
+function draw_load_disp(ax, load_disp, sweep_label, sweep_val)
+% Draw a load-displacement curve for Format B .res files (nonlinear load-step output).
+    hold(ax, 'on'); grid(ax, 'on');
+    set(ax, 'Color', [0.08 0.08 0.10], ...
+            'XColor', [0.70 0.70 0.70], 'YColor', [0.70 0.70 0.70], ...
+            'GridColor', [0.30 0.30 0.30], 'GridAlpha', 0.4);
+    u = abs(load_disp(:, 2));   % max |displacement| at each step
+    p = load_disp(:, 1);         % applied load at each step
+    plot(ax, u, p, 'o-', ...
+         'Color', [0.40 0.75 0.40], 'MarkerFaceColor', [0.40 0.75 0.40], ...
+         'LineWidth', 1.5, 'MarkerSize', 4);
+    xlabel(ax, 'max|u|', 'Color', [0.70 0.70 0.70], 'FontSize', 8);
+    ylabel(ax, 'Load',   'Color', [0.70 0.70 0.70], 'FontSize', 8);
+    hold(ax, 'off');
 end
 
 
@@ -175,9 +212,16 @@ end
 
 
 % ==========================================================================
-function [nodes, disp_mat, elem_conn] = parse_run(out, yaml_path, overrides)
-% Parse nodal displacements from .res and coordinates from YAML.
-    nodes = []; disp_mat = []; elem_conn = [];
+function [nodes, disp_mat, elem_conn, load_disp] = parse_run(out, yaml_path, overrides)
+% Parse results from a PFEM .res file.
+%
+% Format A (structural/elastic): per-node displacements table.
+%   Returns: nodes (coords), disp_mat (Nx2+ displacements), elem_conn, load_disp=[]
+%
+% Format B (nonlinear load-step, e.g. p61 von Mises):
+%   "step  load  disp  iters" table.
+%   Returns: nodes=[], disp_mat=[], elem_conn=[], load_disp (Nx2 [load, max_disp])
+    nodes = []; disp_mat = []; elem_conn = []; load_disp = [];
 
     if ~isfield(out, 'files') || isempty(out.files), return; end
     res_files = out.files(cellfun(@(f) endsWith(f, '.res'), out.files));
@@ -203,7 +247,32 @@ function [nodes, disp_mat, elem_conn] = parse_run(out, yaml_path, overrides)
             break;
         end
     end
-    if disp_start == 0, return; end   % load table or eigenvalue output
+    if disp_start == 0
+        % Format A not found — check for Format B: "step  load  disp  iters" table
+        ld_start = 0;
+        for i = 1:numel(lines)
+            ln = strtrim(lines{i});
+            if contains(ln, 'step') && contains(ln, 'load') && contains(ln, 'disp')
+                ld_start = i + 1;
+                break;
+            end
+        end
+        if ld_start > 0
+            ld = [];
+            for i = ld_start:numel(lines)
+                ln = strtrim(lines{i});
+                if isempty(ln), break; end
+                v = sscanf(ln, '%f');
+                if numel(v) >= 3   % step, load, disp [, iters]
+                    ld(end+1, :) = [v(2), v(3)]; %#ok<AGROW>  [load, max_disp]
+                end
+            end
+            if ~isempty(ld)
+                load_disp = ld;
+            end
+        end
+        return;   % no per-node data (load-step or eigenvalue output)
+    end
 
     dd = [];
     for i = disp_start:numel(lines)
