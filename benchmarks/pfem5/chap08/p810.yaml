@@ -10,7 +10,7 @@ authors:
     dataset: p810
   entry:
     created_by: Naeem
-    created_on: '2026-02-24'
+    created_on: '2026-02-28'
     verified_platform: Linux (gfortran)
 code:
   language: Fortran (F2003)
@@ -73,8 +73,8 @@ tunable_parameters:
   unit_category: time
   current_value: '0.04'
   suggested_range:
-  - 1.0e-08
-  - 10.0
+  - 0.0004
+  - 4.0
 - name: number_of_steps
   global_token_index: 110
   line: 15

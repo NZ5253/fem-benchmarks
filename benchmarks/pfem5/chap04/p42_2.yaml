@@ -57,8 +57,8 @@ tunable_parameters:
   unit_category: stress
   current_value: 5.0e5
   suggested_range:
-  - 1000.0
-  - 1000000000000.0
+  - 5000.0
+  - 50000000.0
 - name: nels_or_nxe
   global_token_index: 1
   line: 1

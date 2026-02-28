@@ -10,7 +10,7 @@ authors:
     dataset: p71_2
   entry:
     created_by: Naeem
-    created_on: '2026-02-24'
+    created_on: '2026-02-28'
     verified_platform: Linux (gfortran)
 code:
   language: Fortran (F2003)
@@ -54,12 +54,12 @@ tunable_parameters:
   description: Permeability k or consolidation cv
   unit_category: permeability
   current_value: '3.0'
-  suggested_range:
-  - 1.0e-10
-  - 100.0
   book_reference:
     value: '3.0'
-    figure: 'Figure 7.3'
+    figure: Figure 7.3
+  suggested_range:
+  - 0.03
+  - 300.0
 - name: nels_or_nxe
   global_token_index: 1
   line: 1
@@ -178,7 +178,7 @@ how_to_run:
   - pfem_root = fullfile(getenv('HOME'), 'projects', 'fem-benchmarks', 'pfem');
   - '[status, out] = pfem_run_from_yaml(repo_root, pfem_root, yaml_path, struct());'
 verification:
-  book_figure: 'Figure 7.3'
+  book_figure: Figure 7.3
 notes:
 - Use global_token_index from tunable_parameters for patching.
 - The patcher replaces tokens by their 1-based index in the flat token list.

@@ -67,8 +67,8 @@ tunable_parameters:
   unit_category: stress
   current_value: '9.0'
   suggested_range:
-  - 0.0
-  - 1000000.0
+  - 0.09
+  - 900.0
 - name: dilation_angle_psi
   global_token_index: 6
   line: 2
@@ -98,7 +98,7 @@ tunable_parameters:
   current_value: 1.0e5
   suggested_range:
   - 1000.0
-  - 1000000000000.0
+  - 10000000.0
 - name: poisson_ratio_nu
   global_token_index: 9
   line: 2

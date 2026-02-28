@@ -106,7 +106,7 @@ tunable_parameters:
   current_value: 1.0e5
   suggested_range:
   - 1000.0
-  - 1000000000000.0
+  - 10000000.0
 - name: poisson_ratio_nu
   global_token_index: 10
   line: 2
@@ -146,7 +146,7 @@ tunable_parameters:
   current_value: '35'
   suggested_range:
   - 1
-  - 1000
+  - 500
 - name: prescribed_increment
   global_token_index: 137
   line: 14
@@ -155,8 +155,8 @@ tunable_parameters:
   unit_category: mixed
   current_value: '2.0e-5'
   suggested_range:
-  - -1000000.0
-  - 1000000.0
+  - 2.0e-07
+  - 0.002
 - name: nels_or_nxe
   global_token_index: 1
   line: 1

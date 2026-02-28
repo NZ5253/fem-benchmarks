@@ -55,8 +55,8 @@ tunable_parameters:
   unit_category: stress
   current_value: 4.0e4
   suggested_range:
-  - 1000.0
-  - 1000000000000.0
+  - 400.0
+  - 4000000.0
 - name: poisson_ratio_nu
   global_token_index: 5
   line: 2

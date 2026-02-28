@@ -49,8 +49,8 @@ tunable_parameters:
   unit_category: stress
   current_value: '1.0'
   suggested_range:
-  - 1.0e-06
-  - 1000000000000.0
+  - 0.01
+  - 100.0
 - name: mass_per_length_rhoA
   global_token_index: 5
   line: 2
@@ -59,8 +59,8 @@ tunable_parameters:
   unit_category: density
   current_value: '800.0'
   suggested_range:
-  - 1.0e-06
-  - 1000000.0
+  - 8.0
+  - 80000.0
 - name: iteration_limit
   global_token_index: 17
   line: 6

@@ -46,7 +46,7 @@ tunable_parameters:
   current_value: '3'
   suggested_range:
   - 1
-  - 1000
+  - 500
 - name: iteration_limit
   global_token_index: 5
   line: 1
@@ -86,7 +86,7 @@ tunable_parameters:
   current_value: 1.0e5
   suggested_range:
   - 1000.0
-  - 1000000000000.0
+  - 10000000.0
 - name: poisson_ratio_fill
   global_token_index: 13
   line: 3
@@ -105,8 +105,8 @@ tunable_parameters:
   unit_category: stress
   current_value: '14.0'
   suggested_range:
-  - 0.0
-  - 1000000.0
+  - 0.14
+  - 1400.0
 - name: friction_angle_fill
   global_token_index: 15
   line: 3
@@ -146,7 +146,7 @@ tunable_parameters:
   current_value: 1.0e5
   suggested_range:
   - 1000.0
-  - 1000000000000.0
+  - 10000000.0
 - name: poisson_ratio_embankment
   global_token_index: 19
   line: 4
@@ -165,8 +165,8 @@ tunable_parameters:
   unit_category: stress
   current_value: '14.0'
   suggested_range:
-  - 0.0
-  - 1000000.0
+  - 0.14
+  - 1400.0
 - name: friction_angle_embankment
   global_token_index: 21
   line: 4

@@ -10,7 +10,7 @@ authors:
     dataset: p102_1
   entry:
     created_by: Naeem
-    created_on: '2026-02-24'
+    created_on: '2026-02-28'
     verified_platform: Linux (gfortran)
 code:
   language: Fortran (F2003)
@@ -51,8 +51,8 @@ tunable_parameters:
   unit_category: stress
   current_value: '1.0'
   suggested_range:
-  - 1.0e-06
-  - 1000000000000.0
+  - 0.01
+  - 100.0
 - name: poisson_ratio_nu
   global_token_index: 6
   line: 3
@@ -71,8 +71,8 @@ tunable_parameters:
   unit_category: density
   current_value: '1.0'
   suggested_range:
-  - 1.0e-08
-  - 100000.0
+  - 0.01
+  - 100.0
 - name: number_of_modes
   global_token_index: 23
   line: 8

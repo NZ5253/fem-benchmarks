@@ -10,7 +10,7 @@ authors:
     dataset: p101
   entry:
     created_by: Naeem
-    created_on: '2026-02-24'
+    created_on: '2026-02-28'
     verified_platform: Linux (gfortran)
 code:
   language: Fortran (F2003)
@@ -51,8 +51,8 @@ tunable_parameters:
   unit_category: stress
   current_value: '0.08333'
   suggested_range:
-  - 1.0e-06
-  - 1000000000000.0
+  - 0.00083
+  - 8.3
 - name: mass_per_length_rhoA
   global_token_index: 4
   line: 3
@@ -61,8 +61,8 @@ tunable_parameters:
   unit_category: density
   current_value: '1.0'
   suggested_range:
-  - 1.0e-06
-  - 1000000.0
+  - 0.01
+  - 100.0
 - name: number_of_modes
   global_token_index: 14
   line: 7

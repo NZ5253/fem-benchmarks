@@ -10,7 +10,7 @@ authors:
     dataset: p55
   entry:
     created_by: Naeem
-    created_on: '2026-02-24'
+    created_on: '2026-02-28'
     verified_platform: Linux (gfortran)
 code:
   language: Fortran (F2003)
@@ -62,7 +62,7 @@ tunable_parameters:
   current_value: 1.0e5
   suggested_range:
   - 1000.0
-  - 1000000000000.0
+  - 10000000.0
 - name: poisson_ratio_nu
   global_token_index: 10
   line: 4
@@ -81,8 +81,8 @@ tunable_parameters:
   unit_category: density
   current_value: '1.E-5'
   suggested_range:
+  - 1.0e-07
   - 0.001
-  - 100000.0
 - name: yield_stress
   global_token_index: 12
   line: 4
@@ -91,8 +91,8 @@ tunable_parameters:
   unit_category: stress
   current_value: '1.E-5'
   suggested_range:
-  - 10.0
-  - 1000000.0
+  - 1.0e-07
+  - 0.001
 - name: nels_or_nxe
   global_token_index: 3
   line: 2

@@ -57,8 +57,8 @@ tunable_parameters:
   unit_category: stress
   current_value: '100.0'
   suggested_range:
-  - 10.0
-  - 1000000.0
+  - 1.0
+  - 10000.0
 - name: youngs_modulus_E
   global_token_index: 5
   line: 2
@@ -68,7 +68,7 @@ tunable_parameters:
   current_value: 1.0e5
   suggested_range:
   - 1000.0
-  - 1000000000000.0
+  - 10000000.0
 - name: poisson_ratio_nu
   global_token_index: 6
   line: 2
@@ -108,7 +108,7 @@ tunable_parameters:
   current_value: '10'
   suggested_range:
   - 1
-  - 1000
+  - 500
 - name: nels_or_nxe
   global_token_index: 1
   line: 1

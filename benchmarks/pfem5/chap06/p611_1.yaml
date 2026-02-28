@@ -81,8 +81,8 @@ tunable_parameters:
   unit_category: stress
   current_value: 2.5e4
   suggested_range:
-  - 1000.0
-  - 1000000000000.0
+  - 250.0
+  - 2500000.0
 - name: poisson_ratio_nu
   global_token_index: 7
   line: 2
@@ -101,8 +101,8 @@ tunable_parameters:
   unit_category: stress
   current_value: 1.0e6
   suggested_range:
-  - 1.0
-  - 1000000000000.0
+  - 10000.0
+  - 100000000.0
 - name: initial_effective_stress
   global_token_index: 9
   line: 2
@@ -111,7 +111,7 @@ tunable_parameters:
   unit_category: stress
   current_value: '-100.0'
   suggested_range:
-  - -1000000000.0
+  - -10000.0
   - 0.0
 - name: convergence_tolerance
   global_token_index: 37
@@ -140,12 +140,12 @@ tunable_parameters:
   description: Number of load increments
   unit_category: count
   current_value: '8'
-  suggested_range:
-  - 1
-  - 1000
   book_reference:
     value: '8'
-    figure: 'Figure 6.49'
+    figure: Figure 6.49
+  suggested_range:
+  - 1
+  - 500
 - name: prescribed_increment
   global_token_index: 40
   line: 9
@@ -154,8 +154,8 @@ tunable_parameters:
   unit_category: mixed
   current_value: '-2.0e-3'
   suggested_range:
-  - -1000000.0
-  - 1000000.0
+  - -0.2
+  - -2.0e-05
 - name: nels_or_nxe
   global_token_index: 1
   line: 1
@@ -278,7 +278,7 @@ how_to_run:
   - pfem_root = fullfile(getenv('HOME'), 'projects', 'fem-benchmarks', 'pfem');
   - '[status, out] = pfem_run_from_yaml(repo_root, pfem_root, yaml_path, struct());'
 verification:
-  book_figure: 'Figure 6.49'
+  book_figure: Figure 6.49
 notes:
 - Use global_token_index from tunable_parameters for patching.
 - The patcher replaces tokens by their 1-based index in the flat token list.

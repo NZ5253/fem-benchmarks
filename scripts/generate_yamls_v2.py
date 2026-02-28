@@ -873,6 +873,153 @@ def analyze_source_for_metadata(source_file):
 
 
 # =============================================================================
+# SUGGESTED RANGE REFINEMENT
+# =============================================================================
+
+def _round_to_2sf(x):
+    """Round x to 2 significant figures for clean suggested_range display."""
+    import math
+    if x == 0.0:
+        return 0.0
+    mag = math.floor(math.log10(abs(x)))
+    # round(x, ndigits) avoids float-multiplication artifacts (e.g. 20*1e-6 != 2e-5)
+    return round(x, -(mag - 1))
+
+
+# Parameters with absolute physical bounds (fixed, not relative to current value)
+_FIXED_RANGES = {
+    'poisson_ratio_nu':               [0.0,  0.49],
+    'poisson_ratio_fill':             [0.0,  0.49],
+    'poisson_ratio_embankment':       [0.0,  0.49],
+    'poisson_ratio_nu_prop1':         [0.0,  0.49],
+    'poisson_ratio_nu_prop2':         [0.0,  0.49],
+    'poisson_ratio_nu_prop3':         [0.0,  0.49],
+    'poisson_ratio_nu_prop4':         [0.0,  0.49],
+    'friction_angle_phi':             [0.0,  45.0],
+    'friction_angle_fill':            [0.0,  45.0],
+    'friction_angle_embankment':      [0.0,  45.0],
+    'dilation_angle_psi':             [0.0,  45.0],
+    'dilation_angle_fill':            [0.0,  45.0],
+    'dilation_angle_embankment':      [0.0,  45.0],
+    'earth_pressure_coeff_k0':        [0.0,  2.0],
+    'unit_weight_gamma':              [0.0,  100.0],
+    'unit_weight_fill':               [0.0,  100.0],
+    'unit_weight_embankment':         [0.0,  100.0],
+    'theta_integration':              [0.5,  1.0],
+    'newmark_beta':                   [0.0,  0.5],
+    'newmark_gamma':                  [0.5,  1.0],
+    'mass_damping_factor':            [0.0,  10.0],
+    'stiffness_damping_factor':       [0.0,  1.0],
+    'damping_ratio':                  [0.0,  1.0],
+    'convergence_tolerance':          [1e-12, 0.1],
+    'cg_tolerance':                   [1e-14, 0.01],
+    'local_yield_tolerance_ltol':     [1e-8,  0.01],
+    'iteration_limit':                [10,    10000],
+    'cg_iteration_limit':             [100,   1000000],
+    'load_increments':                [1,     500],
+    'number_of_steps':                [10,    100000],
+    'number_of_modes':                [1,     100],
+    'num_eigenvalues':                [1,     100],
+    'krylov_subspace_size':           [5,     500],
+    'max_arnoldi_iterations':         [100,   100000],
+}
+
+# Name substrings that trigger relative range [v*0.01, v*100]
+_RELATIVE_SUBSTRINGS = (
+    'youngs_modulus', 'axial_stiffness', 'stiffness_e_or_ei',
+    'yield_stress', 'bulk_modulus',
+    'permeability', 'conductivity', 'heat_capacity',
+    'time_step', 'natural_frequency', 'dynamic_viscosity',
+    'density_rho', 'mass_per_length',
+)
+
+
+def refine_suggested_ranges(tunables):
+    """Post-process tunables: apply physically accurate suggested_range values.
+
+    Two strategies:
+    - FIXED:    absolute physical bounds (ν, angles, tolerances, counts).
+    - RELATIVE: [v×0.01, v×100] rounded to 2 sig figs (E, k, σ_y, dtim, …).
+    Special cases: cohesion=0 → [0, 1e6]; cons<0 → [v×100, 0]; presc<0 → negated.
+    """
+    for param in tunables:
+        name = param.get('name', '')
+
+        # Mesh topology params carry a WARNING note — keep original range
+        if param.get('note', '').startswith('WARNING'):
+            continue
+
+        # 1. Fixed absolute bounds
+        if name in _FIXED_RANGES:
+            param['suggested_range'] = list(_FIXED_RANGES[name])
+            continue
+
+        # 2. initial_effective_stress (cons) — typically negative (compressive)
+        if name == 'initial_effective_stress':
+            try:
+                v = float(str(param.get('current_value', '0')).strip("'"))
+            except (ValueError, TypeError):
+                continue
+            if v < 0:
+                param['suggested_range'] = [_round_to_2sf(v * 100), 0.0]
+            elif v > 0:
+                param['suggested_range'] = [_round_to_2sf(v * 0.01),
+                                            _round_to_2sf(v * 100)]
+            continue
+
+        # 3. prescribed_increment — can be negative (displacement-controlled)
+        if name == 'prescribed_increment':
+            try:
+                v = float(str(param.get('current_value', '0')).strip("'"))
+            except (ValueError, TypeError):
+                continue
+            if v == 0.0:
+                param['suggested_range'] = [-1e6, 1e6]
+            elif v < 0:
+                hi = _round_to_2sf(abs(v) * 100)
+                lo = _round_to_2sf(abs(v) * 0.01)
+                param['suggested_range'] = [-hi, -lo]
+            else:
+                param['suggested_range'] = [_round_to_2sf(v * 0.01),
+                                            _round_to_2sf(v * 100)]
+            continue
+
+        # 4. cohesion — c=0 (smooth soil) needs absolute fallback
+        if 'cohesion' in name:
+            try:
+                v = float(str(param.get('current_value', '0')).strip("'"))
+            except (ValueError, TypeError):
+                continue
+            if v == 0.0:
+                param['suggested_range'] = [0.0, 1e6]
+            else:
+                param['suggested_range'] = [_round_to_2sf(v * 0.01),
+                                            _round_to_2sf(v * 100)]
+            continue
+
+        # 5. Scale-sensitive parameters — relative range (case-insensitive match)
+        if any(sub in name.lower() for sub in _RELATIVE_SUBSTRINGS):
+            try:
+                v = float(str(param.get('current_value', '0')).strip("'"))
+            except (ValueError, TypeError):
+                continue
+            if v == 0.0:
+                continue  # cannot form relative range from zero
+            abs_v = abs(v)
+            lo = _round_to_2sf(abs_v * 0.01)
+            hi = _round_to_2sf(abs_v * 100)
+            # Clamp permeability / conductivity lower bound
+            if 'permeability' in name or 'conductivity' in name:
+                lo = max(lo, 1e-12)
+            # Ensure lo < hi after rounding
+            if lo >= hi:
+                hi = lo * 100
+            param['suggested_range'] = [lo, hi]
+
+    return tunables
+
+
+# =============================================================================
 # YAML GENERATION
 # =============================================================================
 
@@ -887,6 +1034,7 @@ def generate_yaml(case, chapter, program, source_file, dat_file):
 
     # Detect tunable parameters
     tunables = detect_tunables_comprehensive(tokens, token_positions, read_stmts, source_file)
+    tunables = refine_suggested_ranges(tunables)
 
     # Get metadata
     metadata = analyze_source_for_metadata(source_file)

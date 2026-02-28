@@ -59,8 +59,8 @@ tunable_parameters:
   unit_category: stress
   current_value: 4.0e6
   suggested_range:
-  - 1000.0
-  - 1000000000000.0
+  - 40000.0
+  - 400000000.0
 - name: poisson_ratio_nu
   global_token_index: 7
   line: 2
@@ -79,7 +79,7 @@ tunable_parameters:
   unit_category: dimensionless
   current_value: 0.3e6
   suggested_range:
-  - 0.0
+  - 0.5
   - 1.0
 - name: nels_or_nxe
   global_token_index: 1

@@ -10,7 +10,7 @@ authors:
     dataset: p91
   entry:
     created_by: Naeem
-    created_on: '2026-02-24'
+    created_on: '2026-02-28'
     verified_platform: Linux (gfortran)
 code:
   language: Fortran (F2003)
@@ -69,8 +69,8 @@ tunable_parameters:
   unit_category: viscosity
   current_value: '0.01'
   suggested_range:
-  - 1.0e-06
-  - 100.0
+  - 0.0001
+  - 1.0
 - name: density_rho
   global_token_index: 6
   line: 1
@@ -79,8 +79,8 @@ tunable_parameters:
   unit_category: density
   current_value: '1.0'
   suggested_range:
-  - 0.001
-  - 100000.0
+  - 0.01
+  - 100.0
 - name: nels_or_nxe
   global_token_index: 1
   line: 1
