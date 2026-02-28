@@ -42,7 +42,7 @@ function pfem_compare_results(out, varargin)
         if do_text
             fprintf('Original: %s\n', out.original_res);
         end
-        [orig_disp, orig_stress] = parse_res_file(out.original_res);
+        [orig_disp, orig_stress, orig_ld] = parse_res_file(out.original_res);
     else
         if do_text
             fprintf('Original .res not found. Run the base case first.\n');
@@ -62,7 +62,7 @@ function pfem_compare_results(out, varargin)
     if do_text
         fprintf('Modified: %s\n', mod_res);
     end
-    [mod_disp, mod_stress] = parse_res_file(mod_res);
+    [mod_disp, mod_stress, mod_ld] = parse_res_file(mod_res);
 
     % Get parameter info
     param_name = '';
@@ -81,65 +81,86 @@ function pfem_compare_results(out, varargin)
         param_value = out.overrides.(param_name);
     end
 
-    % Compare displacements
+    % Detect format and show appropriate comparison
+    is_format_b = ~isempty(orig_ld) || ~isempty(mod_ld);
+
     if do_text
         fprintf('\n--- Displacement Comparison ---\n');
     end
-    if ~isempty(orig_disp) && ~isempty(mod_disp)
+
+    if is_format_b
+        % Format B: nonlinear load-step table (e.g. p61 von Mises)
+        if do_text
+            fprintf('(Format B: nonlinear load-step output)\n');
+            fprintf('%-6s  %12s  %14s  %14s\n', 'Step', 'Load', 'Orig max|u|', 'Mod max|u|');
+            fprintf('%s\n', repmat('-', 1, 52));
+            n_orig = size(orig_ld, 1);
+            n_mod  = size(mod_ld,  1);
+            n_rows = max(n_orig, n_mod);
+            for i = 1:min(n_rows, 15)
+                o_load = NaN; o_u = NaN; m_load = NaN; m_u = NaN;
+                if i <= n_orig, o_load = orig_ld(i,1); o_u = orig_ld(i,2); end
+                if i <= n_mod,  m_load = mod_ld(i,1);  m_u = mod_ld(i,2);  end
+                fprintf('%-6d  %12.4e  %14.4e  %14.4e\n', i, o_load, o_u, m_u);
+            end
+            if n_rows > 15
+                fprintf('... (%d more steps)\n', n_rows - 15);
+            end
+            if ~isempty(orig_ld) && ~isempty(mod_ld)
+                fprintf('\nFinal max|u|: orig = %.4e  mod = %.4e  ratio = %.3f\n', ...
+                        orig_ld(end,2), mod_ld(end,2), ...
+                        mod_ld(end,2) / max(abs(orig_ld(end,2)), eps));
+            end
+        end
+    elseif ~isempty(orig_disp) && ~isempty(mod_disp)
+        % Format A: per-node displacement table
         if do_text
             fprintf('%-6s  %12s  %12s  %12s  %12s\n', 'Node', 'Orig_X', 'Mod_X', 'Orig_Y', 'Mod_Y');
             fprintf('%s\n', repmat('-', 1, 60));
-            n_nodes = min(size(orig_disp, 1), size(mod_disp, 1));
+            n_nodes = min(size(orig_disp,1), size(mod_disp,1));
             for i = 1:min(n_nodes, 12)
                 fprintf('%-6d  %12.4e  %12.4e  %12.4e  %12.4e\n', ...
                     i, orig_disp(i,1), mod_disp(i,1), orig_disp(i,2), mod_disp(i,2));
             end
-            if n_nodes > 12
-                fprintf('... (%d more nodes)\n', n_nodes - 12);
-            end
-
-            disp_diff = mod_disp - orig_disp(1:size(mod_disp,1), :);
-            max_diff = max(abs(disp_diff(:)));
-            rel_diff = max_diff / max(abs(orig_disp(:)));
+            if n_nodes > 12, fprintf('... (%d more nodes)\n', n_nodes - 12); end
+            disp_diff = mod_disp - orig_disp(1:size(mod_disp,1),:);
+            max_diff  = max(abs(disp_diff(:)));
+            rel_diff  = max_diff / max(abs(orig_disp(:)));
             fprintf('\nMax absolute difference: %.4e\n', max_diff);
             fprintf('Max relative difference: %.2f%%\n', rel_diff * 100);
         end
     else
-        if do_text
-            fprintf('Could not parse displacement data.\n');
-        end
+        if do_text, fprintf('Could not parse displacement data.\n'); end
     end
 
-    % Compare stresses
+    % Stress comparison (Format A only)
     if do_text
         fprintf('\n--- Stress Comparison ---\n');
     end
-    if ~isempty(orig_stress) && ~isempty(mod_stress)
+    if ~is_format_b && ~isempty(orig_stress) && ~isempty(mod_stress)
         if do_text
             fprintf('%-4s  %10s  %10s  %10s  %10s  %10s  %10s\n', ...
                 'Elem', 'Orig_sigX', 'Mod_sigX', 'Orig_sigY', 'Mod_sigY', 'Orig_tauXY', 'Mod_tauXY');
             fprintf('%s\n', repmat('-', 1, 75));
-            n_elem = min(size(orig_stress, 1), size(mod_stress, 1));
+            n_elem = min(size(orig_stress,1), size(mod_stress,1));
             for i = 1:min(n_elem, 10)
                 fprintf('%-4d  %10.3e  %10.3e  %10.3e  %10.3e  %10.3e  %10.3e\n', ...
                     i, orig_stress(i,3), mod_stress(i,3), ...
-                    orig_stress(i,4), mod_stress(i,4), ...
-                    orig_stress(i,5), mod_stress(i,5));
+                       orig_stress(i,4), mod_stress(i,4), ...
+                       orig_stress(i,5), mod_stress(i,5));
             end
-
             if max(abs(mod_stress(:,3))) > 0
-                stress_ratio = orig_stress(1,3) / mod_stress(1,3);
-                fprintf('\nStress ratio (orig/mod): %.2f\n', stress_ratio);
+                fprintf('\nStress ratio (orig/mod): %.2f\n', orig_stress(1,3)/mod_stress(1,3));
             end
         end
+    elseif is_format_b
+        if do_text, fprintf('(load-step output — stress table not applicable)\n'); end
     else
-        if do_text
-            fprintf('Could not parse stress data.\n');
-        end
+        if do_text, fprintf('Could not parse stress data.\n'); end
     end
 
-    % Plot if requested
-    if do_plot && ~isempty(orig_disp) && ~isempty(mod_disp)
+    % Plot if requested (Format A only — Format B plots are in pfem_plot_sweep_summary)
+    if do_plot && ~is_format_b && ~isempty(orig_disp) && ~isempty(mod_disp)
         plot_single_comparison(orig_disp, mod_disp, orig_stress, mod_stress, out, do_save);
     end
 
@@ -265,10 +286,15 @@ function compare_sweep(results, do_plot, do_save)
 end
 
 
-function [disp_data, stress_data] = parse_res_file(res_path)
-% Parse PFEM .res file to extract displacements and stresses
-    disp_data = [];
+function [disp_data, stress_data, ld_data] = parse_res_file(res_path)
+% Parse PFEM .res file.
+% Returns Format A (per-node disp/stress) or Format B (load-step table).
+%   disp_data  : Format A Nx2 [x-disp, y-disp]     (empty for Format B)
+%   stress_data: Format A Nx5+ stress rows           (empty for Format B)
+%   ld_data    : Format B Nx2 [load, max_disp]       (empty for Format A)
+    disp_data   = [];
     stress_data = [];
+    ld_data     = [];
 
     if ~exist(res_path, 'file')
         return;
@@ -329,6 +355,29 @@ function [disp_data, stress_data] = parse_res_file(res_path)
         end
         if ~isempty(stress_rows)
             stress_data = vertcat(stress_rows{:});
+        end
+    end
+
+    % Format B: load-step table ("step load disp iters")
+    % Only populated when Format A header was absent.
+    if isempty(disp_data) && isempty(stress_data)
+        for i = 1:numel(lines)
+            ln = strtrim(lines{i});
+            if contains(ln,'step') && contains(ln,'load') && contains(ln,'disp')
+                ld_rows = {};
+                for j = i+1:numel(lines)
+                    ln2 = strtrim(lines{j});
+                    if isempty(ln2), break; end
+                    v = sscanf(ln2, '%f');
+                    if numel(v) >= 3
+                        ld_rows{end+1} = [v(2), v(3)]; %#ok<AGROW>  [load, max_disp]
+                    end
+                end
+                if ~isempty(ld_rows)
+                    ld_data = vertcat(ld_rows{:});
+                end
+                break;
+            end
         end
     end
 end

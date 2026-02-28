@@ -17,31 +17,36 @@ addpath(genpath(fullfile(repo_root, 'matlab')));
 %% ---- CONFIGURATION — edit this section ----
 % ============================================================
 
-%% 1. YAML case(s) to run  (add more paths to the cell array for batch runs)
+%% 1. YAML case(s) to run
+%    Add or remove entries; every case runs the same scenario set.
 yaml_paths = {
-    fullfile(repo_root, 'benchmarks', 'pfem5', 'chap06', 'p61.yaml'),
-    % fullfile(repo_root, 'benchmarks', 'pfem5', 'chap06', 'p63.yaml'),
+    fullfile(repo_root, 'benchmarks', 'pfem5', 'chap06', 'p61.yaml'),   % von Mises plasticity
+    fullfile(repo_root, 'benchmarks', 'pfem5', 'chap06', 'p63.yaml'),   % Mohr-Coulomb bearing cap
 };
 
-%% 2. Show tunables for the first case (comment out once you've chosen parameters)
+%% 2. Show tunables for the first case (comment out after choosing parameters)
 fprintf('=== Tunable parameters ===\n\n');
 pfem_show_tunables(yaml_paths{1});
 
 %% 3. Define parameter scenarios
+%    All parameters in a scenario are applied simultaneously to every case.
 %
-% --- Single-parameter sweep (simplest) ---
-scenarios = pfem_make_scenarios('yield_stress', [50, 100, 200, 500]);
-
-% --- Multiple parameters varied together in lockstep ---
-%     (all value arrays must have the same number of elements)
-% scenarios = pfem_make_scenarios( ...
-%     'yield_stress',     [50,   100,  200], ...
-%     'youngs_modulus_E', [1e5,  2e5,  1e5]);
-
-% --- Fully manual: any combination of params per scenario ---
-%     Label is optional — if omitted NZ.m will auto-fill 'sc1','sc2',...
-% scenarios(1) = struct('label','soft-weak',  'yield_stress',  50, 'youngs_modulus_E',1e5);
-% scenarios(2) = struct('label','hard-stiff', 'yield_stress', 200, 'youngs_modulus_E',2e5);
+% ---- Option A: single-parameter sweep ----
+%      Four yield-stress levels for the p61 von Mises case:
+% scenarios = pfem_make_scenarios('yield_stress', [50, 100, 200, 500]);
+%
+% ---- Option B: multiple parameters varied in lockstep ----
+%      (all arrays must be the same length)
+scenarios = pfem_make_scenarios( ...
+    'yield_stress',     [50,   100,  200,  500], ...
+    'youngs_modulus_E', [5e4,  1e5,  2e5,  1e5]);
+%
+% ---- Option C: fully manual — any mix of params per scenario ----
+%      (label is optional; NZ.m auto-fills 'sc1','sc2',... if missing)
+% scenarios(1) = struct('label','low-sy',   'yield_stress',  50, 'youngs_modulus_E',5e4);
+% scenarios(2) = struct('label','baseline', 'yield_stress', 100, 'youngs_modulus_E',1e5);
+% scenarios(3) = struct('label','high-E',   'yield_stress', 100, 'youngs_modulus_E',2e5);
+% scenarios(4) = struct('label','high-sy',  'yield_stress', 500, 'youngs_modulus_E',1e5);
 
 % ============================================================
 %% ---- End of configuration ----
@@ -54,14 +59,14 @@ for si = 1:numel(scenarios)
     end
 end
 
-%% Determine sweep display name for figure axes
-%   • Single param   → use the parameter name (e.g. "yield stress")
-%   • Multiple params → 'Scenario'
+%% Determine sweep_param for pfem_plot_sweep_summary
+%   • Single param  → raw field name with underscores (function converts for display)
+%   • Multiple params → 'Scenario'  (valid MATLAB identifier)
 sc_fields  = fieldnames(rmfield(scenarios(1), 'label'));   % param fields only
 if numel(sc_fields) == 1
-    sweep_display = strrep(sc_fields{1}, '_', ' ');
+    sweep_display = sc_fields{1};        % keep underscores — used as struct field internally
 else
-    sweep_display = 'Scenario';
+    sweep_display = 'Scenario';          % multi-param: use index on x-axis
 end
 
 % ============================================================

@@ -65,8 +65,15 @@ function figs = pfem_plot_sweep_summary(results, sweep_param, yaml_path, varargi
     for i = 1:n
         if results(i).status ~= 0, continue; end
 
-        % Parse .res (Format A or Format B)
-        ov = struct(); ov.(sweep_param) = results(i).value;
+        % Parse .res — use the actual run overrides for coord extraction so
+        % multi-param scenarios supply all changed values, not just one.
+        if isfield(results(i).out, 'overrides') && ~isempty(fieldnames(results(i).out.overrides))
+            ov = results(i).out.overrides;
+        elseif isfield(results(i), 'overrides') && ~isempty(fieldnames(results(i).overrides))
+            ov = results(i).overrides;
+        else
+            ov = struct();
+        end
         [nd, dm, ec, ld] = parse_res(results(i).out, yaml_path, ov);
         nodes_arr{i}     = nd;
         disp_arr{i}      = dm;
