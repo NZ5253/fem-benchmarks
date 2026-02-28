@@ -31,18 +31,14 @@ function ok = pfem_ensure_built(repo_root, pfem_root, program, chapter)
     cmd = sprintf('bash "%s" "%s" %s 2>&1', build_script, pfem_root, chapter);
     [rc, output] = system(cmd);
 
-    if rc ~= 0
-        fprintf('  [build] BUILD FAILED (exit code %d):\n', rc);
-        fprintf('%s\n', output);
-        ok = false;
-        return;
-    end
-
-    % Confirm binary now exists
+    % Determine success by whether OUR binary now exists.
+    % The build script may exit non-zero when other programs in the chapter
+    % fail (e.g. stale YAML entries with no matching .f03 source), even
+    % though the specific binary we need was compiled successfully.
     ok = exist(exe, 'file') > 0;
     if ok
         fprintf('  [build] OK — binary ready: %s\n', exe);
     else
-        fprintf('  [build] Build script exited 0 but binary still missing: %s\n', exe);
+        fprintf('  [build] BUILD FAILED (exit code %d) — binary still missing:\n%s\n', rc, output);
     end
 end
