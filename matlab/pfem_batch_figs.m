@@ -107,25 +107,31 @@ function saved = process_case(yaml_path, repo_root, pfem_root)
         results(i).out    = out;
     end
 
-    % --- Generate + save figure (hidden — batch mode) ---
-    fig_dir  = fullfile(repo_root, 'figures', chap_str);
-    fig_path = fullfile(fig_dir, sprintf('%s_%s.png', case_name, sweep_param));
+    % --- Generate + save figures (hidden — batch mode) ---
+    fig_dir    = fullfile(repo_root, 'figures', chap_str);
+    fig_prefix = fullfile(fig_dir, sprintf('%s_%s', case_name, sweep_param));
 
-    fig = pfem_plot_sweep_summary(results, sweep_param, yaml_path, ...
+    figs = pfem_plot_sweep_summary(results, sweep_param, yaml_path, ...
             'Title', sprintf('PFEM %s — %s sweep', case_name, strrep(sweep_param,'_',' ')), ...
-            'Save', fig_path, ...
+            'Save', fig_prefix, ...
             'Show', false);
 
     % Check whether anything useful was drawn
     n_ok = sum([results.status] == 0);
     if n_ok == 0
         fprintf('  [skip] %-12s — no results (binary missing or non-structural)\n', case_name);
-        close(fig);
+        fn = fieldnames(figs);
+        for fi = 1:numel(fn)
+            if ~isempty(figs.(fn{fi})) && ishandle(figs.(fn{fi})), close(figs.(fn{fi})); end
+        end
         return;
     end
 
-    fprintf('  [saved] figures/%s/%s_%s.png\n', chap_str, case_name, sweep_param);
-    close(fig);
+    fprintf('  [saved] figures/%s/%s_%s_*.png\n', chap_str, case_name, sweep_param);
+    fn = fieldnames(figs);
+    for fi = 1:numel(fn)
+        if ~isempty(figs.(fn{fi})) && ishandle(figs.(fn{fi})), close(figs.(fn{fi})); end
+    end
     saved = 1;
 end
 

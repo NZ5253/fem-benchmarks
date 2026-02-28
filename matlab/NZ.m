@@ -89,20 +89,20 @@ end
 % Generates: parameter-vs-max|u| curve  +  tiled deformed mesh panels.
 % Saves to figures/<chap>/<case>_<param>.png  and  stays open in MATLAB.
 
-fprintf('\nGenerating sweep comparison figure...\n');
+fprintf('\nGenerating sweep comparison figures...\n');
 
-% Derive save path from yaml_path
+% Derive save prefix from yaml_path  (each output type appends _res/_msh/_dis/_vec)
 [yaml_dir, case_name, ~] = fileparts(yaml_path);
 [~, chap_str] = fileparts(yaml_dir);   % e.g. 'chap06'
-fig_dir  = fullfile(repo_root, 'figures', chap_str);
-fig_path = fullfile(fig_dir, sprintf('%s_%s.png', case_name, sweep_param));
+fig_dir    = fullfile(repo_root, 'figures', chap_str);
+fig_prefix = fullfile(fig_dir, sprintf('%s_%s', case_name, sweep_param));
 
 pfem_plot_sweep_summary(results, sweep_param, yaml_path, ...
     'Title', sprintf('PFEM %s — %s sweep', case_name, strrep(sweep_param,'_',' ')), ...
-    'Save',  fig_path, ...
+    'Save',  fig_prefix, ...
     'Show',  true);
 
-fprintf('Figure saved: figures/%s/%s_%s.png\n', chap_str, case_name, sweep_param);
+fprintf('Figures saved to: figures/%s/%s_%s_*.png\n', chap_str, case_name, sweep_param);
 
 %% ---- Show any previously saved PNG figures for this case ----
 % Displays PNGs from figures/<chap>/ that are named for the current case.
