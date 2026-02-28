@@ -43,6 +43,15 @@ function figs = pfem_plot_sweep_summary(results, sweep_param, yaml_path, varargi
     n    = numel(results);
     vals = arrayfun(@(r) r.value, results);
 
+    % Per-result display labels (scenario label if present, else param=val)
+    has_labels = all(arrayfun(@(r) isfield(r,'label') && ~isempty(r.label), results));
+    if has_labels
+        panel_labels = {results.label};
+    else
+        panel_labels = arrayfun(@(r) sprintf('%s = %.4g', sweep_label, r.value), ...
+                                results, 'UniformOutput', false);
+    end
+
     % ---- Collect all result data ----------------------------------------
     load_disp_arr = cell(n,1);   % Format B: [load, max_disp] per step
     nodes_arr     = cell(n,1);   % Format A: node coordinates
@@ -130,32 +139,34 @@ function figs = pfem_plot_sweep_summary(results, sweep_param, yaml_path, varargi
             plot(ax_c, vals(~ok), zeros(1,sum(~ok)), 'rx', ...
                  'MarkerSize',12, 'LineWidth',2);
         end
+        % When x-axis carries scenario indices, label each tick with the scenario text
+        if has_labels
+            set(ax_c, 'XTick', vals, 'XTickLabel', panel_labels, ...
+                      'XTickLabelRotation', 20, 'TickLabelInterpreter', 'none');
+        end
         xlabel(ax_c, sweep_label, 'Color',[0.75 0.75 0.75], 'FontSize',9);
         ylabel(ax_c, 'max|u|',    'Color',[0.75 0.75 0.75], 'FontSize',9);
         title(ax_c, sprintf('%s — sweep of  %s', case_title, sweep_label), ...
               'Color',[0.88 0.88 0.88], 'FontSize',10, 'Interpreter','none');
         hold(ax_c,'off');
 
-        % Bottom row: one load-disp (or magnitude) panel per sweep value
+        % Bottom row: one load-disp (or magnitude) panel per scenario/sweep value
         for i = 1:n
             ax  = subplot(2, cols, cols + i, 'Parent', fig1);
             style_ax(ax);
-            lbl = sprintf('%s = %.4g', sweep_label, vals(i));
+            lbl = panel_labels{i};
 
             if results(i).status ~= 0
                 show_na(ax, [lbl newline '[FAIL]']);
 
             elseif ~isempty(load_disp_arr{i})
-                % Format B: load vs displacement history
                 draw_load_disp(ax, load_disp_arr{i});
                 if ~isnan(maxu_vec(i))
-                    lbl = sprintf('%s = %.4g\nmax|u| = %.3e', ...
-                                  sweep_label, vals(i), maxu_vec(i));
+                    lbl = sprintf('%s\nmax|u| = %.3e', lbl, maxu_vec(i));
                 end
                 title(ax, lbl, 'FontSize',8,'Color',[0.80 0.80 0.80],'Interpreter','none');
 
             elseif ~isempty(disp_arr{i})
-                % Format A: plot |u| magnitude per node
                 dm  = disp_arr{i};
                 nc  = min(2, size(dm,2));
                 mag = sqrt(sum(dm(:,1:nc).^2, 2));
@@ -164,8 +175,7 @@ function figs = pfem_plot_sweep_summary(results, sweep_param, yaml_path, varargi
                 xlabel(ax,'Node','Color',[0.70 0.70 0.70],'FontSize',8);
                 ylabel(ax,'|u|', 'Color',[0.70 0.70 0.70],'FontSize',8);
                 grid(ax,'on');
-                lbl = sprintf('%s = %.4g\nmax|u| = %.3e', ...
-                              sweep_label, vals(i), maxu_vec(i));
+                lbl = sprintf('%s\nmax|u| = %.3e', lbl, maxu_vec(i));
                 title(ax, lbl, 'FontSize',8,'Color',[0.80 0.80 0.80],'Interpreter','none');
 
             else
@@ -188,7 +198,7 @@ function figs = pfem_plot_sweep_summary(results, sweep_param, yaml_path, varargi
 
         for i = 1:n
             ax  = subplot(nr, nc2, i, 'Parent', fig2);
-            lbl = sprintf('%s = %.4g', sweep_label, vals(i));
+            lbl = panel_labels{i};
             if results(i).status ~= 0
                 show_na(ax, [lbl newline '[FAIL]']);
             elseif ~isempty(msh_arr{i})
@@ -214,14 +224,13 @@ function figs = pfem_plot_sweep_summary(results, sweep_param, yaml_path, varargi
 
         for i = 1:n
             ax  = subplot(nr, nc2, i, 'Parent', fig3);
-            lbl = sprintf('%s = %.4g', sweep_label, vals(i));
+            lbl = panel_labels{i};
             if results(i).status ~= 0
                 show_na(ax, [lbl newline '[FAIL]']);
             elseif ~isempty(dis_arr{i})
                 draw_ps_mesh(ax, dis_arr{i}, [0.70 0.85 0.70]);
                 if ~isnan(maxu_vec(i))
-                    lbl = sprintf('%s = %.4g\nmax|u| = %.3e', ...
-                                  sweep_label, vals(i), maxu_vec(i));
+                    lbl = sprintf('%s\nmax|u| = %.3e', lbl, maxu_vec(i));
                 end
                 title(ax, lbl,'FontSize',8,'Color',[0.80 0.80 0.80],'Interpreter','none');
             else
@@ -244,7 +253,7 @@ function figs = pfem_plot_sweep_summary(results, sweep_param, yaml_path, varargi
 
         for i = 1:n
             ax  = subplot(nr, nc2, i, 'Parent', fig4);
-            lbl = sprintf('%s = %.4g', sweep_label, vals(i));
+            lbl = panel_labels{i};
             if results(i).status ~= 0
                 show_na(ax, [lbl newline '[FAIL]']);
             elseif ~isempty(vec_arr{i})

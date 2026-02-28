@@ -1,122 +1,164 @@
-% NZ.m — PFEM parametric sweep: run, visualise, and save comparison figure
+% NZ.m — PFEM multi-scenario sweep: run, visualise, and save comparison figures
+%
+% Supports:
+%   • One or more YAML benchmark cases run in one go
+%   • Any number of parameters changed simultaneously per scenario
+%   • Auto-saved comparison figures (one window per output type) saved
+%     alongside run outputs in  runs/<chap>/<case>/
+%
 clear; clc; close all;
 
-%% Paths
+%% ---- Paths ----
 repo_root = fullfile(getenv('HOME'), 'projects', 'fem-benchmarks');
 pfem_root = fullfile(repo_root, 'pfem');
 addpath(genpath(fullfile(repo_root, 'matlab')));
 
+% ============================================================
 %% ---- CONFIGURATION — edit this section ----
+% ============================================================
+
+%% 1. YAML case(s) to run  (add more paths to the cell array for batch runs)
+yaml_paths = {
+    fullfile(repo_root, 'benchmarks', 'pfem5', 'chap06', 'p61.yaml'),
+    % fullfile(repo_root, 'benchmarks', 'pfem5', 'chap06', 'p63.yaml'),
+};
+
+%% 2. Show tunables for the first case (comment out once you've chosen parameters)
+fprintf('=== Tunable parameters ===\n\n');
+pfem_show_tunables(yaml_paths{1});
+
+%% 3. Define parameter scenarios
 %
-% Pick a YAML case and a tunable parameter to sweep.
-%
-% Good starting cases:
-%   chap05/p51_4.yaml  — E affects displacements only (load-controlled)
-%   chap05/p51_3.yaml  — E affects stresses only (disp-controlled)
-%   chap06/p61.yaml    — yield_stress controls plastic zone (von Mises)
-%   chap06/p63.yaml    — friction_angle_phi (Mohr-Coulomb bearing capacity)
-%
-yaml_path = fullfile(repo_root, 'benchmarks', 'pfem5', 'chap06', 'p61.yaml');
+% --- Single-parameter sweep (simplest) ---
+scenarios = pfem_make_scenarios('yield_stress', [50, 100, 200, 500]);
 
-% Show tunables for this case (comment out once you've chosen)
-fprintf('=== Tunable parameters ===\n');
-tunables = pfem_show_tunables(yaml_path);
+% --- Multiple parameters varied together in lockstep ---
+%     (all value arrays must have the same number of elements)
+% scenarios = pfem_make_scenarios( ...
+%     'yield_stress',     [50,   100,  200], ...
+%     'youngs_modulus_E', [1e5,  2e5,  1e5]);
 
-% Parameter to sweep + values to try
-sweep_param  = 'yield_stress';
-sweep_values = [50, 100, 200, 500];   % e.g. 4 values for a 2×2 comparison panel
+% --- Fully manual: any combination of params per scenario ---
+%     Label is optional — if omitted NZ.m will auto-fill 'sc1','sc2',...
+% scenarios(1) = struct('label','soft-weak',  'yield_stress',  50, 'youngs_modulus_E',1e5);
+% scenarios(2) = struct('label','hard-stiff', 'yield_stress', 200, 'youngs_modulus_E',2e5);
 
-%% ---- Validate ----
-param_names = {tunables.name};
-if ~ismember(sweep_param, param_names)
-    error('Parameter "%s" not found.\nAvailable: %s', sweep_param, strjoin(param_names, ', '));
-end
+% ============================================================
+%% ---- End of configuration ----
+% ============================================================
 
-%% ---- Ensure binary is built ----
-y_tmp   = pfem_yaml_load(yaml_path);
-program = y_tmp.authors.source.program;
-chap    = sprintf('chap%02d', y_tmp.authors.source.chapter);
-if ~pfem_ensure_built(repo_root, pfem_root, program, chap)
-    error('Build failed for %s/%s. Check gfortran is installed and pfem/ source is present.', chap, program);
-end
-clear y_tmp program chap;
-
-%% ---- Run sweep ----
-fprintf('\n=== Sweep: %s over %d values ===\n', sweep_param, numel(sweep_values));
-results = struct('param',{}, 'value',{}, 'status',{}, 'run_dir',{}, 'files',{}, 'out',{});
-
-for i = 1:numel(sweep_values)
-    val = sweep_values(i);
-    overrides = struct();
-    overrides.(sweep_param) = val;
-
-    fprintf('[%d/%d] %s = %.4g  ...  ', i, numel(sweep_values), sweep_param, val);
-    [status, out] = pfem_run_from_yaml(repo_root, pfem_root, yaml_path, overrides);
-
-    results(i).param   = sweep_param;
-    results(i).value   = val;
-    results(i).status  = status;
-    results(i).run_dir = out.work_dir;
-    results(i).files   = out.files;
-    results(i).out     = out;
-
-    if status == 0
-        fprintf('OK (%d files)\n', out.num_files);
-    else
-        fprintf('FAILED\n');
+%% Ensure every scenario has a label (safety net for manual construction)
+for si = 1:numel(scenarios)
+    if ~isfield(scenarios(si), 'label') || isempty(scenarios(si).label)
+        scenarios(si).label = sprintf('sc%d', si);
     end
 end
 
-%% ---- Summary table ----
-fprintf('\n%-12s  %-8s  %s\n', 'VALUE', 'STATUS', 'RUN_DIR');
-fprintf('%s\n', repmat('-', 1, 80));
-for i = 1:numel(results)
-    s = 'OK'; if results(i).status ~= 0, s = 'FAIL'; end
-    fprintf('%-12.4g  %-8s  %s\n', results(i).value, s, results(i).run_dir);
+%% Determine sweep display name for figure axes
+%   • Single param   → use the parameter name (e.g. "yield stress")
+%   • Multiple params → 'Scenario'
+sc_fields  = fieldnames(rmfield(scenarios(1), 'label'));   % param fields only
+if numel(sc_fields) == 1
+    sweep_display = strrep(sc_fields{1}, '_', ' ');
+else
+    sweep_display = 'Scenario';
 end
-n_ok = sum([results.status] == 0);
-fprintf('\n%d/%d runs succeeded.\n', n_ok, numel(results));
 
-%% ---- Text comparison (original vs each run) ----
-for i = 1:numel(results)
-    if results(i).status == 0
-        fprintf('\n--- %s = %.4g ---\n', sweep_param, results(i).value);
-        pfem_compare_results(results(i).out, 'plot', false);
+% ============================================================
+%% ---- Run all cases × scenarios ----
+% ============================================================
+for ci = 1:numel(yaml_paths)
+    yaml_path = yaml_paths{ci};
+    [yaml_dir, case_name, ~] = fileparts(yaml_path);
+    [~, chap_str] = fileparts(yaml_dir);      % e.g. 'chap06'
+
+    fprintf('\n%s\n', repmat('=', 1, 60));
+    fprintf('Case: %s  |  Chapter: %s  |  %d scenario(s)\n', ...
+            case_name, chap_str, numel(scenarios));
+    fprintf('%s\n', repmat('=', 1, 60));
+
+    %% Ensure binary is compiled
+    y_tmp   = pfem_yaml_load(yaml_path);
+    program = y_tmp.authors.source.program;
+    chap    = sprintf('chap%02d', y_tmp.authors.source.chapter);
+    if ~pfem_ensure_built(repo_root, pfem_root, program, chap)
+        warning('Build failed for %s/%s — skipping case.', chap, program);
+        continue;
     end
-end
 
-%% ---- Sweep comparison figure ----
-% Generates: parameter-vs-max|u| curve  +  tiled deformed mesh panels.
-% Saves to figures/<chap>/<case>_<param>.png  and  stays open in MATLAB.
+    %% Run every scenario
+    case_results = struct('label',{}, 'value',{}, 'status',{}, ...
+                          'run_dir',{}, 'files',{}, 'out',{});
 
-fprintf('\nGenerating sweep comparison figures...\n');
+    for si = 1:numel(scenarios)
+        sc    = scenarios(si);
+        label = sc.label;
+        ovr   = rmfield(sc, 'label');   % strip 'label' — not a YAML parameter
 
-% Derive save prefix from yaml_path  (each output type appends _res/_msh/_dis/_vec)
-[yaml_dir, case_name, ~] = fileparts(yaml_path);
-[~, chap_str] = fileparts(yaml_dir);   % e.g. 'chap06'
-fig_dir    = fullfile(repo_root, 'figures', chap_str);
-fig_prefix = fullfile(fig_dir, sprintf('%s_%s', case_name, sweep_param));
+        fprintf('\n[%d/%d] Scenario: %s\n', si, numel(scenarios), label);
+        fnames = fieldnames(ovr);
+        for fi = 1:numel(fnames)
+            fprintf('        %-30s = %g\n', fnames{fi}, ovr.(fnames{fi}));
+        end
+        fprintf('  Running... ');
 
-pfem_plot_sweep_summary(results, sweep_param, yaml_path, ...
-    'Title', sprintf('PFEM %s — %s sweep', case_name, strrep(sweep_param,'_',' ')), ...
-    'Save',  fig_prefix, ...
-    'Show',  true);
+        [status, out] = pfem_run_from_yaml(repo_root, pfem_root, yaml_path, ovr);
 
-fprintf('Figures saved to: figures/%s/%s_%s_*.png\n', chap_str, case_name, sweep_param);
+        % For the summary curve: use actual param value (single-param sweep)
+        % or scenario index (multi-param) so the x-axis is meaningful.
+        if numel(sc_fields) == 1
+            sc_val = ovr.(sc_fields{1});
+        else
+            sc_val = si;
+        end
 
-%% ---- Show any previously saved PNG figures for this case ----
-% Displays PNGs from figures/<chap>/ that are named for the current case.
-if exist(fig_dir, 'dir')
-    saved_pngs = dir(fullfile(fig_dir, sprintf('%s_*.png', case_name)));
-    for pi = 1:numel(saved_pngs)
-        png_full = fullfile(saved_pngs(pi).folder, saved_pngs(pi).name);
-        if startsWith(png_full, fig_prefix), continue; end   % skip figures just saved
-        figure('Name', saved_pngs(pi).name, 'NumberTitle', 'off');
-        imshow(imread(png_full));
-        title(strrep(saved_pngs(pi).name, '_', ' '), 'Interpreter', 'none');
+        case_results(si).label   = label;
+        case_results(si).value   = sc_val;
+        case_results(si).status  = status;
+        case_results(si).run_dir = out.run_dir;
+        case_results(si).files   = out.files;
+        case_results(si).out     = out;
+
+        if status == 0
+            fprintf('OK (%d output file(s))\n', out.num_files);
+        else
+            fprintf('FAILED (exit code %d)\n', status);
+        end
     end
+
+    %% Summary table
+    fprintf('\n%-24s  %-8s  %s\n', 'SCENARIO', 'STATUS', 'RUN DIR');
+    fprintf('%s\n', repmat('-', 1, 80));
+    n_ok = 0;
+    for si = 1:numel(case_results)
+        s = 'OK'; if case_results(si).status ~= 0, s = 'FAIL'; end
+        if strcmp(s,'OK'), n_ok = n_ok + 1; end
+        fprintf('%-24s  %-8s  %s\n', case_results(si).label, s, ...
+                case_results(si).run_dir);
+    end
+    fprintf('\n%d / %d scenarios succeeded.\n', n_ok, numel(case_results));
+
+    %% Text comparison: original .res vs each scenario's .res
+    for si = 1:numel(case_results)
+        if case_results(si).status == 0
+            fprintf('\n--- %s  |  %s ---\n', case_name, case_results(si).label);
+            pfem_compare_results(case_results(si).out, 'plot', false);
+        end
+    end
+
+    %% Comparison figures — saved in runs/<chap>/<case>/ alongside run output
+    runs_case_dir = fullfile(repo_root, 'runs', chap_str, case_name);
+    if ~exist(runs_case_dir,'dir'), mkdir(runs_case_dir); end
+    fig_prefix = fullfile(runs_case_dir, sprintf('%s_sweep', case_name));
+
+    fprintf('\nGenerating comparison figures...\n');
+    pfem_plot_sweep_summary(case_results, sweep_display, yaml_path, ...
+        'Title', sprintf('PFEM %s', case_name), ...
+        'Save',  fig_prefix, ...
+        'Show',  true);
+
+    fprintf('Figures saved: runs/%s/%s/%s_sweep_{{res,msh,dis,vec}}.png\n', ...
+            chap_str, case_name, case_name);
 end
 
-%% ---- Optional: launch interactive studio ----
-% Uncomment to open the full interactive PFEM Studio after the sweep:
-% pfem_studio(yaml_path, pfem_root);
+fprintf('\nDone.\n');
