@@ -32,6 +32,15 @@ if ~ismember(sweep_param, param_names)
     error('Parameter "%s" not found.\nAvailable: %s', sweep_param, strjoin(param_names, ', '));
 end
 
+%% ---- Ensure binary is built ----
+y_tmp   = pfem_yaml_load(yaml_path);
+program = y_tmp.authors.source.program;
+chap    = sprintf('chap%02d', y_tmp.authors.source.chapter);
+if ~pfem_ensure_built(repo_root, pfem_root, program, chap)
+    error('Build failed for %s/%s. Check gfortran is installed and pfem/ source is present.', chap, program);
+end
+clear y_tmp program chap;
+
 %% ---- Run sweep ----
 fprintf('\n=== Sweep: %s over %d values ===\n', sweep_param, numel(sweep_values));
 results = struct('param',{}, 'value',{}, 'status',{}, 'run_dir',{}, 'files',{}, 'out',{});

@@ -56,8 +56,9 @@ function [status, out] = pfem_run_from_yaml(repo_root, pfem_root, yaml_path, ove
         pfem_patch_dat_using_yaml(dat_dst, y, overrides);
     end
 
-    % copy compiled binary so the run dir is self-contained
-    % chmod +x needed because MATLAB copyfile strips the execute bit on Linux
+    % Auto-build binary if missing, then copy to run dir so it is self-contained.
+    % chmod +x is needed because MATLAB copyfile strips the execute bit on Linux.
+    pfem_ensure_built(repo_root, pfem_root, program, chap);
     exe_src = fullfile(pfem_root, 'build', 'bin', program);
     exe_dst = fullfile(run_dir, program);
     if exist(exe_src, 'file')
