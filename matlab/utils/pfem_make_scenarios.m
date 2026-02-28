@@ -47,7 +47,10 @@ function scenarios = pfem_make_scenarios(varargin)
         end
     end
 
-    scenarios = struct();
+    % Build each scenario as a struct, collect in cell, then concat into array.
+    % (Pre-initialising with struct() creates a fieldless 1×1 stub that
+    %  MATLAB refuses to overwrite with a struct that has fields.)
+    sc_list = cell(1, n_scenarios);
     for si = 1:n_scenarios
         sc = struct();
         label_parts = {};
@@ -58,7 +61,13 @@ function scenarios = pfem_make_scenarios(varargin)
             label_parts{end+1} = sprintf('%s=%s', short_name(pname), fmt(pval)); %#ok<AGROW>
         end
         sc.label   = strjoin(label_parts, ' ');
-        scenarios(si) = sc;
+        sc_list{si} = sc;
+    end
+
+    if isempty(sc_list)
+        scenarios = struct([]);
+    else
+        scenarios = [sc_list{:}];
     end
 end
 
