@@ -83,7 +83,8 @@ fem-benchmarks/
 │   ├── pfem_diagram.m             # Textbook-style mesh diagram renderer
 │   ├── pfem_runner.m              # Single case runner
 │   ├── pfem_run_from_yaml.m       # YAML-driven runner with overrides
-│   ├── pfem_plot_mesh.m           # Deformed mesh visualisation
+│   ├── pfem_plot_mesh.m           # Deformed mesh visualisation (with mesh lines)
+│   ├── pfem_batch_figs.m          # Batch sweep figures for all cases in a chapter
 │   ├── pfem_show_tunables.m       # Display available tunables
 │   ├── pfem_smart_sweep.m         # Auto-discovery sweep
 │   ├── pfem_compare_results.m     # Result comparison & plotting
@@ -145,6 +146,29 @@ pfem_studio('benchmarks/pfem5/chap06/p61.yaml')
 % Via NZ.m: edit yaml_path + sweep_param + sweep_values, then run.
 % The script runs the sweep and opens pfem_studio for visualisation.
 ```
+
+### Batch Figure Generation
+
+Generate sweep comparison figures (deformed mesh + parameter-vs-displacement curve) for all cases in a chapter:
+
+```matlab
+% All cases in chap06 (requires compiled binaries)
+pfem_batch_figs('chap06')
+
+% Single case
+pfem_batch_figs('benchmarks/pfem5/chap05/p51_4.yaml')
+
+% All 90 cases (takes a while — compile all chapters first)
+pfem_batch_figs('all')
+```
+
+For each case, `pfem_batch_figs` automatically:
+1. Selects the primary tunable parameter (first with a `suggested_range`)
+2. Runs 4 sweep values (log-spaced within suggested range)
+3. Generates a figure: parameter-vs-max|u| curve + tiled deformed mesh panels
+4. Saves PNG to `figures/<chap>/<case>_<param>.png`
+
+Supported output: all structural cases (chap04-06, 08, 11). Flow/eigenvalue/coupled cases are skipped gracefully when no per-node displacement output is present.
 
 ## PFEM Studio
 
@@ -221,7 +245,8 @@ The `generate_yamls_v2.py` script creates comprehensive benchmark files:
 | `pfem_diagram` | Standalone textbook-style mesh diagram with BC/load annotations |
 | `pfem_run_from_yaml` | Programmatic runner: patches .dat from YAML overrides, runs PFEM |
 | `pfem_extract_coords` | Extract exact node coordinates from YAML tokens (all chapters) |
-| `pfem_plot_mesh` | Visualise deformed mesh + displacement vectors from run output |
+| `pfem_plot_mesh` | Visualise deformed mesh with element edges from run output |
+| `pfem_batch_figs` | Auto-generate sweep comparison figures for a whole chapter |
 | `pfem_show_tunables` | Print tunable parameters for any YAML case |
 | `pfem_smart_sweep` | Auto-discovery parametric sweep |
 | `pfem_compare_results` | Compare original vs modified results with plots |

@@ -57,6 +57,9 @@ tunable_parameters:
   suggested_range:
   - 1.0e-10
   - 100.0
+  book_reference:
+    value: '3.0'
+    figure: 'Figure 7.3'
 - name: nels_or_nxe
   global_token_index: 1
   line: 1
@@ -174,6 +177,8 @@ how_to_run:
   matlab:
   - pfem_root = fullfile(getenv('HOME'), 'projects', 'fem-benchmarks', 'pfem');
   - '[status, out] = pfem_run_from_yaml(repo_root, pfem_root, yaml_path, struct());'
+verification:
+  book_figure: 'Figure 7.3'
 notes:
 - Use global_token_index from tunable_parameters for patching.
 - The patcher replaces tokens by their 1-based index in the flat token list.

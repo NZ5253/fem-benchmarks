@@ -24,7 +24,7 @@ function pfem_plot_mesh(out, varargin)
     end
 
     % Single mesh visualization
-    [nodes, disp, elem_centers, stresses, ndim] = parse_mesh_data(out);
+    [nodes, disp, elem_centers, stresses, ndim, elem_conn] = parse_mesh_data(out);
 
     if isempty(nodes)
         fprintf('Could not extract mesh data.\n');
@@ -72,24 +72,27 @@ function pfem_plot_mesh(out, varargin)
     end
 
     % Subplot 1: Original vs Deformed mesh
-    subplot(1, 2, 1);
+    ax1 = subplot(1, 2, 1);
     hold on;
 
-    % Plot original nodes
-    plot(nodes(:,1), nodes(:,2), 'bo', 'MarkerSize', 6, 'MarkerFaceColor', 'b');
-
-    % Plot deformed nodes
     deformed = nodes + scale_factor * disp;
-    plot(deformed(:,1), deformed(:,2), 'rs', 'MarkerSize', 6, 'MarkerFaceColor', 'r');
 
-    % Draw lines connecting original to deformed (shows displacement vectors)
-    for i = 1:size(nodes, 1)
-        plot([nodes(i,1), deformed(i,1)], [nodes(i,2), deformed(i,2)], 'k-', 'LineWidth', 0.5);
-    end
-
-    % Plot element centers
-    if ~isempty(elem_centers)
-        plot(elem_centers(:,1), elem_centers(:,2), 'g^', 'MarkerSize', 8, 'MarkerFaceColor', 'g');
+    % Draw element edges (mesh lines) if connectivity is available
+    if ~isempty(elem_conn)
+        for i = 1:size(elem_conn, 1)
+            nids = elem_conn(i,:);
+            nids = nids(nids >= 1 & nids <= size(nodes,1));
+            nids_c = [nids, nids(1)];
+            plot(nodes(nids_c,1), nodes(nids_c,2), 'b-', 'LineWidth', 0.6, 'Color', [0.5 0.6 0.9]);
+            plot(deformed(nids_c,1), deformed(nids_c,2), 'r-', 'LineWidth', 0.9, 'Color', [0.9 0.4 0.4]);
+        end
+    else
+        % Fallback: scatter nodes and draw displacement vectors
+        plot(nodes(:,1), nodes(:,2), 'bo', 'MarkerSize', 6, 'MarkerFaceColor', 'b');
+        plot(deformed(:,1), deformed(:,2), 'rs', 'MarkerSize', 6, 'MarkerFaceColor', 'r');
+        for i = 1:size(nodes, 1)
+            plot([nodes(i,1), deformed(i,1)], [nodes(i,2), deformed(i,2)], 'k-', 'LineWidth', 0.5);
+        end
     end
 
     hold off;
@@ -143,7 +146,7 @@ function plot_mesh_comparison(results, scale_factor)
         end
 
         out = results(k).out;
-        [nodes, disp, ~, ~] = parse_mesh_data(out);
+        [nodes, disp, ~, ~, ~, elem_conn] = parse_mesh_data(out);
 
         if isempty(nodes)
             continue;
@@ -165,12 +168,19 @@ function plot_mesh_comparison(results, scale_factor)
         subplot(rows, cols, k);
         hold on;
 
-        % Plot original mesh
-        plot(nodes(:,1), nodes(:,2), 'b.', 'MarkerSize', 8);
-
-        % Plot deformed
         deformed = nodes + sf * disp;
-        plot(deformed(:,1), deformed(:,2), 'r.', 'MarkerSize', 8);
+
+        if ~isempty(elem_conn)
+            for e = 1:size(elem_conn, 1)
+                nids = elem_conn(e,:); nids = nids(nids >= 1 & nids <= size(nodes,1));
+                nc = [nids, nids(1)];
+                plot(nodes(nc,1), nodes(nc,2), '-', 'Color', [0.5 0.6 0.9], 'LineWidth', 0.5);
+                plot(deformed(nc,1), deformed(nc,2), '-', 'Color', [0.9 0.4 0.4], 'LineWidth', 0.8);
+            end
+        else
+            plot(nodes(:,1), nodes(:,2), 'b.', 'MarkerSize', 8);
+            plot(deformed(:,1), deformed(:,2), 'r.', 'MarkerSize', 8);
+        end
 
         hold off;
         axis equal;
@@ -193,13 +203,14 @@ function plot_mesh_comparison(results, scale_factor)
 end
 
 
-function [nodes, disp, elem_centers, stresses, ndim] = parse_mesh_data(out)
+function [nodes, disp, elem_centers, stresses, ndim, elem_conn] = parse_mesh_data(out)
 % Parse mesh data from .res file and YAML
     nodes = [];
     disp = [];
     elem_centers = [];
     stresses = [];
     ndim = 2;  % Default to 2D
+    elem_conn = [];
 
     % Find .res file
     res_files = out.files(endsWith(out.files, '.res'));
@@ -281,8 +292,8 @@ function [nodes, disp, elem_centers, stresses, ndim] = parse_mesh_data(out)
         end
     end
 
-    % Try to get exact coordinates from YAML
-    [nodes, yaml_ndim] = extract_coords_from_yaml(out, n_nodes);
+    % Try to get exact coordinates and connectivity from YAML
+    [nodes, yaml_ndim, elem_conn] = extract_coords_from_yaml(out, n_nodes);
 
     % Update ndim if YAML provided it
     if ~isempty(yaml_ndim)
@@ -296,10 +307,11 @@ function [nodes, disp, elem_centers, stresses, ndim] = parse_mesh_data(out)
 end
 
 
-function [nodes, ndim] = extract_coords_from_yaml(out, n_nodes)
-% Extract exact node coordinates from YAML tokens
+function [nodes, ndim, elem_conn] = extract_coords_from_yaml(out, n_nodes)
+% Extract exact node coordinates and element connectivity from YAML tokens
     nodes = [];
     ndim = [];
+    elem_conn = [];
 
     % Check for YAML path in output struct
     yaml_path = '';
@@ -314,12 +326,13 @@ function [nodes, ndim] = extract_coords_from_yaml(out, n_nodes)
     end
 
     try
-        [yaml_nodes, ~, meta] = pfem_extract_coords(yaml_path);
+        [yaml_nodes, ec, meta] = pfem_extract_coords(yaml_path);
 
         % Verify node count matches
         if ~isempty(yaml_nodes) && size(yaml_nodes, 1) == n_nodes
-            nodes = yaml_nodes;
-            ndim = size(yaml_nodes, 2);
+            nodes     = yaml_nodes;
+            elem_conn = ec;
+            ndim      = size(yaml_nodes, 2);
             fprintf('  [Mesh] Using exact coordinates from YAML (%s, %d nodes, %dD)\n', ...
                     meta.program, n_nodes, ndim);
         elseif ~isempty(yaml_nodes)

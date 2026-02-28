@@ -143,6 +143,9 @@ tunable_parameters:
   suggested_range:
   - 1
   - 1000
+  book_reference:
+    value: '8'
+    figure: 'Figure 6.49'
 - name: prescribed_increment
   global_token_index: 40
   line: 9
@@ -274,6 +277,8 @@ how_to_run:
   matlab:
   - pfem_root = fullfile(getenv('HOME'), 'projects', 'fem-benchmarks', 'pfem');
   - '[status, out] = pfem_run_from_yaml(repo_root, pfem_root, yaml_path, struct());'
+verification:
+  book_figure: 'Figure 6.49'
 notes:
 - Use global_token_index from tunable_parameters for patching.
 - The patcher replaces tokens by their 1-based index in the flat token list.
