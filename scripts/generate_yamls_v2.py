@@ -260,6 +260,10 @@ SCALAR_TUNABLE_DB = {
     'presc':  {'name': 'prescribed_increment',       'type': 'real', 'unit_category': 'mixed',
                'description': 'Prescribed displacement or load increment magnitude per step',
                'suggested_range': [-1e6, 1e6]},
+    # Local (Gauss-point) plasticity return-mapping tolerance — p66, p67 von Mises
+    'ltol':   {'name': 'local_yield_tolerance_ltol', 'type': 'real', 'unit_category': 'dimensionless',
+               'description': 'Local yield-function convergence tolerance for return mapping',
+               'suggested_range': [1e-8, 0.01]},
 }
 
 
@@ -436,6 +440,11 @@ def classify_prop_structure(nprops, prop_tokens, constants, symbol_table=None):
             return [{'name': 'permeability_k_or_cv',
                      'description': 'Permeability k or consolidation cv',
                      'unit_category': 'permeability', 'suggested_range': [1e-10, 100.0]}]
+        if v0 is not None and v0 >= 100:
+            # 1D rod / pin-jointed frame: prop = EA (axial stiffness)
+            return [{'name': 'axial_stiffness_EA',
+                     'description': 'Axial stiffness EA (Young\'s modulus × cross-section area)',
+                     'unit_category': 'stress', 'suggested_range': [1e3, 1e12]}]
         return [{'name': 'material_prop_1',
                  'description': 'Material property 1',
                  'unit_category': 'mixed', 'suggested_range': [1e-10, 1e12]}]

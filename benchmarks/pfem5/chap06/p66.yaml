@@ -10,7 +10,7 @@ authors:
     dataset: p66
   entry:
     created_by: Naeem
-    created_on: '2026-02-24'
+    created_on: '2026-02-28'
     verified_platform: Linux (gfortran)
 code:
   language: Fortran (F2003)
@@ -77,6 +77,16 @@ tunable_parameters:
   suggested_range:
   - 0.0
   - 0.49
+- name: local_yield_tolerance_ltol
+  global_token_index: 37
+  line: 8
+  type: real
+  description: Local yield-function convergence tolerance for return mapping
+  unit_category: dimensionless
+  current_value: '0.00005'
+  suggested_range:
+  - 1.0e-08
+  - 0.01
 - name: convergence_tolerance
   global_token_index: 38
   line: 8
