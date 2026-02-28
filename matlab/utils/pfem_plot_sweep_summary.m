@@ -2,26 +2,18 @@ function fig = pfem_plot_sweep_summary(results, sweep_param, yaml_path, varargin
 % PFEM_PLOT_SWEEP_SUMMARY  Deformed mesh comparison figure from sweep results
 %
 % Generates a dark-themed figure with:
-%   - Top row:    parameter vs max|u| curve
-%   - Bottom row: tiled deformed mesh panels for each sweep value
+%   - Top strip:     parameter vs max|u| (or max displacement) curve
+%   - Mesh row:      deformed mesh panels (from YAML coords + .res, or from .msh PostScript)
+%   - Vector row:    displacement vector panels (from .vec PostScript, if present)
+%
+% Supported .res formats:
+%   Format A (elastic/structural): per-node x-disp/y-disp table
+%   Format B (nonlinear load-step): "step load disp iters" table — draws from .msh/.vec
 %
 % Usage:
 %   fig = pfem_plot_sweep_summary(results, sweep_param, yaml_path)
 %   fig = pfem_plot_sweep_summary(results, sweep_param, yaml_path, 'Save', '/path/fig.png')
 %   fig = pfem_plot_sweep_summary(results, sweep_param, yaml_path, 'Show', false)
-%
-% Inputs:
-%   results     - struct array with fields:
-%                   .value  (sweep value)
-%                   .status (0 = success)
-%                   .out    (from pfem_run_from_yaml — must have .files cell array)
-%   sweep_param - name of swept parameter (string, used for axis labels)
-%   yaml_path   - path to the benchmark YAML (for node coordinate extraction)
-%
-% Name-value options:
-%   'Title'  - super-title string (default: basename of yaml_path)
-%   'Save'   - file path to save PNG; directory is created automatically
-%   'Show'   - true/false (default: true) — make figure visible
 
     p = inputParser;
     addParameter(p, 'Title', '');
@@ -42,46 +34,74 @@ function fig = pfem_plot_sweep_summary(results, sweep_param, yaml_path, varargin
     n    = numel(results);
     vals = arrayfun(@(r) r.value, results);
 
-    % Parse displacement results for each run.
-    % parse_run returns either per-node displacements (Format A: elastic/structural)
-    % or a [load, max_disp] table (Format B: load-step nonlinear, e.g. p61 von Mises).
-    nodes_arr     = cell(n,1);
-    disp_arr      = cell(n,1);
-    ec_arr        = cell(n,1);
-    load_disp_arr = cell(n,1);
+    % ---- Collect all result data ----
+    nodes_arr     = cell(n,1);   % Format A: undeformed node coords
+    disp_arr      = cell(n,1);   % Format A: per-node displacement matrix
+    ec_arr        = cell(n,1);   % Format A: element connectivity
+    load_disp_arr = cell(n,1);   % Format B: [load, max_disp] table
+    msh_arr       = cell(n,1);   % PS .msh: cell of polygon vertex matrices
+    vec_arr       = cell(n,1);   % PS .vec: [from_x from_y to_x to_y] matrix
     maxu_vec      = NaN(n,1);
 
     for i = 1:n
         if results(i).status ~= 0, continue; end
+
+        % Parse .res file (Format A or B)
         ov = struct();
         ov.(sweep_param) = results(i).value;
-        [nd, dm, ec, ld] = parse_run(results(i).out, yaml_path, ov);
+        [nd, dm, ec, ld] = parse_res(results(i).out, yaml_path, ov);
         nodes_arr{i}     = nd;
         disp_arr{i}      = dm;
         ec_arr{i}        = ec;
         load_disp_arr{i} = ld;
+
         if ~isempty(dm)
-            % Format A: per-node displacements
             nc = min(2, size(dm, 2));
             maxu_vec(i) = max(sqrt(sum(dm(:,1:nc).^2, 2)));
         elseif ~isempty(ld)
-            % Format B: load-step table — use max|disp| at final step
             maxu_vec(i) = max(abs(ld(:, 2)));
+        end
+
+        % Parse PostScript files if present
+        out_files = {};
+        if isfield(results(i).out, 'files')
+            out_files = results(i).out.files;
+        elseif isfield(results(i), 'files')
+            out_files = results(i).files;
+        end
+        if ~iscell(out_files), out_files = {}; end
+
+        msh_files = out_files(cellfun(@(f) endsWith(f, '.msh'), out_files));
+        if ~isempty(msh_files) && exist(msh_files{1}, 'file')
+            msh_arr{i} = parse_pfem_msh(msh_files{1});
+        end
+
+        vec_files = out_files(cellfun(@(f) endsWith(f, '.vec'), out_files));
+        if ~isempty(vec_files) && exist(vec_files{1}, 'file')
+            vec_arr{i} = parse_pfem_vec(vec_files{1});
         end
     end
 
-    % Figure layout
+    has_disp_mesh = any(~cellfun(@isempty, disp_arr));
+    has_ps_mesh   = any(~cellfun(@isempty, msh_arr));
+    has_ps_vecs   = any(~cellfun(@isempty, vec_arr));
+
+    % ---- Figure layout ----
     cols = min(n, 4);
     rows = ceil(n / cols);
-    vis  = 'off';
+    % Extra panel row for vectors (only when PS vector data available)
+    vec_row = has_ps_vecs;
+    total_rows = rows + 1 + double(vec_row);   % +1 for top strip
+
+    vis = 'off';
     if do_show, vis = 'on'; end
 
     fig = figure('Name', sprintf('Sweep: %s — %s', sweep_label, case_title), ...
-                 'Position', [80 80 340*cols 280*(rows+1)], ...
+                 'Position', [80 80 340*cols 260*total_rows], ...
                  'Color', [0.11 0.11 0.14], 'Visible', vis);
 
     % ---- Top strip: parameter vs max|u| ----
-    ax_c = subplot(rows+1, 1, 1, 'Parent', fig);
+    ax_c = subplot(total_rows, 1, 1, 'Parent', fig);
     set(ax_c, 'Color', [0.08 0.08 0.10], ...
               'XColor', [0.70 0.70 0.70], 'YColor', [0.70 0.70 0.70], ...
               'GridColor', [0.30 0.30 0.30], 'GridAlpha', 0.5);
@@ -96,9 +116,9 @@ function fig = pfem_plot_sweep_summary(results, sweep_param, yaml_path, varargin
     if any(~ok)
         plot(ax_c, vals(~ok), zeros(1,sum(~ok)), 'rx', 'MarkerSize', 12, 'LineWidth', 2);
     end
-    has_ld = any(cellfun(@(x) ~isempty(x), load_disp_arr));
+
     ylbl = 'max|u|';
-    if has_ld && ~any(cellfun(@(x) ~isempty(x), disp_arr))
+    if ~has_disp_mesh && has_ps_mesh
         ylbl = 'max displacement at final step';
     end
     xlabel(ax_c, sweep_label, 'Color', [0.75 0.75 0.75], 'FontSize', 9);
@@ -107,35 +127,62 @@ function fig = pfem_plot_sweep_summary(results, sweep_param, yaml_path, varargin
           'Color', [0.88 0.88 0.88], 'FontSize', 10, 'Interpreter', 'none');
     hold(ax_c, 'off');
 
-    % ---- Tiled panels: deformed mesh (Format A) or load-disp curve (Format B) ----
+    % ---- Mesh panels (row 2) ----
     for i = 1:n
-        ax  = subplot(rows+1, cols, cols+i, 'Parent', fig);
+        ax = subplot(total_rows, cols, cols + i, 'Parent', fig);
         set(ax, 'Color', [0.08 0.08 0.10]);
-        nd = nodes_arr{i};
-        dm = disp_arr{i};
-        ec = ec_arr{i};
-        ld = load_disp_arr{i};
 
-        if results(i).status == 0 && ~isempty(nd) && ~isempty(dm)
-            % Format A: draw deformed mesh
+        nd  = nodes_arr{i};
+        dm  = disp_arr{i};
+        ec  = ec_arr{i};
+        ld  = load_disp_arr{i};
+        msh = msh_arr{i};
+
+        if results(i).status ~= 0
+            lbl = sprintf('%s = %.4g  [FAIL]', sweep_label, vals(i));
+            show_na(ax, lbl);
+        elseif ~isempty(nd) && ~isempty(dm)
+            % Format A: draw deformed mesh from YAML coords + .res displacements
             draw_deformed(ax, nd, dm, ec);
             if isnan(maxu_vec(i))
                 lbl = sprintf('%s = %.4g', sweep_label, vals(i));
             else
                 lbl = sprintf('%s = %.4g\nmax|u| = %.3e', sweep_label, vals(i), maxu_vec(i));
             end
-        elseif results(i).status == 0 && ~isempty(ld)
-            % Format B: draw load-displacement curve
-            draw_load_disp(ax, ld, sweep_label, vals(i));
+        elseif ~isempty(msh)
+            % Format B: draw deformed mesh from .msh PostScript
+            draw_ps_mesh(ax, msh);
+            if isnan(maxu_vec(i))
+                lbl = sprintf('%s = %.4g', sweep_label, vals(i));
+            else
+                lbl = sprintf('%s = %.4g\nmax|u| = %.3e', sweep_label, vals(i), maxu_vec(i));
+            end
+        elseif ~isempty(ld)
+            % Fallback: no PS mesh — draw load-displacement curve
+            draw_load_disp(ax, ld);
             lbl = sprintf('%s = %.4g\nmax|u| = %.3e', sweep_label, vals(i), maxu_vec(i));
         else
-            axis(ax, 'off');
-            text(ax, 0.5, 0.5, sprintf('%s = %.4g\nN/A', sweep_label, vals(i)), ...
-                 'HorizontalAlignment', 'center', 'Color', [0.5 0.5 0.5], ...
-                 'FontSize', 9, 'Units', 'normalized');
-            lbl = sprintf('%s = %.4g  [N/A]', sweep_label, vals(i));
+            lbl = sprintf('%s = %.4g\nN/A', sweep_label, vals(i));
+            show_na(ax, lbl);
         end
         title(ax, lbl, 'FontSize', 8, 'Color', [0.80 0.80 0.80], 'Interpreter', 'none');
+    end
+
+    % ---- Vector panels (row 3, only when .vec data present) ----
+    if vec_row
+        for i = 1:n
+            ax = subplot(total_rows, cols, 2*cols + i, 'Parent', fig);
+            set(ax, 'Color', [0.08 0.08 0.10]);
+            vec = vec_arr{i};
+            if results(i).status == 0 && ~isempty(vec)
+                draw_ps_vecs(ax, vec);
+                lbl = sprintf('%s = %.4g\nvectors', sweep_label, vals(i));
+            else
+                lbl = sprintf('%s = %.4g\n[no vectors]', sweep_label, vals(i));
+                show_na(ax, lbl);
+            end
+            title(ax, lbl, 'FontSize', 8, 'Color', [0.80 0.80 0.80], 'Interpreter', 'none');
+        end
     end
 
     % ---- Save ----
@@ -148,15 +195,53 @@ end
 
 
 % ==========================================================================
-function draw_load_disp(ax, load_disp, sweep_label, sweep_val)
-% Draw a load-displacement curve for Format B .res files (nonlinear load-step output).
+function show_na(ax, lbl)
+    axis(ax, 'off');
+    text(ax, 0.5, 0.5, lbl, 'HorizontalAlignment', 'center', ...
+         'Color', [0.5 0.5 0.5], 'FontSize', 9, 'Units', 'normalized');
+end
+
+
+% ==========================================================================
+function draw_ps_mesh(ax, patches)
+% Draw deformed mesh polygons parsed from a PFEM .msh PostScript file.
+    hold(ax, 'on'); axis(ax, 'equal'); axis(ax, 'off');
+    set(ax, 'Color', [0.08 0.08 0.10]);
+    col = [0.72 0.78 0.84];
+    for k = 1:numel(patches)
+        pts = patches{k};
+        if size(pts, 1) < 2, continue; end
+        fill(ax, pts([1:end,1], 1), pts([1:end,1], 2), ...
+             [0.12 0.14 0.17], 'EdgeColor', col, 'LineWidth', 0.7);
+    end
+    hold(ax, 'off');
+end
+
+
+% ==========================================================================
+function draw_ps_vecs(ax, arrows)
+% Draw displacement vectors parsed from a PFEM .vec PostScript file.
+    hold(ax, 'on'); axis(ax, 'equal'); axis(ax, 'off');
+    set(ax, 'Color', [0.08 0.08 0.10]);
+    col = [0.55 0.80 0.55];
+    for k = 1:size(arrows, 1)
+        x1 = arrows(k,1); y1 = arrows(k,2);
+        x2 = arrows(k,3); y2 = arrows(k,4);
+        quiver(ax, x1, y1, x2-x1, y2-y1, 0, ...
+               'Color', col, 'LineWidth', 0.8, 'MaxHeadSize', 0.6);
+    end
+    hold(ax, 'off');
+end
+
+
+% ==========================================================================
+function draw_load_disp(ax, load_disp)
+% Draw a load-displacement curve (fallback when no .msh PostScript available).
     hold(ax, 'on'); grid(ax, 'on');
     set(ax, 'Color', [0.08 0.08 0.10], ...
             'XColor', [0.70 0.70 0.70], 'YColor', [0.70 0.70 0.70], ...
             'GridColor', [0.30 0.30 0.30], 'GridAlpha', 0.4);
-    u = abs(load_disp(:, 2));   % max |displacement| at each step
-    p = load_disp(:, 1);         % applied load at each step
-    plot(ax, u, p, 'o-', ...
+    plot(ax, abs(load_disp(:,2)), load_disp(:,1), 'o-', ...
          'Color', [0.40 0.75 0.40], 'MarkerFaceColor', [0.40 0.75 0.40], ...
          'LineWidth', 1.5, 'MarkerSize', 4);
     xlabel(ax, 'max|u|', 'Color', [0.70 0.70 0.70], 'FontSize', 8);
@@ -167,6 +252,7 @@ end
 
 % ==========================================================================
 function draw_deformed(ax, nodes, disp_mat, elem_conn)
+% Draw deformed mesh from YAML node coordinates and .res per-node displacements.
     hold(ax, 'on'); axis(ax, 'equal'); axis(ax, 'off');
 
     nc       = min(2, size(disp_mat, 2));
@@ -190,7 +276,6 @@ function draw_deformed(ax, nodes, disp_mat, elem_conn)
         scatter(ax, def(:,1), def(:,2), 18, disp_mag, 'filled');
         colormap(ax, 'turbo');
     else
-        % 1D: displacement profile
         x = (1:size(disp_mat,1))';
         scatter(ax, x, disp_mat(:,1), 18, disp_mag, 'filled');
         colormap(ax, 'turbo');
@@ -212,14 +297,77 @@ end
 
 
 % ==========================================================================
-function [nodes, disp_mat, elem_conn, load_disp] = parse_run(out, yaml_path, overrides)
+function patches = parse_pfem_msh(msh_path)
+% Parse a PFEM .msh PostScript file into element polygon vertex arrays.
+% Each polygon is stored as an Nx2 matrix of [x, y] coordinates.
+    patches = {};
+    try
+        fid = fopen(msh_path, 'r');
+        if fid == -1, return; end
+        raw = textscan(fid, '%s', 'Delimiter', '\n', 'Whitespace', '');
+        fclose(fid);
+        lines = raw{1};
+
+        NUM = '([+-]?\d+\.?\d*(?:[eE][+-]?\d+)?)';
+        pat_m = ['^' NUM '\s+' NUM '\s+m\s*$'];
+        pat_l = ['^' NUM '\s+' NUM '\s+l\s*$'];
+
+        current = [];
+        for k = 1:numel(lines)
+            ln = strtrim(lines{k});
+            tok = regexp(ln, pat_m, 'tokens');
+            if ~isempty(tok)
+                current = [str2double(tok{1}{1}), str2double(tok{1}{2})];
+                continue;
+            end
+            tok = regexp(ln, pat_l, 'tokens');
+            if ~isempty(tok)
+                current(end+1, :) = [str2double(tok{1}{1}), str2double(tok{1}{2})]; %#ok<AGROW>
+                continue;
+            end
+            if strcmp(ln, 'c s') && size(current, 1) >= 3
+                patches{end+1} = current; %#ok<AGROW>
+                current = [];
+            end
+        end
+    catch
+    end
+end
+
+
+% ==========================================================================
+function arrows = parse_pfem_vec(vec_path)
+% Parse a PFEM .vec PostScript file into [from_x from_y to_x to_y] rows.
+    arrows = [];
+    try
+        fid = fopen(vec_path, 'r');
+        if fid == -1, return; end
+        raw = textscan(fid, '%s', 'Delimiter', '\n', 'Whitespace', '');
+        fclose(fid);
+        lines = raw{1};
+
+        NUM = '([+-]?\d+\.?\d*(?:[eE][+-]?\d+)?)';
+        pat = ['^' NUM '\s+' NUM '\s+' NUM '\s+' NUM '\s+arrow\s*$'];
+
+        for k = 1:numel(lines)
+            ln = strtrim(lines{k});
+            tok = regexp(ln, pat, 'tokens');
+            if ~isempty(tok)
+                arrows(end+1, :) = cellfun(@str2double, tok{1}); %#ok<AGROW>
+            end
+        end
+    catch
+    end
+end
+
+
+% ==========================================================================
+function [nodes, disp_mat, elem_conn, load_disp] = parse_res(out, yaml_path, overrides)
 % Parse results from a PFEM .res file.
 %
-% Format A (structural/elastic): per-node displacements table.
-%   Returns: nodes (coords), disp_mat (Nx2+ displacements), elem_conn, load_disp=[]
-%
-% Format B (nonlinear load-step, e.g. p61 von Mises):
-%   "step  load  disp  iters" table.
+% Format A (structural/elastic): per-node displacement table.
+%   Returns: nodes, disp_mat (Nx2+), elem_conn, load_disp=[]
+% Format B (nonlinear load-step): "step load disp iters" table.
 %   Returns: nodes=[], disp_mat=[], elem_conn=[], load_disp (Nx2 [load, max_disp])
     nodes = []; disp_mat = []; elem_conn = []; load_disp = [];
 
@@ -235,6 +383,7 @@ function [nodes, disp_mat, elem_conn, load_disp] = parse_run(out, yaml_path, ove
     fclose(fid);
     lines = raw{1};
 
+    % --- Try Format A first ---
     disp_start = 0;
     disp_cols  = 2;
     for i = 1:numel(lines)
@@ -247,55 +396,50 @@ function [nodes, disp_mat, elem_conn, load_disp] = parse_run(out, yaml_path, ove
             break;
         end
     end
-    if disp_start == 0
-        % Format A not found — check for Format B: "step  load  disp  iters" table
-        ld_start = 0;
-        for i = 1:numel(lines)
+
+    if disp_start > 0
+        dd = [];
+        for i = disp_start:numel(lines)
             ln = strtrim(lines{i});
-            if contains(ln, 'step') && contains(ln, 'load') && contains(ln, 'disp')
-                ld_start = i + 1;
-                break;
+            if isempty(ln) || contains(ln, 'integration') || contains(ln, 'Element'), break; end
+            v = sscanf(ln, '%f');
+            if numel(v) >= 1 + disp_cols
+                dd(end+1, :) = v(2:(1+disp_cols))'; %#ok<AGROW>
             end
         end
-        if ld_start > 0
+        if ~isempty(dd)
+            disp_mat = dd;
+            n_nodes = size(dd, 1);
+            try
+                [ny, ec, ~] = pfem_extract_coords(yaml_path, overrides);
+                if ~isempty(ny) && size(ny, 1) == n_nodes
+                    nodes     = ny;
+                    elem_conn = ec;
+                else
+                    nodes = [(1:n_nodes)', zeros(n_nodes, 1)];
+                end
+            catch
+                nodes = [(1:n_nodes)', zeros(n_nodes, 1)];
+            end
+        end
+        return;
+    end
+
+    % --- Try Format B: "step load disp iters" table ---
+    for i = 1:numel(lines)
+        ln = strtrim(lines{i});
+        if contains(ln, 'step') && contains(ln, 'load') && contains(ln, 'disp')
             ld = [];
-            for i = ld_start:numel(lines)
-                ln = strtrim(lines{i});
-                if isempty(ln), break; end
-                v = sscanf(ln, '%f');
-                if numel(v) >= 3   % step, load, disp [, iters]
+            for j = i+1:numel(lines)
+                ln2 = strtrim(lines{j});
+                if isempty(ln2), break; end
+                v = sscanf(ln2, '%f');
+                if numel(v) >= 3
                     ld(end+1, :) = [v(2), v(3)]; %#ok<AGROW>  [load, max_disp]
                 end
             end
-            if ~isempty(ld)
-                load_disp = ld;
-            end
+            if ~isempty(ld), load_disp = ld; end
+            return;
         end
-        return;   % no per-node data (load-step or eigenvalue output)
-    end
-
-    dd = [];
-    for i = disp_start:numel(lines)
-        ln = strtrim(lines{i});
-        if isempty(ln) || contains(ln, 'integration') || contains(ln, 'Element'), break; end
-        v = sscanf(ln, '%f');
-        if numel(v) >= 1 + disp_cols
-            dd(end+1, :) = v(2:(1+disp_cols))'; %#ok<AGROW>
-        end
-    end
-    if isempty(dd), return; end
-    disp_mat = dd;
-
-    n_nodes = size(dd, 1);
-    try
-        [ny, ec, ~] = pfem_extract_coords(yaml_path, overrides);
-        if ~isempty(ny) && size(ny, 1) == n_nodes
-            nodes     = ny;
-            elem_conn = ec;
-        else
-            nodes = [(1:n_nodes)', zeros(n_nodes, 1)];
-        end
-    catch
-        nodes = [(1:n_nodes)', zeros(n_nodes, 1)];
     end
 end
