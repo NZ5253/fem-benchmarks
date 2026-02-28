@@ -30,10 +30,10 @@ ls ~/projects/fem-benchmarks/pfem/source/
 
 ```bash
 # 1. Generate YAMLs for a chapter
-python3 scripts/generate_perfect_yamls.py --chapter chap05
+python3 scripts/generate_yamls_v2.py --chapter chap05
 
 # 2. Or generate all chapters at once
-python3 scripts/generate_perfect_yamls.py --all-chapters
+python3 scripts/generate_yamls_v2.py --all-chapters
 
 # 3. Validate generated files
 python3 scripts/verify_yamls.py benchmarks/pfem5/chap05/*.yaml
@@ -52,31 +52,48 @@ git push
 
 The `generate_yamls_v2.py` script creates YAML benchmark files with **token-based patch coordinates**:
 - Tokenizes `.dat` files preserving position information
-- Extracts READ(10,*) statements from Fortran source
-- Detects tunable parameters (E, nu, mesh parameters) with their token indices
+- Extracts READ(10,*) statements (including Fortran `&` continuations) from source
+- Detects tunable parameters with their token indices — see table below
 - Generates structured YAML with `global_token_index` for each tunable
+
+### Detected Tunable Parameter Types
+
+| Category | Parameters detected |
+|----------|-------------------|
+| Elastic | E (Young's modulus), ν (Poisson's ratio) |
+| Plasticity | yield_stress σ_y (von Mises) |
+| Mohr-Coulomb | friction_angle_phi, cohesion_c, dilation_angle_psi, unit_weight_gamma, earth_pressure_coeff_k0 |
+| Two-material | fill: E/ν/c/φ/ψ/γ; embankment: E/ν/c/φ/ψ/γ (p69-style) |
+| Flow | permeability_kx/ky, conductivity_kx/ky, dynamic_viscosity |
+| Dynamics | density_rho, dtim, nstep, theta, beta, gamma, fm, fk, dr, omega |
+| Eigenvalue | nmodes, nev, ncv, maxitr |
+| Solver | tol (convergence), limit (max iters), cg_tol, cg_limit |
+| Loading | incs (load increments), presc (prescribed increment) |
+| Consolidation | bulk_modulus_ke, initial_effective_stress (cons), k0 |
+| Mesh | nels/nxe, nye (with topology-change warning) |
 
 ### Key Features
 
 - **Token indexing**: Each tunable has a `global_token_index` for direct patching
-- **Conservative detection**: Identifies E (>10000), nu (0-0.5), and mesh parameters
+- **Source-aware detection**: Walks READ statements in source order using a symbol table
+- **Continuation handling**: Fortran `&` multi-line READs joined before parsing
 - **All tokens stored**: Complete token list in `inputs.all_tokens` for verification
 
 ### Usage
 
 **Generate single case:**
 ```bash
-python3 scripts/generate_perfect_yamls.py --chapter chap05 --case p54_1
+python3 scripts/generate_yamls_v2.py --chapter chap05 --case p54_1
 ```
 
 **Generate all cases in a chapter:**
 ```bash
-python3 scripts/generate_perfect_yamls.py --chapter chap05
+python3 scripts/generate_yamls_v2.py --chapter chap05
 ```
 
 **Preview without generating:**
 ```bash
-python3 scripts/generate_perfect_yamls.py --chapter chap05 --dry-run
+python3 scripts/generate_yamls_v2.py --chapter chap05 --dry-run
 ```
 
 ### Command Options
@@ -91,10 +108,10 @@ python3 scripts/generate_perfect_yamls.py --chapter chap05 --dry-run
 
 ### Generate All Chapters
 
-Process all 85 cases across chapters 4-11 with one command:
+Process all 90 cases across chapters 4-11 with one command:
 
 ```bash
-python3 scripts/generate_perfect_yamls.py --all-chapters
+python3 scripts/generate_yamls_v2.py --all-chapters
 ```
 
 ### YAML Structure
@@ -204,9 +221,15 @@ for E = [500, 1000, 5000, 10000]
 end
 ```
 
-Each run creates an isolated folder with parameter values in the name:
+Each run creates an isolated, self-contained folder:
 ```
-runs/single/chap05/p51/p51_4/260125_160124_E_500/
+runs/chap05/p51_4/E_5e5/          ← parameter key in folder name
+    p51_4.dat                      ← patched input
+    p51                            ← compiled binary (chmod +x)
+    p51_4.res  p51_4.msh           ← PFEM outputs
+    case.yaml                      ← copy of YAML
+    overrides.mat                  ← saved parameter overrides
+    run_info.txt                   ← human-readable run summary
 ```
 
 ### Result Comparison
@@ -428,15 +451,15 @@ fem-benchmarks/
 
 | Chapter | Programs | Cases | Topics |
 |---------|----------|-------|--------|
-| 4 | p41-p47 | 13 | 1D Problems |
-| 5 | p51-p57 | 13 | 2D Linear Elasticity |
-| 6 | p61-p69 | 15 | Material Nonlinearity |
-| 7 | p71-p75 | 8 | Steady State Flow |
-| 8 | p81-p89 | 16 | Transient Problems |
-| 9 | p91-p96 | 7 | Coupled Problems |
+| 4 | p41-p47   | 13 | 1D Problems |
+| 5 | p51-p57   | 14 | 2D Linear Elasticity |
+| 6 | p61-p69   | 19 | Material Nonlinearity (von Mises, Mohr-Coulomb) |
+| 7 | p71-p75   | 8  | Steady State Flow |
+| 8 | p81-p811  | 16 | Transient Problems |
+| 9 | p91-p96   | 7  | Coupled Problems (Biot, Navier-Stokes) |
 | 10 | p101-p104 | 5 | Eigenvalue Problems |
-| 11 | p111-p115 | 8 | Parallel Processing |
-| **Total** | | **85** | |
+| 11 | p111-p118 | 8 | Dynamics & Explicit Plasticity |
+| **Total** | | **90** | |
 
 ---
 

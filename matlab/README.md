@@ -15,14 +15,15 @@ pfem_root = '~/projects/fem-benchmarks/pfem';
 ```
 
 #### pfem_run_from_yaml.m
-YAML-driven runner with parameter overrides. Creates isolated run folders with parameter values in the name.
+YAML-driven runner with parameter overrides. Creates isolated, self-contained run folders.
 
 ```matlab
 yaml_path = 'benchmarks/pfem5/chap05/p51_4.yaml';
 overrides = struct();
 overrides.youngs_modulus_E = 500;
 [status, out] = pfem_run_from_yaml(repo_root, pfem_root, yaml_path, overrides);
-% Creates folder: runs/single/chap05/p51/p51_4/260125_160124_E_500/
+% Creates folder: runs/chap05/p51_4/E_500/
+%   Contains: patched .dat, binary (chmod +x), .res/.msh, case.yaml, overrides.mat, run_info.txt
 ```
 
 ### Parameter Discovery
@@ -34,18 +35,27 @@ Display available tunable parameters for any YAML case.
 tunables = pfem_show_tunables('benchmarks/pfem5/chap05/p51_4.yaml');
 ```
 
-Output:
+Output (example for p63 — Mohr-Coulomb):
 ```
 ============================================================
-Tunable Parameters for: p51_4
-Program: p51 | Chapter: 5
+Tunable Parameters for: p63
+Program: p63 | Chapter: 6
 ============================================================
 
 NAME                       TOKEN          CURRENT      TYPE  SUGGESTED RANGE
 --------------------------------------------------------------------------------
-youngs_modulus_E               9            1.0e6      real  [1.00e+04, 1.00e+12]
+friction_angle_phi             5             20.0      real  [0.00e+00, 4.50e+01]
+cohesion_c                     6             10.0      real  [0.00e+00, 1.00e+06]
+dilation_angle_psi             7             20.0      real  [0.00e+00, 4.50e+01]
+unit_weight_gamma              8             16.0      real  [0.00e+00, 1.00e+02]
+youngs_modulus_E               9           1.0e5      real  [1.00e+03, 1.00e+12]
 poisson_ratio_nu              10              0.3      real  [0.00e+00, 4.90e-01]
-nels_or_nxe                    3                8       int  -
+convergence_tolerance         74           0.001      real  [1.00e-12, 1.00e-01]
+iteration_limit               75            500        int  [10, 10000]
+load_increments               76             25        int  [1, 1000]
+prescribed_increment          77          -0.001      real  [-1.00e+06, 1.00e+06]
+nels_or_nxe                    1             40        int  -
+np_types_or_nye                2             20        int  -
 ```
 
 #### pfem_smart_sweep.m
@@ -166,14 +176,22 @@ results = pfem_run_chapter(repo_root, pfem_root, 'chap04');
 
 ## Output Structure
 
-Each run creates an isolated folder:
+Each run creates a self-contained folder (binary + inputs + outputs in one place):
 ```
-runs/single/chap05/p51/p51_4/
-  260125_160124_E_500/          # Timestamp + parameter values
-    p51_4_XXXX.dat              # Modified input
-    p51_4_XXXX.res              # Results
-    case.yaml                   # Copy of YAML
-    overrides.mat               # Parameter overrides
+runs/chap05/p51_4/E_500/        # parameter key in folder name
+    p51_4.dat                   # patched input
+    p51                         # compiled binary (chmod +x; re-runnable from shell)
+    p51_4.res                   # PFEM results
+    p51_4.msh                   # PFEM mesh output
+    case.yaml                   # copy of YAML used
+    overrides.mat               # saved parameter struct
+    run_info.txt                # human-readable summary (program, params, file sizes)
+```
+
+Re-run any case directly from shell (no MATLAB needed):
+```bash
+cd runs/chap05/p51_4/E_500
+printf "p51_4\n" | ./p51
 ```
 
 ## Comparison Features

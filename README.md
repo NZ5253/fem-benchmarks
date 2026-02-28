@@ -5,7 +5,7 @@ A comprehensive benchmark catalogue for **Programming the Finite Element Method 
 ## Overview
 
 This repository provides:
-- 📋 **Structured YAML metadata** for 85+ PFEM benchmark cases across chapters 4-11
+- 📋 **Structured YAML metadata** for 90 PFEM benchmark cases across chapters 4-11
 - 🔧 **Build and execution scripts** for all PFEM programs
 - 📊 **MATLAB interface** for running cases and performing parametric studies
 - 📝 **Comprehensive documentation** with detailed input/output schemas
@@ -116,10 +116,10 @@ Example: [benchmarks/pfem5/chap05/p51_3.yaml](benchmarks/pfem5/chap05/p51_3.yaml
 
 ```bash
 # Single chapter
-python3 scripts/generate_perfect_yamls.py --chapter chap05
+python3 scripts/generate_yamls_v2.py --chapter chap05
 
 # All chapters at once
-python3 scripts/generate_perfect_yamls.py --all-chapters
+python3 scripts/generate_yamls_v2.py --all-chapters
 
 # Verify generated YAMLs
 python3 scripts/verify_yamls.py benchmarks/pfem5/chap05/*.yaml
@@ -201,11 +201,16 @@ pfem_studio('benchmarks/pfem5/chap06/p61.yaml')
 ## Key Features
 
 ### 1. YAML Generation
-The `generate_perfect_yamls.py` script creates comprehensive benchmark files:
-- Extracts READ(10,*) statements with line numbers from Fortran source
+The `generate_yamls_v2.py` script creates comprehensive benchmark files:
+- Extracts READ(10,*) statements (including `&` continuation) with line numbers from Fortran source
 - Parses .dat files to document input values organized by record
-- Identifies tunable parameters for parametric studies (E, nu, loads, mesh)
-- Generates complete YAML specifications following p54_1.yaml template
+- Identifies tunable parameters for parametric studies including:
+  - Elastic: E, ν (Young's modulus, Poisson's ratio)
+  - Mohr-Coulomb: φ, c, ψ, γ (friction angle, cohesion, dilation angle, unit weight)
+  - Two-material (fill/embankment): separate E, ν, c, φ, ψ, γ per material
+  - Solver: tol, limit, incs, presc, dtim, nstep, cg_tol, …
+  - Mesh topology: nels/nxe, nye
+- Generates complete YAML specifications with `global_token_index` for each tunable
 - Includes input_schema, tunable_parameters, and parsed inputs sections
 
 ### 2. MATLAB Integration
@@ -237,14 +242,14 @@ Runs are saved to `runs/<chap>/<case>/<param_key>/`, for example:
 | Chapter | Program Range | Cases | Topics |
 |---------|---------------|-------|--------|
 | 4       | p41-p47      | 13    | 1D Problems |
-| 5       | p51-p54      | 13    | 2D Linear Elasticity |
-| 6       | p61-p69      | 15    | Material Nonlinearity |
+| 5       | p51-p57      | 14    | 2D Linear Elasticity |
+| 6       | p61-p69      | 19    | Material Nonlinearity (von Mises, Mohr-Coulomb) |
 | 7       | p71-p75      | 8     | Steady State Flow |
-| 8       | p81-p89      | 16    | Transient Problems |
-| 9       | p91-p96      | 7     | Coupled Problems |
+| 8       | p81-p811     | 16    | Transient Problems |
+| 9       | p91-p96      | 7     | Coupled Problems (Biot, Navier-Stokes) |
 | 10      | p101-p104    | 5     | Eigenvalue Problems |
-| 11      | p111-p115    | 8     | Parallel Processing |
-| **Total** |            | **85** | |
+| 11      | p111-p118    | 8     | Dynamics & Explicit Plasticity |
+| **Total** |            | **90** | |
 
 ## Licensing Note
 
