@@ -428,18 +428,17 @@ end
 
 
 function cb_open_figs(fig, res_tbl)
-% Open sweep figures only for the rows selected in the Results table.
-% Each unique case opens its own figure window.
+% Open sweep figures for checked rows.
+% All checked scenarios for the SAME case are combined into ONE figure
+% (side-by-side comparison, exactly like NZ.m). Each unique case gets its
+% own independent figure window.
     st = getappdata(fig, 'state');
-    if isempty(st.case_result_map)
-        uialert(fig, 'No results yet. Run a sweep first.', 'No results'); return;
-    end
     row_data = res_tbl.Data;
-    if isempty(row_data)
+    if isempty(st.case_result_map) || isempty(row_data)
         uialert(fig, 'No results yet. Run a sweep first.', 'No results'); return;
     end
 
-    % Build (case_name, scenario_label) from checked rows (col 1 = checkbox)
+    % Collect checked (case_name, label) pairs
     want_cn  = {};
     want_lbl = {};
     for r = 1:size(row_data, 1)
@@ -452,36 +451,56 @@ function cb_open_figs(fig, res_tbl)
         uialert(fig, 'Tick the checkbox on one or more rows first.', 'Nothing checked'); return;
     end
 
-    opened = 0;
+    % Process each unique case independently — one figure window per case
+    opened     = 0;
+    done_cases = {};
     for k = 1:numel(st.case_result_map)
-        m = st.case_result_map{k};
-        sc_idx = [];
-        for si = 1:numel(m.case_results)
-            for ri = 1:numel(want_cn)
-                if strcmp(want_cn{ri}, m.case_name) && strcmp(want_lbl{ri}, m.case_results(si).label)
-                    sc_idx(end+1) = si; %#ok<AGROW>
-                    break;
+        m  = st.case_result_map{k};
+        cn = m.case_name;
+        if ~any(strcmp(want_cn, cn)), continue; end          % nothing checked for this case
+        if any(strcmp(done_cases, cn)),        continue; end  % already processed
+
+        % Gather ALL checked scenarios for this case across every map entry
+        % (handles results from multiple separate Run calls)
+        cn_labels = want_lbl(strcmp(want_cn, cn));
+        all_sc    = struct([]);
+        yaml_path = m.yaml_path;
+        chap_str  = m.chap_str;
+        sweep_disp = m.sweep_display;
+
+        for k2 = 1:numel(st.case_result_map)
+            m2 = st.case_result_map{k2};
+            if ~strcmp(m2.case_name, cn), continue; end
+            for si = 1:numel(m2.case_results)
+                lbl = m2.case_results(si).label;
+                if any(strcmp(cn_labels, lbl))
+                    all_sc(end+1) = m2.case_results(si); %#ok<AGROW>
                 end
             end
         end
-        if isempty(sc_idx), continue; end
+        done_cases{end+1} = cn; %#ok<AGROW>
 
-        subset     = m.case_results(sc_idx);
-        runs_dir   = fullfile(st.repo_root, 'runs', m.chap_str, m.case_name);
+        if isempty(all_sc), continue; end
+
+        % If mixed single/multi-param runs, x-axis label falls back to 'Scenario'
+        if numel(all_sc) > 1
+            sweep_disp = 'Scenario';
+        end
+
+        runs_dir   = fullfile(st.repo_root, 'runs', chap_str, cn);
         if ~exist(runs_dir, 'dir'), mkdir(runs_dir); end
-        fig_prefix = fullfile(runs_dir, sprintf('%s_sweep', m.case_name));
+        fig_prefix = fullfile(runs_dir, sprintf('%s_sweep', cn));
         try
-            pfem_plot_sweep_summary(subset, m.sweep_display, m.yaml_path, ...
-                'Title', sprintf('PFEM %s  [%d of %d scenario(s)]', ...
-                    m.case_name, numel(sc_idx), numel(m.case_results)), ...
+            pfem_plot_sweep_summary(all_sc, sweep_disp, yaml_path, ...
+                'Title', sprintf('PFEM %s  [%d scenario(s)]', cn, numel(all_sc)), ...
                 'Save', fig_prefix, 'Show', true);
             opened = opened + 1;
         catch ex
-            uialert(fig, ex.message, sprintf('Figure error: %s', m.case_name));
+            uialert(fig, ex.message, sprintf('Figure error: %s', cn));
         end
     end
     if opened == 0
-        uialert(fig, 'No results matched the selected rows.', 'Nothing opened');
+        uialert(fig, 'No results matched the checked rows.', 'Nothing opened');
     end
 end
 
