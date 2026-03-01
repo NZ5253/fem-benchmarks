@@ -9,7 +9,7 @@ function pfem_sweep_gui()
 %   - Sweep modes: Lockstep (arrays vary together) or Grid (Cartesian product)
 %   - Preview scenario list before running
 %   - Run all cases x scenarios; live log output; stop button
-%   - Results table with max|u|; open saved figures; print text comparison
+%   - Results table with max|u|; open saved figures; compare runs in GUI log
 %
 % Usage:
 %   pfem_sweep_gui()
@@ -187,7 +187,7 @@ function pfem_sweep_gui()
     ag.BackgroundColor = [0.10 0.10 0.12];
 
     btn_figs = sbtn(ag, 'Open Figures',      [0.17 0.27 0.42], 1, 1);
-    btn_cmp  = sbtn(ag, 'Print Comparison',  [0.17 0.27 0.42], 2, 1);
+    btn_cmp  = sbtn(ag, 'Show Comparison',   [0.17 0.27 0.42], 2, 1);
     btn_clr  = sbtn(ag, 'Clear Results',     [0.35 0.13 0.13], 3, 1);
 
     %% ── Wire callbacks ──────────────────────────────────────────────────────
@@ -200,7 +200,7 @@ function pfem_sweep_gui()
     btn_run.ButtonPushedFcn     = @(~,~) cb_run(fig, param_tbl, sweep_dd, log_ta, prog_lbl, res_tbl);
     btn_stop.ButtonPushedFcn    = @(~,~) cb_stop(fig);
     btn_figs.ButtonPushedFcn    = @(~,~) cb_open_figs(fig);
-    btn_cmp.ButtonPushedFcn     = @(~,~) cb_print_compare(fig);
+    btn_cmp.ButtonPushedFcn     = @(~,~) cb_print_compare(fig, log_ta);
     btn_clr.ButtonPushedFcn     = @(~,~) set(res_tbl, 'Data', {});
 end
 
@@ -445,20 +445,36 @@ function cb_open_figs(fig)
 end
 
 
-function cb_print_compare(fig)
+function cb_print_compare(fig, log_ta)
     st = getappdata(fig, 'state');
     if isempty(st.case_result_map)
         uialert(fig, 'No results yet. Run a sweep first.', 'No results'); return;
     end
+    append_log(log_ta, '══════════════════════════════════════════════════════');
+    append_log(log_ta, '  Comparison: original vs modified');
+    append_log(log_ta, '══════════════════════════════════════════════════════');
     for k = 1:numel(st.case_result_map)
         m = st.case_result_map{k};
         for si = 1:numel(m.case_results)
-            if m.case_results(si).status == 0
-                fprintf('\n--- %s | %s ---\n', m.case_name, m.case_results(si).label);
-                pfem_compare_results(m.case_results(si).out, 'plot', false);
+            r = m.case_results(si);
+            if r.status ~= 0, continue; end
+            append_log(log_ta, sprintf('─── %s  |  %s ───', m.case_name, r.label));
+            % Capture pfem_compare_results text output and pipe into log
+            try
+                txt = evalc('pfem_compare_results(r.out, ''plot'', false, ''text'', true)');
+                lns = strsplit(txt, newline);
+                for li = 1:numel(lns)
+                    ln = strtrim(lns{li});
+                    if ~isempty(ln)
+                        append_log(log_ta, ['  ' ln]);
+                    end
+                end
+            catch ex
+                append_log(log_ta, sprintf('  [compare error] %s', ex.message));
             end
         end
     end
+    append_log(log_ta, '══════════════════════════════════════════════════════');
 end
 
 
