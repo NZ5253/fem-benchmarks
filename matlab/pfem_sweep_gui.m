@@ -187,7 +187,9 @@ function pfem_sweep_gui()
     ag.BackgroundColor = [0.10 0.10 0.12];
 
     btn_figs = sbtn(ag, 'Open Figures',      [0.17 0.27 0.42], 1, 1);
+    btn_figs.Tooltip = 'Select rows first (Ctrl/Shift for multi). Each case opens its own figure.';
     btn_cmp  = sbtn(ag, 'Show Comparison',   [0.17 0.27 0.42], 2, 1);
+    btn_cmp.Tooltip  = 'Select 2+ rows (same or different cases) to compare scenarios in the log.';
     btn_clr  = sbtn(ag, 'Clear Results',     [0.35 0.13 0.13], 3, 1);
 
     %% ── Wire callbacks ──────────────────────────────────────────────────────
@@ -199,8 +201,8 @@ function pfem_sweep_gui()
     btn_preview.ButtonPushedFcn = @(~,~) cb_preview(param_tbl, sweep_dd, log_ta);
     btn_run.ButtonPushedFcn     = @(~,~) cb_run(fig, param_tbl, sweep_dd, log_ta, prog_lbl, res_tbl);
     btn_stop.ButtonPushedFcn    = @(~,~) cb_stop(fig);
-    btn_figs.ButtonPushedFcn    = @(~,~) cb_open_figs(fig);
-    btn_cmp.ButtonPushedFcn     = @(~,~) cb_print_compare(fig, log_ta);
+    btn_figs.ButtonPushedFcn    = @(~,~) cb_open_figs(fig, res_tbl);
+    btn_cmp.ButtonPushedFcn     = @(~,~) cb_print_compare(fig, log_ta, res_tbl);
     btn_clr.ButtonPushedFcn     = @(~,~) set(res_tbl, 'Data', {});
 end
 
@@ -424,42 +426,116 @@ function cb_stop(fig)
 end
 
 
-function cb_open_figs(fig)
+function cb_open_figs(fig, res_tbl)
+% Open sweep figures only for the rows selected in the Results table.
+% Each unique case opens its own figure window.
     st = getappdata(fig, 'state');
     if isempty(st.case_result_map)
         uialert(fig, 'No results yet. Run a sweep first.', 'No results'); return;
     end
+    sel = res_tbl.Selection;          % Nx2 [row, col] or empty
+    if isempty(sel)
+        uialert(fig, sprintf('Select one or more rows in the Results table first.\n(Ctrl/Shift for multi-select)'), ...
+                'No selection'); return;
+    end
+    sel_rows = unique(sel(:,1));
+    row_data = res_tbl.Data;
+
+    % Build (case_name, scenario_label) lookup from selection
+    want_cn  = {};
+    want_lbl = {};
+    for ri = 1:numel(sel_rows)
+        r = sel_rows(ri);
+        if r <= size(row_data, 1)
+            want_cn{end+1}  = row_data{r,1};  %#ok<AGROW>
+            want_lbl{end+1} = row_data{r,2};  %#ok<AGROW>
+        end
+    end
+
+    opened = 0;
     for k = 1:numel(st.case_result_map)
-        m          = st.case_result_map{k};
+        m = st.case_result_map{k};
+        sc_idx = [];
+        for si = 1:numel(m.case_results)
+            for ri = 1:numel(want_cn)
+                if strcmp(want_cn{ri}, m.case_name) && strcmp(want_lbl{ri}, m.case_results(si).label)
+                    sc_idx(end+1) = si; %#ok<AGROW>
+                    break;
+                end
+            end
+        end
+        if isempty(sc_idx), continue; end
+
+        subset     = m.case_results(sc_idx);
         runs_dir   = fullfile(st.repo_root, 'runs', m.chap_str, m.case_name);
         if ~exist(runs_dir, 'dir'), mkdir(runs_dir); end
         fig_prefix = fullfile(runs_dir, sprintf('%s_sweep', m.case_name));
         try
-            pfem_plot_sweep_summary(m.case_results, m.sweep_display, m.yaml_path, ...
-                'Title', sprintf('PFEM %s', m.case_name), ...
+            pfem_plot_sweep_summary(subset, m.sweep_display, m.yaml_path, ...
+                'Title', sprintf('PFEM %s  [%d of %d scenario(s)]', ...
+                    m.case_name, numel(sc_idx), numel(m.case_results)), ...
                 'Save', fig_prefix, 'Show', true);
+            opened = opened + 1;
         catch ex
             uialert(fig, ex.message, sprintf('Figure error: %s', m.case_name));
         end
     end
+    if opened == 0
+        uialert(fig, 'No results matched the selected rows.', 'Nothing opened');
+    end
 end
 
 
-function cb_print_compare(fig, log_ta)
+function cb_print_compare(fig, log_ta, res_tbl)
+% Show text comparison in the GUI log.
+% Requires 2+ rows selected (Ctrl/Shift). Single-row selection makes no
+% sense for a comparative sweep — alert the user instead.
     st = getappdata(fig, 'state');
     if isempty(st.case_result_map)
         uialert(fig, 'No results yet. Run a sweep first.', 'No results'); return;
     end
+
+    sel = res_tbl.Selection;
+    if isempty(sel)
+        uialert(fig, sprintf('Select 2 or more rows in the Results table.\n(Ctrl/Shift for multi-select)'), ...
+                'No selection'); return;
+    end
+    sel_rows = unique(sel(:,1));
+    if numel(sel_rows) < 2
+        uialert(fig, sprintf('Select 2 or more rows to compare scenarios.\nA single run has nothing to compare against.'), ...
+                'Need 2+ rows'); return;
+    end
+
+    row_data = res_tbl.Data;
+    want_cn  = {};
+    want_lbl = {};
+    for ri = 1:numel(sel_rows)
+        r = sel_rows(ri);
+        if r <= size(row_data, 1)
+            want_cn{end+1}  = row_data{r,1};  %#ok<AGROW>
+            want_lbl{end+1} = row_data{r,2};  %#ok<AGROW>
+        end
+    end
+
     append_log(log_ta, '══════════════════════════════════════════════════════');
-    append_log(log_ta, '  Comparison: original vs modified');
+    append_log(log_ta, sprintf('  Comparison: %d selected scenario(s) vs original', numel(sel_rows)));
     append_log(log_ta, '══════════════════════════════════════════════════════');
+
+    found = 0;
     for k = 1:numel(st.case_result_map)
         m = st.case_result_map{k};
         for si = 1:numel(m.case_results)
             r = m.case_results(si);
-            if r.status ~= 0, continue; end
+            % Check if this scenario is in the selection
+            match = false;
+            for ri = 1:numel(want_cn)
+                if strcmp(want_cn{ri}, m.case_name) && strcmp(want_lbl{ri}, r.label)
+                    match = true; break;
+                end
+            end
+            if ~match || r.status ~= 0, continue; end
+            found = found + 1;
             append_log(log_ta, sprintf('─── %s  |  %s ───', m.case_name, r.label));
-            % Capture pfem_compare_results text output and pipe into log
             try
                 txt = evalc('pfem_compare_results(r.out, ''plot'', false, ''text'', true)');
                 lns = strsplit(txt, newline);
@@ -473,6 +549,10 @@ function cb_print_compare(fig, log_ta)
                 append_log(log_ta, sprintf('  [compare error] %s', ex.message));
             end
         end
+    end
+
+    if found == 0
+        append_log(log_ta, '  (no successful runs matched the selection)');
     end
     append_log(log_ta, '══════════════════════════════════════════════════════');
 end
