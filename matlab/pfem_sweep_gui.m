@@ -413,7 +413,11 @@ function cb_run(fig, param_tbl, sweep_dd, log_ta, prog_lbl, res_tbl)
 
     end
 
-    n_ok = sum(strcmp(row_data(:,3), 'OK'));
+    if isempty(row_data)
+        n_ok = 0;
+    else
+        n_ok = sum(strcmp(row_data(:,3), 'OK'));
+    end
     prog_lbl.Text = sprintf('Done  (%d / %d OK)', n_ok, total);
     append_log(log_ta, '=== Run complete ===');
 end

@@ -120,19 +120,20 @@ function figs = pfem_plot_sweep_summary(results, sweep_param, yaml_path, varargi
     vis  = 'off';
     if do_show, vis = 'on'; end
     figs = struct('res',[],'msh',[],'dis',[],'vec',[]);
-    cols = min(n, 4);
 
     % ====================================================================
     % Figure 1 — Load / Displacement  (.res)
     % ====================================================================
     if has_res
+        [nr_p, nc_p] = panel_layout(n);
+        n_rows_total = nr_p + 1;   % row 1 = summary curve; rows 2..end = panels
         fig1 = make_dark_figure( ...
             sprintf('Load–Disp — %s — %s sweep', case_title, sweep_label), ...
-            cols, 2, vis);
+            nc_p, n_rows_total, vis);
         figs.res = fig1;
 
-        % Top row: parameter-vs-max|u| sweep curve
-        ax_c = subplot(2, 1, 1, 'Parent', fig1);
+        % Top row: parameter-vs-max|u| sweep curve (spans all columns)
+        ax_c = subplot(n_rows_total, nc_p, 1:nc_p, 'Parent', fig1);
         style_ax(ax_c);
         hold(ax_c,'on'); grid(ax_c,'on');
 
@@ -157,9 +158,9 @@ function figs = pfem_plot_sweep_summary(results, sweep_param, yaml_path, varargi
               'Color',[0.88 0.88 0.88], 'FontSize',10, 'Interpreter','none');
         hold(ax_c,'off');
 
-        % Bottom row: one load-disp (or magnitude) panel per scenario/sweep value
+        % Remaining rows: one panel per scenario (layout handles n > 4)
         for i = 1:n
-            ax  = subplot(2, cols, cols + i, 'Parent', fig1);
+            ax  = subplot(n_rows_total, nc_p, nc_p + i, 'Parent', fig1);
             style_ax(ax);
             lbl = panel_labels{i};
 
