@@ -3,8 +3,10 @@ function [status, outputs] = pfem_runner(pfem_root, chapter, program, case_name,
 % If work_dir is provided, PFEM runs in work_dir and reads <case_name>.dat from there.
 
     outputs = struct();
-    outputs.case = case_name;
+    outputs.case      = case_name;
     outputs.timestamp = datetime('now');
+    outputs.files     = {};       % always set so callers never hit missing-field errors
+    outputs.num_files = 0;
 
     if startsWith(pfem_root, '~')
         pfem_root = replace(pfem_root, '~', getenv('HOME'));
