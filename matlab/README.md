@@ -125,7 +125,76 @@ pfem_compare_results(out, 'plot', true);
 
 ---
 
-## NZ.m — Multi-Case × Multi-Scenario Sweep
+## pfem_sweep_gui.m — Graphical Sweep Studio (recommended)
+
+`pfem_sweep_gui` is the GUI equivalent of NZ.m.  No code editing required.
+
+```matlab
+pfem_sweep_gui()
+```
+
+### Layout
+
+```
+┌─ Cases ──────────────┐  ┌─ Tunable Parameters ──────────────────────────────┐
+│ chap06/p61           │  │ ☑  youngs_modulus_E   1e4  2e4  4e4  1e5  [Range] │
+│ chap06/p63           │  │ ☑  yield_stress       50   100  200  500  [Range] │
+│ chap05/p51_4         │  │ ☐  poisson_ratio_nu                       [Range] │
+│                      │  │                                                    │
+│ [+ Add YAML(s)]      │  │  Mode: [Lockstep ▼]  [Fill Ranges] [-][4][+]      │
+│ [- Remove]           │  │                      [Preview Scenarios]           │
+└──────────────────────┘  └────────────────────────────────────────────────────┘
+┌─ Run ────────────────┐  ┌─ Log ──────────────────────────────────────────────┐
+│  [  Run All  ]       │  │ === Run start: 3 case(s) x 4 scenario(s) = 12     │
+│  [   Stop   ]        │  │ --- Case: p61  (chap06) ---                        │
+│  3 / 12 (p61|sy=50)  │  │   [1/12] p61 | sy=50 E=1e4                        │
+└──────────────────────┘  │     OK  — 4 file(s)   max|u| = 3.721e-02          │
+┌─ Results ────────────────────────────────────────────────────────────────────┐
+│ Case  Scenario    Status  max|u|     Run Directory                           │
+│ p61   sy=50 E=1e4   OK   3.721e-02  runs/chap06/p61/sy_50_E_1e4/            │
+│ p61   sy=100 E=2e4  OK   1.860e-02  runs/chap06/p61/sy_100_E_2e4/           │
+└──────────────────────────────────────────────────────────────────────────────┘
+                              [Open Figures]  [Print Comparison]  [Clear]
+```
+
+### Workflow
+
+1. **Add YAML(s)** — file picker (multi-select); parameters auto-populate from union of all loaded cases
+2. **Configure parameters** — check/uncheck rows, type values (`50, 100, 200`) or click **Fill Ranges**
+3. **Adjust count** — click `−`/`+` next to Fill Ranges to set how many log-spaced values (1–20, default 4)
+4. **Choose sweep mode**:
+   - **Lockstep** — arrays vary in parallel; `E=[1e4,2e4]` + `nu=[0.2,0.3]` → 2 scenarios. Arrays must be same length.
+   - **Grid** — Cartesian product; `E=[1e4,2e4]` + `nu=[0.2,0.3]` → 4 scenarios (max 500).
+5. **Preview** — verify scenario list in log before committing to a run
+6. **Run All** — for each case:
+   - Binary is auto-compiled via `pfem_ensure_built` if missing (see below)
+   - Every scenario runs with `pfem_run_from_yaml`; baseline auto-generated if book `.res` absent
+   - Results table fills live; stop button interrupts cleanly
+7. **Open Figures** — click after run to show Load–Disp, reference mesh, deformed shape, and vector panels
+8. **Print Comparison** — prints text diff tables to MATLAB command window
+
+### Auto-Build
+
+Binaries are compiled automatically — no manual build step needed:
+
+```
+[build] Binary not found: pfem/build/bin/p61
+[build] Building p61 for chap06 ...
+[build] OK — binary ready: pfem/build/bin/p61
+```
+
+If the build fails for a case (e.g. missing gfortran), that case is skipped and
+the remaining cases continue.  The log shows which cases were skipped.
+
+### Parameters silently skipped
+
+A scenario set can be applied to multiple cases of different types.  Parameters
+not present in a given case's YAML (e.g. `yield_stress` for a flow case) are
+silently ignored — no errors, no warnings.
+
+---
+
+## NZ.m — Multi-Case × Multi-Scenario Sweep (scripted)
 
 `NZ.m` is the primary scripted sweep interface.  Edit the configuration
 section and run the file.

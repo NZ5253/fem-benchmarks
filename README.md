@@ -39,7 +39,18 @@ mv ~/Downloads/pfem5/5th_ed pfem/
 scripts/pfem_build_and_run.sh pfem chap05 p51 p51_3 --rebuild
 ```
 
-### From MATLAB — PFEM Studio (interactive)
+### From MATLAB — Sweep GUI (recommended, no code editing)
+```matlab
+% Launch the graphical sweep studio
+pfem_sweep_gui()
+```
+- Click **Add YAML(s)** → select any benchmark files from `benchmarks/pfem5/`
+- Parameters auto-populate with suggested ranges; enter comma-separated values or click **Fill Ranges**
+- Choose **Lockstep** (params vary together) or **Grid** (all combinations) sweep mode
+- Click **Run All** → binaries are compiled automatically if missing; live log shows progress
+- Click **Open Figures** after the run to view Load–Displacement, mesh, deformed shape, and vector panels
+
+### From MATLAB — PFEM Studio (single-case interactive)
 ```matlab
 % Open the interactive study environment (file picker opens)
 pfem_studio()
@@ -55,7 +66,7 @@ pfem_root = fullfile(repo_root, 'pfem');
 [status, outputs] = pfem_runner(pfem_root, 'chap05', 'p51', 'p51_3');
 ```
 
-### From MATLAB — multi-case, multi-parameter sweep (NZ.m)
+### From MATLAB — scripted multi-case sweep (NZ.m)
 ```matlab
 % Run two cases (p61 + p63) across 4 simultaneous-parameter scenarios
 yaml_paths = {
@@ -93,7 +104,8 @@ fem-benchmarks/
 │   ├── generate_yamls_v2.py         # YAML generator (token-based)
 │   └── verify_yamls.py              # YAML validation
 ├── matlab/              # MATLAB interface
-│   ├── pfem_studio.m              # Interactive study environment (main UI)
+│   ├── pfem_sweep_gui.m           # GUI sweep studio (multi-case × multi-param, auto-build)
+│   ├── pfem_studio.m              # Interactive study environment (single case)
 │   ├── pfem_diagram.m             # Textbook-style mesh diagram renderer
 │   ├── pfem_runner.m              # Single case runner
 │   ├── pfem_run_from_yaml.m       # YAML-driven runner with overrides + auto-baseline
@@ -145,7 +157,22 @@ python3 scripts/verify_yamls.py benchmarks/pfem5/chap05/*.yaml
 
 See [docs/GUIDE.md](docs/GUIDE.md) for complete instructions.
 
-### Parametric Study — Interactive (recommended)
+### Parametric Study — Sweep GUI (recommended)
+
+```matlab
+pfem_sweep_gui()
+```
+
+1. **Add YAML(s)** — pick any combination of benchmark files; parameters auto-populate
+2. **Configure** — enable parameters, enter values (`50, 100, 200, 500`) or use **Fill Ranges [-][4][+]**
+3. **Preview** — verify scenario list in log before running
+4. **Run All** — auto-builds missing binaries; runs every case × every scenario; live log
+5. **Open Figures** — view Load–Disp, mesh, deformed shape, vector panels on demand
+
+Supports any number of cases and scenarios simultaneously.  Parameters not present in a
+given case's YAML are silently skipped, so one scenario set covers all cases.
+
+### Parametric Study — Single Case Interactive (pfem_studio)
 
 ```matlab
 % Open studio with file picker
@@ -280,7 +307,8 @@ The `generate_yamls_v2.py` script creates comprehensive benchmark files:
 
 | Function | Purpose |
 |---|---|
-| `pfem_studio` | Interactive GUI — load YAML, edit params, run, see deformed mesh |
+| `pfem_sweep_gui` | **Sweep GUI** — multi-case × multi-param, auto-build, live log, on-demand figures |
+| `pfem_studio` | Single-case interactive GUI — load YAML, edit params, run, see deformed mesh |
 | `pfem_diagram` | Standalone textbook-style mesh diagram with BC/load annotations |
 | `pfem_run_from_yaml` | Programmatic runner: patches .dat from YAML overrides, auto-generates baseline |
 | `pfem_extract_coords` | Extract exact node coordinates from YAML tokens (all chapters) |

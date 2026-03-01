@@ -231,9 +231,47 @@ runs/chap06/p63/default/   ← created automatically on first p63 override run
 ```
 Subsequent scenario runs compare against this cached baseline.
 
-### Parametric Studies — Multi-Case × Multi-Parameter Sweep (NZ.m)
+### Parametric Studies — GUI (pfem_sweep_gui) — recommended
 
-`NZ.m` is the primary scripted sweep interface.  Edit the configuration
+`pfem_sweep_gui` is the graphical sweep studio.  No code editing required.
+
+```matlab
+pfem_sweep_gui()
+```
+
+**Step-by-step:**
+
+1. Click **Add YAML(s)** and select any `.yaml` files from `benchmarks/pfem5/`
+   (multi-select supported; cases from different chapters can be mixed)
+2. The **Tunable Parameters** table auto-populates with the union of all tunables
+   across the loaded cases, with their suggested ranges
+3. Enter sweep values in the **Values** column (comma-separated, e.g. `50, 100, 200, 500`),
+   or click **Fill Ranges** to auto-fill N log-spaced values — adjust N with the `−`/`+` counter
+4. Select **Sweep mode**:
+   - **Lockstep** — all enabled parameters vary together step-by-step.
+     `yield_stress=[50,100]` + `youngs_modulus_E=[1e4,2e4]` → 2 scenarios: (50,1e4) and (100,2e4).
+     Arrays must be the same length.
+   - **Grid** — Cartesian product of all enabled parameter arrays.
+     `yield_stress=[50,100]` + `youngs_modulus_E=[1e4,2e4]` → 4 scenarios.
+     Capped at 500 combinations.
+5. Click **Preview Scenarios** to see the full list in the log before running
+6. Click **Run All**:
+   - Binaries are compiled automatically via `pfem_ensure_built` if missing
+   - Every case × every scenario runs; results table fills live
+   - Stop button interrupts cleanly at any time
+7. When the run finishes, click **Open Figures** to view comparison plots:
+   Load–Displacement, reference mesh, deformed shape, and displacement vectors
+8. Click **Print Comparison** to print text diff tables to the command window
+
+**Auto-build**: if `pfem/build/bin/<program>` is missing, `pfem_build_chapter.sh` is
+run automatically.  If build fails, that case is skipped; all others continue.
+
+**Cross-case parameters**: parameters not present in a given YAML (e.g. `yield_stress`
+in a flow case) are silently skipped — the same scenario set works across all cases.
+
+### Parametric Studies — Multi-Case × Multi-Parameter Sweep (NZ.m, scripted)
+
+`NZ.m` is the scripted sweep interface.  Edit the configuration
 section (yaml_paths + scenarios) and run it.
 
 ```matlab
@@ -415,6 +453,7 @@ fem-benchmarks/
 │   └── pfem_build_chapter.sh       # Batch chapter build
 │
 ├── matlab/
+│   ├── pfem_sweep_gui.m            # GUI sweep studio (multi-case × multi-param, auto-build)
 │   ├── pfem_runner.m               # Single case executor
 │   ├── pfem_run_from_yaml.m        # YAML-driven runner + auto-baseline generation
 │   ├── pfem_show_tunables.m        # Display available tunables
