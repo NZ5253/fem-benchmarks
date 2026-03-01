@@ -560,4 +560,24 @@ function [nodes, disp_mat, elem_conn, load_disp] = parse_res(out, yaml_path, ove
             return;
         end
     end
+
+    % --- Try Format C: seepage/consolidation "Time  Uav  Pressure" header ---
+    % Returns [time, Uav] so the existing load-disp plot shows consolidation
+    % degree (Uav) vs time.
+    for i = 1:numel(lines)
+        ln = strtrim(lines{i});
+        if contains(ln,'Time') && contains(ln,'Uav')
+            ld = [];
+            for j = i+1:numel(lines)
+                ln2 = strtrim(lines{j});
+                if isempty(ln2) || contains(ln2,'Depth'), break; end
+                v = sscanf(ln2,'%f');
+                if numel(v) >= 2
+                    ld(end+1,:) = [v(1), v(2)]; %#ok<AGROW>  [time, Uav]
+                end
+            end
+            if ~isempty(ld), load_disp = ld; end
+            return;
+        end
+    end
 end

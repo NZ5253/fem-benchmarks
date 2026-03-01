@@ -269,6 +269,10 @@ function cb_fill_ranges(~, param_tbl, count_lbl)
         else
             vals = round_sig4(logspace(log10(lo), log10(hi), n));
         end
+        % Integer parameters: round and deduplicate to avoid Fortran "Bad integer"
+        if is_int_param(data{i,2})
+            vals = unique(round(vals), 'stable');
+        end
         data{i,3} = num2str(vals, '%.4g  ');
     end
     param_tbl.Data = data;
@@ -779,6 +783,21 @@ function s = get_max_u_str(out)
                 return;
             end
         end
+
+        % Format C: seepage/consolidation — show max Uav (consolidation degree)
+        for i = 1:numel(lines)
+            if contains(lines{i},'Time') && contains(lines{i},'Uav')
+                last_uav = nan;
+                for j = i+1:numel(lines)
+                    ln = strtrim(lines{j});
+                    if isempty(ln) || contains(ln,'Depth'), break; end
+                    v = sscanf(ln, '%f');
+                    if numel(v) >= 2, last_uav = v(2); end
+                end
+                if ~isnan(last_uav), s = sprintf('%.3f Uav', abs(last_uav)); end
+                return;
+            end
+        end
     catch
     end
 end
@@ -860,6 +879,18 @@ end
 
 function s = ifelse(cond, a, b)
     if cond, s = a; else, s = b; end
+end
+
+
+function tf = is_int_param(name)
+% Returns true for PFEM parameters that Fortran reads as INTEGER.
+% Passing floats (e.g. 7.937) for these causes "Bad integer" runtime errors.
+    INT_PARAMS = { ...
+        'load_increments', 'iteration_limit', 'number_of_steps', ...
+        'nels_or_nxe', 'np_types_or_nye', 'number_of_modes', ...
+        'num_eigenvalues', 'krylov_subspace_size', 'max_arnoldi_iterations', ...
+        'cg_iteration_limit' };
+    tf = any(strcmp(name, INT_PARAMS));
 end
 
 
