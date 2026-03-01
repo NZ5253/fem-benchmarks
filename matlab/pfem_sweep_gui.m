@@ -532,7 +532,11 @@ function refresh_params(fig, param_tbl)
         e  = all_map(nm);
         data{i,1} = true;
         data{i,2} = nm;
-        data{i,3} = ifelse(isKey(old_vals, nm), old_vals(nm), '');
+        if isKey(old_vals, nm)
+            data{i,3} = old_vals(nm);
+        else
+            data{i,3} = '';
+        end
         data{i,4} = e.range;
         data{i,5} = strjoin(e.chaps, ', ');
     end
