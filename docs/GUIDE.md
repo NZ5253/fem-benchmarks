@@ -205,109 +205,96 @@ poisson_ratio_nu              10              0.3      real  [0.00e+00, 4.90e-01
 nels_or_nxe                    3                8       int  -
 ```
 
-### Parametric Studies
+### Parametric Studies — Single Case
 
 ```matlab
-yaml_path = 'benchmarks/pfem5/chap05/p51_4.yaml';
-overrides = struct();
-results = [];
-
-for E = [500, 1000, 5000, 10000]
-    overrides.youngs_modulus_E = E;
-    [status, out] = pfem_run_from_yaml(repo_root, pfem_root, yaml_path, overrides);
-    results(end+1).out = out;
-    results(end).value = E;
-    results(end).status = status;
-end
+overrides.youngs_modulus_E = 500;
+[status, out] = pfem_run_from_yaml(repo_root, pfem_root, yaml_path, overrides);
 ```
 
 Each run creates an isolated, self-contained folder:
 ```
-runs/chap05/p51_4/E_5e5/          ← parameter key in folder name
-    p51_4.dat                      ← patched input
-    p51                            ← compiled binary (chmod +x)
-    p51_4.res  p51_4.msh           ← PFEM outputs
-    case.yaml                      ← copy of YAML
-    overrides.mat                  ← saved parameter overrides
-    run_info.txt                   ← human-readable run summary
+runs/chap05/p51_4/E_500/
+    p51_4.dat          ← patched input
+    p51                ← compiled binary (chmod +x; re-runnable from shell)
+    p51_4.res  p51_4.msh  p51_4.dis  p51_4.vec
+    case.yaml          ← YAML snapshot
+    overrides.mat      ← saved overrides
+    run_info.txt       ← human-readable summary
 ```
+
+When the PFEM book's pre-computed `.res` is absent (e.g. p63), the first
+override run automatically generates a baseline:
+```
+runs/chap06/p63/default/   ← created automatically on first p63 override run
+    p63.dat  p63  p63.res  run.log
+```
+Subsequent scenario runs compare against this cached baseline.
+
+### Parametric Studies — Multi-Case × Multi-Parameter Sweep (NZ.m)
+
+`NZ.m` is the primary scripted sweep interface.  Edit the configuration
+section (yaml_paths + scenarios) and run it.
+
+```matlab
+%% 1. Cases
+yaml_paths = {
+    fullfile(repo_root, 'benchmarks', 'pfem5', 'chap06', 'p61.yaml'),
+    fullfile(repo_root, 'benchmarks', 'pfem5', 'chap06', 'p63.yaml'),
+};
+
+%% 2. Scenarios — pfem_make_scenarios builds the struct array
+% Single parameter:
+scenarios = pfem_make_scenarios('yield_stress', [50, 100, 200, 500]);
+
+% Multiple parameters in lockstep (equal-length arrays):
+scenarios = pfem_make_scenarios( ...
+    'yield_stress',     [50,   100,  200,  500], ...
+    'youngs_modulus_E', [5e4,  1e5,  2e5,  1e5]);
+% → 4 scenarios, labels auto-generated: 'sy=50 E=5e4', 'sy=100 E=1e5', ...
+
+% Fully manual (custom labels):
+scenarios(1) = struct('label','soft', 'yield_stress', 50,  'youngs_modulus_E', 5e4);
+scenarios(2) = struct('label','hard', 'yield_stress', 500, 'youngs_modulus_E', 2e5);
+```
+
+NZ.m runs every scenario for every case, then:
+1. Prints a text comparison table (original `.res` vs each scenario's `.res`)
+2. Opens 4 separate figure windows via `pfem_plot_sweep_summary`
+3. Saves `runs/<chap>/<case>/<case>_sweep_{res,msh,dis,vec}.png`
+
+Parameters not present in a given case's YAML are silently skipped, so the
+same scenario set can be applied to multiple cases without errors.
 
 ### Result Comparison
 
-Compare original vs modified results with text tables and plots:
-
 ```matlab
-% Text comparison only (displacement and stress tables)
+% Single run — text table (Format A: per-node displacements + stresses)
 pfem_compare_results(out, 'plot', false);
 
-% Plot only (bar charts for single run)
-pfem_compare_results(out, 'plot', true, 'text', false);
-
-% Sweep summary (parameter vs displacement/stress plots)
-pfem_compare_results(results_array, 'plot', true);
+% Single run — Format B (load-step table, e.g. p61 von Mises)
+% Automatically detected; shows step / load / orig max|u| / mod max|u| table.
+pfem_compare_results(out, 'plot', false);
 ```
 
-#### Comparison Output
-
-Text output shows:
-- Node-by-node displacement comparison (original vs modified)
-- Element stress comparison
-- Max absolute and relative differences
-
-Plots include:
-- **Single run**: Bar charts comparing X/Y displacements and stresses
-- **Sweep**: Line plots showing how displacement/stress vary with parameter
-
-### Complete Sweep Example (NZ.m)
+### Sweep Visualisation
 
 ```matlab
-% Setup
-yaml_path = fullfile(repo_root, 'benchmarks', 'pfem5', 'chap05', 'p51_4.yaml');
-
-% Discover tunables
-tunables = pfem_show_tunables(yaml_path);
-
-% Define sweep
-sweep_param = 'youngs_modulus_E';
-sweep_values = [500, 1000, 5000, 10000];
-
-% Run sweep
-for i = 1:length(sweep_values)
-    overrides.(sweep_param) = sweep_values(i);
-    [status, out] = pfem_run_from_yaml(repo_root, pfem_root, yaml_path, overrides);
-    results(i).out = out;
-    results(i).status = status;
-end
-
-% Text comparison for ALL runs
-for i = 1:length(results)
-    pfem_compare_results(results(i).out, 'plot', false);
-end
-
-% Sweep summary plot
-pfem_compare_results(results, 'plot', true);
-
-% Individual comparison plots for ALL runs
-for i = 1:length(results)
-    pfem_compare_results(results(i).out, 'plot', true, 'text', false);
-end
+figs = pfem_plot_sweep_summary(results, sweep_param, yaml_path, ...
+    'Title', 'PFEM p61', ...
+    'Save',  fullfile(runs_dir, 'p61_sweep'));
+% Creates up to 4 figures depending on which outputs exist:
+%   figs.res  Load–Displacement summary + per-scenario curve
+%   figs.msh  Reference mesh panels (undeformed)
+%   figs.dis  Deformed shape panels
+%   figs.vec  Displacement vector panels
+% Saved as: p61_sweep_res.png  _msh.png  _dis.png  _vec.png
 ```
 
 ### Batch Chapter Runner
 
-Run all cases in a chapter:
-
 ```matlab
 results = pfem_run_chapter(repo_root, pfem_root, 'chap04');
-```
-
-### Test Script
-
-Verify the pipeline works:
-
-```matlab
-cd ~/projects/fem-benchmarks
-pfem_test_run
 ```
 
 ---
@@ -419,7 +406,7 @@ fem-benchmarks/
 │   ├── chap08/           # 16 cases
 │   ├── chap09/           # 7 cases
 │   ├── chap10/           # 5 cases
-│   └── chap11/           # 8 cases (85 total)
+│   └── chap11/           # 8 cases (90 total)
 │
 ├── scripts/
 │   ├── generate_yamls_v2.py        # YAML generator (token-based)
@@ -428,16 +415,21 @@ fem-benchmarks/
 │   └── pfem_build_chapter.sh       # Batch chapter build
 │
 ├── matlab/
-│   ├── pfem_runner.m               # Single case runner
-│   ├── pfem_run_from_yaml.m        # YAML-driven runner with overrides
+│   ├── pfem_runner.m               # Single case executor
+│   ├── pfem_run_from_yaml.m        # YAML-driven runner + auto-baseline generation
 │   ├── pfem_show_tunables.m        # Display available tunables
-│   ├── pfem_smart_sweep.m          # Auto-discovery sweep
-│   ├── pfem_compare_results.m      # Result comparison & plotting
+│   ├── pfem_smart_sweep.m          # Auto-discovery parametric sweep
+│   ├── pfem_compare_results.m      # Comparison (Format A per-node + Format B load-step)
+│   ├── pfem_batch_figs.m           # Batch sweep figures for a whole chapter
 │   ├── pfem_run_chapter.m          # Batch chapter runner
-│   ├── NZ.m                        # Example sweep script
+│   ├── NZ.m                        # Multi-case × multi-scenario sweep script
 │   └── utils/
-│       ├── pfem_yaml_load.m        # YAML loader
-│       └── pfem_patch_dat_using_yaml.m  # Token-based patcher
+│       ├── pfem_yaml_load.m                # YAML loader
+│       ├── pfem_patch_dat_using_yaml.m     # Token-based .dat patcher
+│       ├── pfem_extract_coords.m           # Node coordinate extraction
+│       ├── pfem_make_scenarios.m           # Build scenario struct arrays
+│       ├── pfem_plot_sweep_summary.m       # Separate figures per output type
+│       └── pfem_ensure_built.m             # Auto-compile binary from source
 │
 ├── docs/
 │   └── GUIDE.md                    # This file

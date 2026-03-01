@@ -55,6 +55,20 @@ pfem_root = fullfile(repo_root, 'pfem');
 [status, outputs] = pfem_runner(pfem_root, 'chap05', 'p51', 'p51_3');
 ```
 
+### From MATLAB — multi-case, multi-parameter sweep (NZ.m)
+```matlab
+% Run two cases (p61 + p63) across 4 simultaneous-parameter scenarios
+yaml_paths = {
+    fullfile(repo_root, 'benchmarks', 'pfem5', 'chap06', 'p61.yaml'),
+    fullfile(repo_root, 'benchmarks', 'pfem5', 'chap06', 'p63.yaml'),
+};
+scenarios = pfem_make_scenarios( ...
+    'yield_stress',     [50,  100, 200, 500], ...
+    'youngs_modulus_E', [5e4, 1e5, 2e5, 1e5]);
+% Edit yaml_paths + scenarios in NZ.m, then run it.
+% Generates 4 separate figure windows (res/msh/dis/vec) saved to runs/<chap>/<case>/
+```
+
 ## Repository Structure
 
 ```
@@ -82,17 +96,20 @@ fem-benchmarks/
 │   ├── pfem_studio.m              # Interactive study environment (main UI)
 │   ├── pfem_diagram.m             # Textbook-style mesh diagram renderer
 │   ├── pfem_runner.m              # Single case runner
-│   ├── pfem_run_from_yaml.m       # YAML-driven runner with overrides
+│   ├── pfem_run_from_yaml.m       # YAML-driven runner with overrides + auto-baseline
 │   ├── pfem_plot_mesh.m           # Deformed mesh visualisation (with mesh lines)
 │   ├── pfem_batch_figs.m          # Batch sweep figures for all cases in a chapter
 │   ├── pfem_show_tunables.m       # Display available tunables
 │   ├── pfem_smart_sweep.m         # Auto-discovery sweep
-│   ├── pfem_compare_results.m     # Result comparison & plotting
-│   ├── NZ.m                       # Example sweep script (launches studio)
+│   ├── pfem_compare_results.m     # Result comparison & plotting (Format A + B)
+│   ├── NZ.m                       # Multi-case, multi-parameter sweep script
 │   └── utils/                     # Utility functions
-│       ├── pfem_yaml_load.m       # YAML parser
-│       ├── pfem_extract_coords.m  # Node coordinate extraction
-│       └── pfem_patch_dat_using_yaml.m  # Token-based .dat patcher
+│       ├── pfem_yaml_load.m                # YAML parser
+│       ├── pfem_extract_coords.m           # Node coordinate extraction
+│       ├── pfem_patch_dat_using_yaml.m     # Token-based .dat patcher
+│       ├── pfem_make_scenarios.m           # Build scenario struct arrays
+│       ├── pfem_plot_sweep_summary.m       # Separate figure per output type
+│       └── pfem_ensure_built.m             # Auto-compile PFEM binary if missing
 ├── docs/                # Documentation
 │   └── GUIDE.md                   # Complete usage guide
 └── README.md            # This file
@@ -140,12 +157,34 @@ pfem_studio('benchmarks/pfem5/chap06/p61.yaml')
 % → Press Run → sweep figure opens automatically
 ```
 
-### Parametric Study — Scripted
+### Parametric Study — Scripted (NZ.m)
+
+`NZ.m` is the primary scripted workflow. Edit three sections and run:
 
 ```matlab
-% Via NZ.m: edit yaml_path + sweep_param + sweep_values, then run.
-% The script runs the sweep and opens pfem_studio for visualisation.
+%% 1. YAML case(s) to run — any number of benchmarks
+yaml_paths = {
+    fullfile(repo_root, 'benchmarks', 'pfem5', 'chap06', 'p61.yaml'),
+    fullfile(repo_root, 'benchmarks', 'pfem5', 'chap06', 'p63.yaml'),
+};
+
+%% 2. Scenarios — single param or multiple params changed simultaneously
+% Option A: sweep one parameter
+scenarios = pfem_make_scenarios('yield_stress', [50, 100, 200, 500]);
+
+% Option B: vary two parameters in lockstep (arrays must be same length)
+scenarios = pfem_make_scenarios( ...
+    'yield_stress',     [50,   100,  200,  500], ...
+    'youngs_modulus_E', [5e4,  1e5,  2e5,  1e5]);
+
+% Option C: fully manual with custom labels
+scenarios(1) = struct('label','soft',   'yield_stress', 50,  'youngs_modulus_E', 5e4);
+scenarios(2) = struct('label','hard',   'yield_stress', 500, 'youngs_modulus_E', 2e5);
 ```
+
+The script runs every scenario for every case, saves four comparison figures
+(`*_res.png`, `*_msh.png`, `*_dis.png`, `*_vec.png`) in `runs/<chap>/<case>/`,
+and prints a text comparison table for each scenario.
 
 ### Batch Figure Generation
 
@@ -243,18 +282,22 @@ The `generate_yamls_v2.py` script creates comprehensive benchmark files:
 |---|---|
 | `pfem_studio` | Interactive GUI — load YAML, edit params, run, see deformed mesh |
 | `pfem_diagram` | Standalone textbook-style mesh diagram with BC/load annotations |
-| `pfem_run_from_yaml` | Programmatic runner: patches .dat from YAML overrides, runs PFEM |
+| `pfem_run_from_yaml` | Programmatic runner: patches .dat from YAML overrides, auto-generates baseline |
 | `pfem_extract_coords` | Extract exact node coordinates from YAML tokens (all chapters) |
 | `pfem_plot_mesh` | Visualise deformed mesh with element edges from run output |
 | `pfem_batch_figs` | Auto-generate sweep comparison figures for a whole chapter |
 | `pfem_show_tunables` | Print tunable parameters for any YAML case |
 | `pfem_smart_sweep` | Auto-discovery parametric sweep |
-| `pfem_compare_results` | Compare original vs modified results with plots |
+| `pfem_compare_results` | Compare original vs modified results (Format A per-node + Format B load-step) |
+| `pfem_make_scenarios` | Build scenario struct arrays for single- or multi-parameter sweeps |
+| `pfem_plot_sweep_summary` | One figure window per output type (res/msh/dis/vec) for sweep results |
+| `pfem_ensure_built` | Auto-compile a PFEM binary from source if the binary is missing |
+| `NZ.m` | Configurable multi-case × multi-scenario sweep script |
 
 Runs are saved to `runs/<chap>/<case>/<param_key>/`, for example:
-- `runs/chap06/p61/default/` — baseline run
-- `runs/chap06/p61/sy_200/` — yield stress = 200
-- `runs/chap06/p61/sy_50_incs_20/` — multi-parameter override
+- `runs/chap06/p61/default/` — auto-generated baseline (used when book .res absent)
+- `runs/chap06/p61/sy_200/` — single override: yield stress = 200
+- `runs/chap06/p61/sy_50_E_5e4/` — multi-parameter override
 
 ## Documentation
 

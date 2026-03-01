@@ -80,12 +80,72 @@ function [status, out] = pfem_run_from_yaml(repo_root, pfem_root, yaml_path, ove
 
     % ---- annotate output struct ----
     out.original_dat = dat_src;
-    out.original_res = fullfile(pfem_root, 'executable', chap, [base '.res']); % for pfem_compare_results
+
+    % Locate (or auto-generate) the original .res for pfem_compare_results.
+    % PFEM distributable includes pre-computed .res in executable/<chap>/.
+    % When that file is absent (e.g. p63) we run the unmodified .dat once and
+    % cache the result in runs/<chap>/<base>/default/ so future runs find it.
+    book_res = fullfile(pfem_root, 'executable', chap, [base '.res']);
+    if exist(book_res, 'file')
+        out.original_res = book_res;
+    else
+        default_res = fullfile(repo_root, 'runs', chap, base, 'default', [base '.res']);
+        if ~exist(default_res, 'file') && nargin >= 4 && ~isempty(overrides) && ~isempty(fieldnames(overrides))
+            default_res = generate_baseline_run(repo_root, pfem_root, chap, program, base, dat_src);
+        end
+        out.original_res = default_res;
+    end
+
     out.param_key    = param_key;
     out.overrides    = overrides;
     out.yaml_path    = yaml_path;
     out.case         = base;
     out.run_dir      = run_dir;
+end
+
+
+% =========================================================================
+function res_path = generate_baseline_run(repo_root, pfem_root, chap, program, base, dat_src)
+% Run the case with default (unmodified) parameters and cache the .res.
+% Used when pfem/executable/<chap>/<base>.res is absent from the PFEM
+% distribution (e.g. p63 Mohr-Coulomb bearing capacity).
+    res_path = '';
+    default_dir = fullfile(repo_root, 'runs', chap, base, 'default');
+    res_cand    = fullfile(default_dir, [base '.res']);
+
+    % Already cached from a previous run?
+    if exist(res_cand, 'file')
+        res_path = res_cand;
+        return;
+    end
+
+    if ~exist(default_dir,'dir'), mkdir(default_dir); end
+
+    % Stage unmodified .dat
+    dat_dst = fullfile(default_dir, [base '.dat']);
+    copyfile(dat_src, dat_dst);
+
+    % Copy binary
+    exe_src = fullfile(pfem_root, 'build', 'bin', program);
+    exe_dst = fullfile(default_dir, program);
+    if ~exist(exe_src,'file')
+        fprintf('  [baseline] Binary missing — cannot generate baseline .res for %s.\n', base);
+        return;
+    end
+    copyfile(exe_src, exe_dst);
+    system(sprintf('chmod +x "%s"', exe_dst));
+
+    fprintf('  [baseline] No book .res found — generating baseline for %s ...\n', base);
+    cmd = sprintf('cd "%s" && printf "%s\\n" | ./%s > run.log 2>&1', ...
+                  default_dir, base, program);
+    system(cmd);
+
+    if exist(res_cand, 'file')
+        fprintf('  [baseline] Cached: %s\n', res_cand);
+        res_path = res_cand;
+    else
+        fprintf('  [baseline] Baseline run did not produce a .res file.\n');
+    end
 end
 
 

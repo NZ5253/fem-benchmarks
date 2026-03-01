@@ -42,8 +42,8 @@ function pfem_patch_dat_using_yaml(dat_path, y, overrides)
         name = override_names{i};
 
         if ~isKey(tunable_map, name)
-            warning('pfem_patch:unknown_tunable', ...
-                'Override "%s" not found in YAML tunable_parameters. Skipping.', name);
+            % Silently skip — expected for cross-case sweeps where not all
+            % parameters apply to every YAML (e.g. yield_stress not in p63).
             continue;
         end
 

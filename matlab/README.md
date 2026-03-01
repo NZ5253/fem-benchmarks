@@ -1,211 +1,214 @@
 # PFEM MATLAB Interface
 
-This directory contains MATLAB scripts for running PFEM benchmarks and performing parametric studies with automatic parameter discovery and result comparison.
+MATLAB scripts for running PFEM benchmarks and performing parametric studies
+with automatic parameter discovery, multi-case sweeps, and result comparison.
 
-## Files
+## Core Scripts
 
-### Core Scripts
-
-#### pfem_runner.m
-Basic runner for executing a single PFEM case from MATLAB.
+### pfem_runner.m
+Basic single-case executor.
 
 ```matlab
-pfem_root = '~/projects/fem-benchmarks/pfem';
+pfem_root = fullfile(getenv('HOME'), 'projects', 'fem-benchmarks', 'pfem');
 [status, outputs] = pfem_runner(pfem_root, 'chap05', 'p51', 'p51_3');
 ```
 
-#### pfem_run_from_yaml.m
-YAML-driven runner with parameter overrides. Creates isolated, self-contained run folders.
+### pfem_run_from_yaml.m
+YAML-driven runner with parameter overrides.  Creates isolated, self-contained
+run folders.  When the PFEM book's pre-computed `.res` is absent (e.g. p63),
+the first override run automatically generates a baseline in `runs/.../default/`
+so `pfem_compare_results` always has a reference to compare against.
 
 ```matlab
-yaml_path = 'benchmarks/pfem5/chap05/p51_4.yaml';
-overrides = struct();
 overrides.youngs_modulus_E = 500;
 [status, out] = pfem_run_from_yaml(repo_root, pfem_root, yaml_path, overrides);
-% Creates folder: runs/chap05/p51_4/E_500/
-%   Contains: patched .dat, binary (chmod +x), .res/.msh, case.yaml, overrides.mat, run_info.txt
+% Creates: runs/chap05/p51_4/E_500/
+%   p51_4.dat  p51  p51_4.res  p51_4.msh  case.yaml  overrides.mat  run_info.txt
+% If pfem/executable/chap05/p51_4.res is missing, also creates:
+%   runs/chap05/p51_4/default/   ← unmodified baseline used for comparison
 ```
 
-### Parameter Discovery
+---
 
-#### pfem_show_tunables.m
-Display available tunable parameters for any YAML case.
+## Scenario & Sweep Utilities
+
+### pfem_make_scenarios.m
+Build a scenario struct array for single- or multi-parameter sweeps.
 
 ```matlab
-tunables = pfem_show_tunables('benchmarks/pfem5/chap05/p51_4.yaml');
+% Single parameter
+scenarios = pfem_make_scenarios('yield_stress', [50, 100, 200, 500]);
+
+% Multiple parameters varied in lockstep (same-length arrays)
+scenarios = pfem_make_scenarios( ...
+    'yield_stress',     [50,   100,  200,  500], ...
+    'youngs_modulus_E', [5e4,  1e5,  2e5,  1e5]);
+% → 4 scenarios, each with label e.g. 'sy=50 E=5e4'
+
+% Fully manual
+scenarios(1) = struct('label','soft', 'yield_stress', 50,  'youngs_modulus_E', 5e4);
+scenarios(2) = struct('label','hard', 'yield_stress', 500, 'youngs_modulus_E', 2e5);
 ```
 
-Output (example for p63 — Mohr-Coulomb):
-```
-============================================================
-Tunable Parameters for: p63
-Program: p63 | Chapter: 6
-============================================================
+### pfem_plot_sweep_summary.m
+Creates one figure window per available PFEM output type.
 
+```matlab
+figs = pfem_plot_sweep_summary(results, sweep_param, yaml_path, ...
+    'Title', 'PFEM p61', 'Save', '/path/to/prefix');
+% figs.res  — Load–Displacement summary (.res)
+% figs.msh  — Reference mesh panels (.msh)
+% figs.dis  — Deformed shape panels (.dis)
+% figs.vec  — Displacement vector panels (.vec)
+% Saved as: /path/to/prefix_res.png  _msh.png  _dis.png  _vec.png
+```
+
+### pfem_ensure_built.m
+Auto-compiles a PFEM binary from source if missing.  Checks binary existence
+rather than exit code (build scripts may exit non-zero when other programs
+in the chapter fail even if the target binary was built successfully).
+
+```matlab
+ok = pfem_ensure_built(repo_root, pfem_root, 'p61', 'chap06');
+```
+
+---
+
+## Parameter Discovery
+
+### pfem_show_tunables.m
+List available tunable parameters for any YAML case.
+
+```matlab
+pfem_show_tunables('benchmarks/pfem5/chap06/p63.yaml');
+```
+
+```
 NAME                       TOKEN          CURRENT      TYPE  SUGGESTED RANGE
 --------------------------------------------------------------------------------
-friction_angle_phi             5             20.0      real  [0.00e+00, 4.50e+01]
-cohesion_c                     6             10.0      real  [0.00e+00, 1.00e+06]
-dilation_angle_psi             7             20.0      real  [0.00e+00, 4.50e+01]
-unit_weight_gamma              8             16.0      real  [0.00e+00, 1.00e+02]
-youngs_modulus_E               9           1.0e5      real  [1.00e+03, 1.00e+12]
-poisson_ratio_nu              10              0.3      real  [0.00e+00, 4.90e-01]
-convergence_tolerance         74           0.001      real  [1.00e-12, 1.00e-01]
+friction_angle_phi             5             20.0      real  [0, 45]
+cohesion_c                     6             10.0      real  [0, 1e6]
+dilation_angle_psi             7             20.0      real  [0, 45]
+unit_weight_gamma              8             16.0      real  [0, 100]
+youngs_modulus_E               9           1.0e5      real  [1e3, 1e12]
+poisson_ratio_nu              10              0.3      real  [0, 0.49]
+convergence_tolerance         74           0.001      real  [1e-12, 0.1]
 iteration_limit               75            500        int  [10, 10000]
 load_increments               76             25        int  [1, 1000]
-prescribed_increment          77          -0.001      real  [-1.00e+06, 1.00e+06]
-nels_or_nxe                    1             40        int  -
-np_types_or_nye                2             20        int  -
+prescribed_increment          77          -0.001      real  [-1e6, 1e6]
 ```
 
-#### pfem_smart_sweep.m
-Run parameter sweeps with automatic tunable discovery.
+### pfem_smart_sweep.m
+Automatic sweep using the first tunable that has a `suggested_range`.
 
 ```matlab
-% Sweep a specific parameter
-results = pfem_smart_sweep('benchmarks/pfem5/chap05/p51_4.yaml', 'youngs_modulus_E', [500, 1000, 5000]);
-
-% Auto-select first tunable with suggested range
 results = pfem_smart_sweep('benchmarks/pfem5/chap05/p51_4.yaml', 'auto', 5);
+results = pfem_smart_sweep('benchmarks/pfem5/chap05/p51_4.yaml', 'youngs_modulus_E', [500, 1000, 5000]);
 ```
 
-### Result Comparison
+---
 
-#### pfem_compare_results.m
-Compare original vs modified results with tables and plots.
+## Result Comparison
+
+### pfem_compare_results.m
+Compare original vs modified results.  Supports two `.res` formats:
+- **Format A** (elastic/structural): per-node displacement and stress table
+- **Format B** (nonlinear load-step): `step load disp iters` table (e.g. p61 von Mises)
 
 ```matlab
 % Text comparison only
 pfem_compare_results(out, 'plot', false);
 
-% Plot only (no text)
-pfem_compare_results(out, 'plot', true, 'text', false);
-
-% Compare sweep results (generates parameter vs displacement/stress plots)
-pfem_compare_results(results_array, 'plot', true);
+% Plot + text
+pfem_compare_results(out, 'plot', true);
 ```
 
-### Example Sweep Script (NZ.m)
+---
 
-Complete example showing parameter sweep with comparison:
+## NZ.m — Multi-Case × Multi-Scenario Sweep
+
+`NZ.m` is the primary scripted sweep interface.  Edit the configuration
+section and run the file.
 
 ```matlab
-% Setup
-yaml_path = fullfile(repo_root, 'benchmarks', 'pfem5', 'chap05', 'p51_4.yaml');
+%% 1. YAML case(s)
+yaml_paths = {
+    fullfile(repo_root, 'benchmarks', 'pfem5', 'chap06', 'p61.yaml'),
+    fullfile(repo_root, 'benchmarks', 'pfem5', 'chap06', 'p63.yaml'),
+};
 
-% Discover tunables
-tunables = pfem_show_tunables(yaml_path);
+%% 2. Scenarios (choose one style)
+% A — single parameter
+scenarios = pfem_make_scenarios('yield_stress', [50, 100, 200, 500]);
 
-% Define sweep
-sweep_param = 'youngs_modulus_E';
-sweep_values = [500, 1000, 5000, 10000];
+% B — multiple parameters in lockstep
+scenarios = pfem_make_scenarios( ...
+    'yield_stress',     [50,   100,  200,  500], ...
+    'youngs_modulus_E', [5e4,  1e5,  2e5,  1e5]);
 
-% Run sweep and compare
-for i = 1:length(sweep_values)
-    overrides.(sweep_param) = sweep_values(i);
-    [status, out] = pfem_run_from_yaml(repo_root, pfem_root, yaml_path, overrides);
-    results(i).out = out;
-end
-
-% Show ALL comparisons (text)
-for i = 1:length(results)
-    pfem_compare_results(results(i).out, 'plot', false);
-end
-
-% Generate ALL comparison plots
-for i = 1:length(results)
-    pfem_compare_results(results(i).out, 'plot', true, 'text', false);
-end
+% C — fully manual
+scenarios(1) = struct('label','low',  'yield_stress', 50,  'youngs_modulus_E', 5e4);
+scenarios(2) = struct('label','high', 'yield_stress', 500, 'youngs_modulus_E', 2e5);
 ```
 
-## Prerequisites
+**What NZ.m does for each case:**
+1. Auto-builds binary via `pfem_ensure_built`
+2. Runs every scenario with `pfem_run_from_yaml` (auto-generates baseline if needed)
+3. Prints text comparison table (original vs each scenario)
+4. Generates 4 separate figure windows via `pfem_plot_sweep_summary`
+5. Saves figures to `runs/<chap>/<case>/<case>_sweep_{res,msh,dis,vec}.png`
 
-1. **PFEM must be compiled:**
-   ```bash
-   cd ~/projects/fem-benchmarks
-   scripts/pfem_build_and_run.sh ~/projects/fem-benchmarks/pfem chap05 p51 p51_3 --rebuild
-   ```
-
-2. **Dataset files must exist** in `pfem_root/executable/chapXX/`
-
-## Workflow
-
-### Single Run
-```matlab
-pfem_root = '~/projects/fem-benchmarks/pfem';
-[status, outputs] = pfem_runner(pfem_root, 'chap05', 'p51', 'p51_3');
-```
-
-### Parameter Sweep with Comparison
-
-```matlab
-% 1. Discover available tunables
-pfem_show_tunables('benchmarks/pfem5/chap05/p51_4.yaml');
-
-% 2. Run sweep
-yaml_path = 'benchmarks/pfem5/chap05/p51_4.yaml';
-overrides = struct();
-results = [];
-
-for E = [500, 1000, 5000, 10000]
-    overrides.youngs_modulus_E = E;
-    [status, out] = pfem_run_from_yaml(repo_root, pfem_root, yaml_path, overrides);
-    results(end+1).out = out;
-    results(end).value = E;
-    results(end).status = status;
-end
-
-% 3. Compare all results
-for i = 1:length(results)
-    pfem_compare_results(results(i).out, 'plot', false);  % Text
-end
-
-% 4. Plot all comparisons
-for i = 1:length(results)
-    pfem_compare_results(results(i).out, 'plot', true, 'text', false);  % Plots only
-end
-```
-
-### Batch Chapter Runner
-
-Run all cases in a chapter:
-
-```matlab
-results = pfem_run_chapter(repo_root, pfem_root, 'chap04');
-```
+---
 
 ## Output Structure
 
-Each run creates a self-contained folder (binary + inputs + outputs in one place):
 ```
-runs/chap05/p51_4/E_500/        # parameter key in folder name
-    p51_4.dat                   # patched input
-    p51                         # compiled binary (chmod +x; re-runnable from shell)
-    p51_4.res                   # PFEM results
-    p51_4.msh                   # PFEM mesh output
-    case.yaml                   # copy of YAML used
-    overrides.mat               # saved parameter struct
-    run_info.txt                # human-readable summary (program, params, file sizes)
+runs/
+└── chap06/
+    └── p61/
+        ├── default/            ← auto-generated baseline (if book .res absent)
+        │   ├── p61.dat         ← unmodified input
+        │   ├── p61             ← compiled binary
+        │   ├── p61.res         ← baseline results (used as comparison reference)
+        │   └── run.log
+        ├── sy_50_E_5e4/        ← scenario 1
+        │   ├── p61.dat         ← patched input
+        │   ├── p61             ← compiled binary (chmod +x)
+        │   ├── p61.res  p61.msh  p61.dis  p61.vec
+        │   ├── case.yaml       ← YAML snapshot
+        │   ├── overrides.mat   ← saved override struct
+        │   └── run_info.txt    ← human-readable summary
+        ├── sy_100_E_1e5/
+        │   └── ...
+        ├── p61_sweep_res.png   ← load–displacement comparison
+        ├── p61_sweep_msh.png   ← reference mesh panels
+        ├── p61_sweep_dis.png   ← deformed shape panels
+        └── p61_sweep_vec.png   ← displacement vector panels
 ```
 
-Re-run any case directly from shell (no MATLAB needed):
+Re-run any case from the shell (no MATLAB needed):
 ```bash
-cd runs/chap05/p51_4/E_500
-printf "p51_4\n" | ./p51
+cd runs/chap06/p61/sy_50_E_5e4
+printf "p61\n" | ./p61
 ```
 
-## Comparison Features
+---
 
-### Text Output
-- Node-by-node displacement comparison (original vs modified)
-- Element stress comparison
-- Max absolute/relative differences
+## Prerequisites
 
-### Plots
-- **Single run**: Bar charts comparing displacements and stresses
-- **Sweep**: Line plots of parameter vs displacement/stress
+1. **PFEM must be compiled** (NZ.m calls `pfem_ensure_built` automatically):
+   ```bash
+   scripts/pfem_build_chapter.sh ~/projects/fem-benchmarks/pfem chap06
+   ```
+
+2. **YAML files must exist** — generate them first if missing:
+   ```bash
+   python3 scripts/generate_yamls_v2.py --chapter chap06
+   ```
+
+---
 
 ## References
 
 - YAML benchmark files contain detailed input/output schemas
-- PFEM book: "Programming the Finite Element Method (5th ed.)"
+- PFEM book: Smith, Griffiths & Margetts, *Programming the Finite Element Method* (5th ed.)
