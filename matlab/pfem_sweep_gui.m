@@ -16,6 +16,8 @@ function pfem_sweep_gui()
 %
 % Requires MATLAB R2019b or later (uifigure, uigridlayout).
 
+    close all;   % close any open figures / previous GUI instances
+
     repo_root  = fullfile(getenv('HOME'), 'projects', 'fem-benchmarks');
     pfem_root  = fullfile(repo_root, 'pfem');
     bench_root = fullfile(repo_root, 'benchmarks', 'pfem5');
