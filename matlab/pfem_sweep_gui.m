@@ -172,10 +172,10 @@ function pfem_sweep_gui()
     rsg.BackgroundColor = [0.10 0.10 0.12];
 
     res_tbl = uitable(rsg, ...
-        'ColumnName',     {'Case', 'Scenario', 'Status', 'max|u|', 'Run Directory'}, ...
-        'ColumnFormat',   {'char', 'char', 'char', 'char', 'char'}, ...
-        'ColumnEditable', false(1, 5), ...
-        'ColumnWidth',    {70, 205, 52, 100, 350}, ...
+        'ColumnName',     {'', 'Case', 'Scenario', 'Status', 'max|u|', 'Run Directory'}, ...
+        'ColumnFormat',   {'logical', 'char', 'char', 'char', 'char', 'char'}, ...
+        'ColumnEditable', [true, false, false, false, false, false], ...
+        'ColumnWidth',    {24, 70, 205, 52, 100, 350}, ...
         'Data',           {}, ...
         'FontSize',       10);
     res_tbl.Layout.Row = 1;  res_tbl.Layout.Column = 1;
@@ -187,9 +187,9 @@ function pfem_sweep_gui()
     ag.BackgroundColor = [0.10 0.10 0.12];
 
     btn_figs = sbtn(ag, 'Open Figures',      [0.17 0.27 0.42], 1, 1);
-    btn_figs.Tooltip = 'Select rows first (Ctrl/Shift for multi). Each case opens its own figure.';
+    btn_figs.Tooltip = 'Tick checkboxes on rows first. Each case opens its own figure.';
     btn_cmp  = sbtn(ag, 'Show Comparison',   [0.17 0.27 0.42], 2, 1);
-    btn_cmp.Tooltip  = 'Select 2+ rows (same or different cases) to compare scenarios in the log.';
+    btn_cmp.Tooltip  = 'Tick 2+ row checkboxes to compare scenarios in the log.';
     btn_clr  = sbtn(ag, 'Clear Results',     [0.35 0.13 0.13], 3, 1);
 
     %% ── Wire callbacks ──────────────────────────────────────────────────────
@@ -388,13 +388,14 @@ function cb_run(fig, param_tbl, sweep_dd, log_ta, prog_lbl, res_tbl)
                 max_u = '-';
             end
 
-            % Append row to results table
+            % Append row to results table (col1 = checkbox)
             n = size(row_data, 1) + 1;
-            row_data{n,1} = case_name;
-            row_data{n,2} = label;
-            row_data{n,3} = ifelse(status==0, 'OK', 'FAIL');
-            row_data{n,4} = max_u;
-            row_data{n,5} = out.run_dir;
+            row_data{n,1} = false;
+            row_data{n,2} = case_name;
+            row_data{n,3} = label;
+            row_data{n,4} = ifelse(status==0, 'OK', 'FAIL');
+            row_data{n,5} = max_u;
+            row_data{n,6} = out.run_dir;
             res_tbl.Data  = row_data;
             drawnow;
         end
@@ -412,7 +413,7 @@ function cb_run(fig, param_tbl, sweep_dd, log_ta, prog_lbl, res_tbl)
     if isempty(row_data)
         n_ok = 0;
     else
-        n_ok = sum(strcmp(row_data(:,3), 'OK'));
+        n_ok = sum(strcmp(row_data(:,4), 'OK'));
     end
     prog_lbl.Text = sprintf('Done  (%d / %d OK)', n_ok, total);
     append_log(log_ta, '=== Run complete ===');
@@ -433,23 +434,22 @@ function cb_open_figs(fig, res_tbl)
     if isempty(st.case_result_map)
         uialert(fig, 'No results yet. Run a sweep first.', 'No results'); return;
     end
-    sel = res_tbl.Selection;          % Nx2 [row, col] or empty
-    if isempty(sel)
-        uialert(fig, sprintf('Select one or more rows in the Results table first.\n(Ctrl/Shift for multi-select)'), ...
-                'No selection'); return;
-    end
-    sel_rows = unique(sel(:,1));
     row_data = res_tbl.Data;
+    if isempty(row_data)
+        uialert(fig, 'No results yet. Run a sweep first.', 'No results'); return;
+    end
 
-    % Build (case_name, scenario_label) lookup from selection
+    % Build (case_name, scenario_label) from checked rows (col 1 = checkbox)
     want_cn  = {};
     want_lbl = {};
-    for ri = 1:numel(sel_rows)
-        r = sel_rows(ri);
-        if r <= size(row_data, 1)
-            want_cn{end+1}  = row_data{r,1};  %#ok<AGROW>
-            want_lbl{end+1} = row_data{r,2};  %#ok<AGROW>
+    for r = 1:size(row_data, 1)
+        if isequal(row_data{r,1}, true)
+            want_cn{end+1}  = row_data{r,2};  %#ok<AGROW>
+            want_lbl{end+1} = row_data{r,3};  %#ok<AGROW>
         end
+    end
+    if isempty(want_cn)
+        uialert(fig, 'Tick the checkbox on one or more rows first.', 'Nothing checked'); return;
     end
 
     opened = 0;
@@ -495,30 +495,25 @@ function cb_print_compare(fig, log_ta, res_tbl)
         uialert(fig, 'No results yet. Run a sweep first.', 'No results'); return;
     end
 
-    sel = res_tbl.Selection;
-    if isempty(sel)
-        uialert(fig, sprintf('Select 2 or more rows in the Results table.\n(Ctrl/Shift for multi-select)'), ...
-                'No selection'); return;
-    end
-    sel_rows = unique(sel(:,1));
-    if numel(sel_rows) < 2
-        uialert(fig, sprintf('Select 2 or more rows to compare scenarios.\nA single run has nothing to compare against.'), ...
-                'Need 2+ rows'); return;
-    end
-
     row_data = res_tbl.Data;
     want_cn  = {};
     want_lbl = {};
-    for ri = 1:numel(sel_rows)
-        r = sel_rows(ri);
-        if r <= size(row_data, 1)
-            want_cn{end+1}  = row_data{r,1};  %#ok<AGROW>
-            want_lbl{end+1} = row_data{r,2};  %#ok<AGROW>
+    for r = 1:size(row_data, 1)
+        if isequal(row_data{r,1}, true)
+            want_cn{end+1}  = row_data{r,2};  %#ok<AGROW>
+            want_lbl{end+1} = row_data{r,3};  %#ok<AGROW>
         end
+    end
+    if isempty(want_cn)
+        uialert(fig, 'Tick the checkbox on one or more rows first.', 'Nothing checked'); return;
+    end
+    if numel(want_cn) < 2
+        uialert(fig, sprintf('Tick 2 or more rows to compare scenarios.\nA single run has nothing to compare against.'), ...
+                'Need 2+ rows'); return;
     end
 
     append_log(log_ta, '══════════════════════════════════════════════════════');
-    append_log(log_ta, sprintf('  Comparison: %d selected scenario(s) vs original', numel(sel_rows)));
+    append_log(log_ta, sprintf('  Comparison: %d checked scenario(s) vs original', numel(want_cn)));
     append_log(log_ta, '══════════════════════════════════════════════════════');
 
     found = 0;
