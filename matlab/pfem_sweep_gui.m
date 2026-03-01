@@ -462,25 +462,32 @@ function cb_open_figs(fig, res_tbl)
 
         % Gather ALL checked scenarios for this case across every map entry
         % (handles results from multiple separate Run calls)
-        cn_labels = want_lbl(strcmp(want_cn, cn));
-        all_sc    = struct([]);
-        yaml_path = m.yaml_path;
-        chap_str  = m.chap_str;
+        cn_labels  = want_lbl(strcmp(want_cn, cn));
+        yaml_path  = m.yaml_path;
+        chap_str   = m.chap_str;
         sweep_disp = m.sweep_display;
 
+        % Collect matching scenarios into a cell array first — avoids
+        % "dissimilar structures" error from struct([]) initialisation.
+        sc_cells = {};
         for k2 = 1:numel(st.case_result_map)
             m2 = st.case_result_map{k2};
             if ~strcmp(m2.case_name, cn), continue; end
             for si = 1:numel(m2.case_results)
-                lbl = m2.case_results(si).label;
-                if any(strcmp(cn_labels, lbl))
-                    all_sc(end+1) = m2.case_results(si); %#ok<AGROW>
+                if any(strcmp(cn_labels, m2.case_results(si).label))
+                    sc_cells{end+1} = m2.case_results(si); %#ok<AGROW>
                 end
             end
         end
         done_cases{end+1} = cn; %#ok<AGROW>
 
-        if isempty(all_sc), continue; end
+        if isempty(sc_cells), continue; end
+
+        % Convert cell array → struct array (safe: all elements share same fields)
+        all_sc = sc_cells{1};
+        for ii = 2:numel(sc_cells)
+            all_sc(ii) = sc_cells{ii}; %#ok<AGROW>
+        end
 
         % If mixed single/multi-param runs, x-axis label falls back to 'Scenario'
         if numel(all_sc) > 1
