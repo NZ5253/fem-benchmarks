@@ -498,9 +498,17 @@ function cb_open_figs(fig, res_tbl)
         if ~exist(runs_dir, 'dir'), mkdir(runs_dir); end
         fig_prefix = fullfile(runs_dir, sprintf('%s_sweep', cn));
         try
-            pfem_plot_sweep_summary(all_sc, sweep_disp, yaml_path, ...
+            figs_out = pfem_plot_sweep_summary(all_sc, sweep_disp, yaml_path, ...
                 'Title', sprintf('PFEM %s  [%d scenario(s)]', cn, numel(all_sc)), ...
                 'Save', fig_prefix, 'Show', true);
+            % Raise each created figure above the uifigure window
+            for fn = fieldnames(figs_out)'
+                f = figs_out.(fn{1});
+                if ~isempty(f) && ishandle(f)
+                    figure(f);
+                end
+            end
+            drawnow;
             opened = opened + 1;
         catch ex
             uialert(fig, ex.message, sprintf('Figure error: %s', cn));
