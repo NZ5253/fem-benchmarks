@@ -123,60 +123,147 @@ function figs = pfem_plot_sweep_summary(results, sweep_param, yaml_path, varargi
     if do_show, vis = 'on'; end
     figs = struct('res',[],'msh',[],'dis',[],'vec',[]);
 
+    % Distinct color per scenario — used consistently across every figure type
+    scenario_colors = scenario_color_map(n);
+
     % ====================================================================
     % Figure 1 — Load / Displacement  (.res)
     % ====================================================================
     % Detect dominant format for axis labels (C = seepage if any scenario is C)
     is_seepage = any(strcmp(ld_fmt_arr, 'C'));
-    res_ylabel = 'max|u|';
-    if is_seepage, res_ylabel = 'final Uav'; end
+    if is_seepage
+        ov_xlabel = 'Time';  ov_ylabel = 'Uav';
+        sum_ylabel = 'final Uav';
+    else
+        ov_xlabel = 'max|u|'; ov_ylabel = 'Load';
+        sum_ylabel = 'max|u|';
+    end
 
     if has_res
         [nr_p, nc_p] = panel_layout(n);
-        n_rows_total = nr_p + 1;   % row 1 = summary curve; rows 2..end = panels
+        % Layout: row 1 = overlay (full width)
+        %         row 2 = summary sweep curve (full width)
+        %         rows 3+ = individual panels
+        n_rows_total = nr_p + 2;
         fig1_title = sprintf('%s — %s sweep', case_title, sweep_label);
         if is_seepage, fig1_title = ['Consolidation — ' fig1_title]; end
-        fig1 = make_dark_figure(fig1_title, ...
-            nc_p, n_rows_total, vis);
+        fig1 = make_dark_figure(fig1_title, nc_p, n_rows_total, vis);
         figs.res = fig1;
 
-        % Top row: parameter-vs-max|u| sweep curve (spans all columns)
-        ax_c = subplot(n_rows_total, nc_p, 1:nc_p, 'Parent', fig1);
+        % ---- Row 1: Overlay — all curves on one axis, distinct colors ----
+        ax_ov = subplot(n_rows_total, nc_p, 1:nc_p, 'Parent', fig1);
+        style_ax(ax_ov);
+        hold(ax_ov,'on'); grid(ax_ov,'on');
+        leg_handles = gobjects(n,1);
+        leg_labels  = cell(n,1);
+        for i = 1:n
+            col = scenario_colors(i,:);
+            if results(i).status ~= 0
+                leg_handles(i) = plot(ax_ov, NaN, NaN, 'x', 'Color',col, ...
+                    'MarkerSize',10, 'LineWidth',2);
+                leg_labels{i}  = [panel_labels{i} '  [FAIL]'];
+            elseif ~isempty(load_disp_arr{i})
+                ld = load_disp_arr{i};
+                if is_seepage
+                    xd = ld(:,1); yd = ld(:,2);
+                else
+                    xd = abs(ld(:,2)); yd = ld(:,1);
+                end
+                leg_handles(i) = plot(ax_ov, xd, yd, 'o-', ...
+                    'Color',col, 'MarkerFaceColor',col, ...
+                    'LineWidth',2, 'MarkerSize',5);
+                leg_labels{i}  = panel_labels{i};
+            elseif ~isempty(disp_arr{i})
+                dm  = disp_arr{i};
+                nc2 = min(2, size(dm,2));
+                mag = sqrt(sum(dm(:,1:nc2).^2, 2));
+                leg_handles(i) = plot(ax_ov, 1:numel(mag), mag, '-', ...
+                    'Color',col, 'LineWidth',2);
+                leg_labels{i}  = panel_labels{i};
+            else
+                leg_handles(i) = plot(ax_ov, NaN, NaN, '-', 'Color',col);
+                leg_labels{i}  = [panel_labels{i} '  [N/A]'];
+            end
+        end
+        xlabel(ax_ov, ov_xlabel, 'Color',[0.75 0.75 0.75], 'FontSize',9);
+        ylabel(ax_ov, ov_ylabel, 'Color',[0.75 0.75 0.75], 'FontSize',9);
+        title(ax_ov, sprintf('Overlay — %s  [%d scenarios]', case_title, n), ...
+              'Color',[0.95 0.95 0.95], 'FontSize',11, 'FontWeight','bold', ...
+              'Interpreter','none');
+        lgd = legend(ax_ov, leg_handles, leg_labels, ...
+                     'TextColor',[0.88 0.88 0.88], 'FontSize',8, ...
+                     'Location','best', 'Interpreter','none');
+        lgd.Color = [0.10 0.10 0.13];
+        hold(ax_ov,'off');
+
+        % ---- Row 2: Summary — sweep parameter vs max|u| ----
+        ax_c = subplot(n_rows_total, nc_p, (nc_p+1):(2*nc_p), 'Parent', fig1);
         style_ax(ax_c);
         hold(ax_c,'on'); grid(ax_c,'on');
-
         ok = ([results.status]==0) & ~isnan(maxu_vec');
-        if any(ok)
-            plot(ax_c, vals(ok), maxu_vec(ok)', 'o-', ...
-                 'Color',[0.40 0.75 0.40], 'MarkerFaceColor',[0.40 0.75 0.40], ...
-                 'LineWidth',2, 'MarkerSize',8);
+        for i = 1:n
+            col = scenario_colors(i,:);
+            if ok(i)
+                plot(ax_c, vals(i), maxu_vec(i), 'o', ...
+                     'Color',col, 'MarkerFaceColor',col, 'MarkerSize',10);
+            else
+                plot(ax_c, vals(i), 0, 'x', 'Color',col, ...
+                     'MarkerSize',12, 'LineWidth',2);
+            end
         end
-        if any(~ok)
-            plot(ax_c, vals(~ok), zeros(1,sum(~ok)), 'rx', ...
-                 'MarkerSize',12, 'LineWidth',2);
+        if sum(ok) > 1
+            plot(ax_c, vals(ok), maxu_vec(ok)', '--', ...
+                 'Color',[0.55 0.55 0.55], 'LineWidth',1);
         end
-        % When x-axis carries scenario indices, label each tick with the scenario text
         if has_labels
             set(ax_c, 'XTick', vals, 'XTickLabel', panel_labels, ...
                       'XTickLabelRotation', 20, 'TickLabelInterpreter', 'none');
         end
         xlabel(ax_c, sweep_label, 'Color',[0.75 0.75 0.75], 'FontSize',9);
-        ylabel(ax_c, res_ylabel,  'Color',[0.75 0.75 0.75], 'FontSize',9);
-        title(ax_c, sprintf('%s — sweep of  %s', case_title, sweep_label), ...
-              'Color',[0.88 0.88 0.88], 'FontSize',10, 'Interpreter','none');
+        ylabel(ax_c, sum_ylabel,  'Color',[0.75 0.75 0.75], 'FontSize',9);
+        title(ax_c, sprintf('Summary — %s vs %s', sum_ylabel, sweep_label), ...
+              'Color',[0.88 0.88 0.88], 'FontSize',9, 'Interpreter','none');
         hold(ax_c,'off');
 
-        % Remaining rows: one panel per scenario (layout handles n > 4)
+        % ---- Rows 3+: Individual panels (same color as overlay) ----
+        % Compute shared axis limits for fair visual comparison
+        all_x = []; all_y = [];
         for i = 1:n
-            ax  = subplot(n_rows_total, nc_p, nc_p + i, 'Parent', fig1);
+            if ~isempty(load_disp_arr{i})
+                ld = load_disp_arr{i};
+                if is_seepage
+                    all_x = [all_x; ld(:,1)]; all_y = [all_y; ld(:,2)]; %#ok<AGROW>
+                else
+                    all_x = [all_x; abs(ld(:,2))]; all_y = [all_y; ld(:,1)]; %#ok<AGROW>
+                end
+            end
+        end
+        shared_xlim = []; shared_ylim = [];
+        if ~isempty(all_x)
+            shared_xlim = [min(all_x)*0.95, max(all_x)*1.05];
+            shared_ylim = [min(all_y)*0.95, max(all_y)*1.05];
+            % Avoid degenerate limits
+            if shared_xlim(1) == shared_xlim(2), shared_xlim = shared_xlim + [-1 1]; end
+            if shared_ylim(1) == shared_ylim(2), shared_ylim = shared_ylim + [-1 1]; end
+        end
+
+        panel_axes = gobjects(n,1);
+        for i = 1:n
+            ax  = subplot(n_rows_total, nc_p, 2*nc_p + i, 'Parent', fig1);
             style_ax(ax);
+            col = scenario_colors(i,:);
             lbl = panel_labels{i};
 
             if results(i).status ~= 0
                 show_na(ax, [lbl newline '[FAIL]']);
+                % Colored title bar to indicate failure
+                title(ax, lbl, 'FontSize',8, 'Color',col, 'Interpreter','none');
 
             elseif ~isempty(load_disp_arr{i})
-                draw_load_disp(ax, load_disp_arr{i}, ld_fmt_arr{i});
+                draw_load_disp(ax, load_disp_arr{i}, ld_fmt_arr{i}, col);
+                if ~isempty(shared_xlim)
+                    xlim(ax, shared_xlim); ylim(ax, shared_ylim);
+                end
                 if ~isnan(maxu_vec(i))
                     val_lbl = sprintf('%.3e', maxu_vec(i));
                     if strcmp(ld_fmt_arr{i}, 'C')
@@ -185,23 +272,23 @@ function figs = pfem_plot_sweep_summary(results, sweep_param, yaml_path, varargi
                         lbl = sprintf('%s\nmax|u| = %s', lbl, val_lbl);
                     end
                 end
-                title(ax, lbl, 'FontSize',8,'Color',[0.80 0.80 0.80],'Interpreter','none');
+                title(ax, lbl, 'FontSize',8, 'Color',col, 'Interpreter','none');
 
             elseif ~isempty(disp_arr{i})
                 dm  = disp_arr{i};
-                nc  = min(2, size(dm,2));
-                mag = sqrt(sum(dm(:,1:nc).^2, 2));
-                plot(ax, 1:numel(mag), mag, '-', ...
-                     'Color',[0.40 0.75 0.40], 'LineWidth',1.5);
+                nc2 = min(2, size(dm,2));
+                mag = sqrt(sum(dm(:,1:nc2).^2, 2));
+                plot(ax, 1:numel(mag), mag, '-', 'Color',col, 'LineWidth',1.5);
                 xlabel(ax,'Node','Color',[0.70 0.70 0.70],'FontSize',8);
                 ylabel(ax,'|u|', 'Color',[0.70 0.70 0.70],'FontSize',8);
                 grid(ax,'on');
                 lbl = sprintf('%s\nmax|u| = %.3e', lbl, maxu_vec(i));
-                title(ax, lbl, 'FontSize',8,'Color',[0.80 0.80 0.80],'Interpreter','none');
+                title(ax, lbl, 'FontSize',8, 'Color',col, 'Interpreter','none');
 
             else
                 show_na(ax, [lbl newline 'N/A']);
             end
+            panel_axes(i) = ax;
         end
 
         do_save(fig1, save_prefix, 'res');
@@ -216,20 +303,23 @@ function figs = pfem_plot_sweep_summary(results, sweep_param, yaml_path, varargi
             sprintf('Reference Mesh — %s — %s sweep', case_title, sweep_label), ...
             nc2, nr, vis);
         figs.msh = fig2;
-
+        mesh_axes = gobjects(n,1);
         for i = 1:n
             ax  = subplot(nr, nc2, i, 'Parent', fig2);
+            col = scenario_colors(i,:);
             lbl = panel_labels{i};
             if results(i).status ~= 0
                 show_na(ax, [lbl newline '[FAIL]']);
+                title(ax, lbl,'FontSize',8,'Color',col,'Interpreter','none');
             elseif ~isempty(msh_arr{i})
-                draw_ps_mesh(ax, msh_arr{i}, [0.72 0.78 0.84]);
-                title(ax, lbl,'FontSize',8,'Color',[0.80 0.80 0.80],'Interpreter','none');
+                draw_ps_mesh(ax, msh_arr{i}, col);
+                title(ax, lbl,'FontSize',9,'Color',col,'FontWeight','bold','Interpreter','none');
             else
                 show_na(ax, [lbl newline 'N/A']);
             end
+            mesh_axes(i) = ax;
         end
-
+        linkaxes(mesh_axes, 'xy');   % same scale across panels
         do_save(fig2, save_prefix, 'msh');
     end
 
@@ -242,23 +332,26 @@ function figs = pfem_plot_sweep_summary(results, sweep_param, yaml_path, varargi
             sprintf('Deformed Shape — %s — %s sweep', case_title, sweep_label), ...
             nc2, nr, vis);
         figs.dis = fig3;
-
+        dis_axes = gobjects(n,1);
         for i = 1:n
             ax  = subplot(nr, nc2, i, 'Parent', fig3);
+            col = scenario_colors(i,:);
             lbl = panel_labels{i};
             if results(i).status ~= 0
                 show_na(ax, [lbl newline '[FAIL]']);
+                title(ax, lbl,'FontSize',8,'Color',col,'Interpreter','none');
             elseif ~isempty(dis_arr{i})
-                draw_ps_mesh(ax, dis_arr{i}, [0.70 0.85 0.70]);
+                draw_ps_mesh(ax, dis_arr{i}, col);
                 if ~isnan(maxu_vec(i))
                     lbl = sprintf('%s\nmax|u| = %.3e', lbl, maxu_vec(i));
                 end
-                title(ax, lbl,'FontSize',8,'Color',[0.80 0.80 0.80],'Interpreter','none');
+                title(ax, lbl,'FontSize',9,'Color',col,'FontWeight','bold','Interpreter','none');
             else
                 show_na(ax, [lbl newline 'N/A']);
             end
+            dis_axes(i) = ax;
         end
-
+        linkaxes(dis_axes, 'xy');    % same spatial scale across panels
         do_save(fig3, save_prefix, 'dis');
     end
 
@@ -271,21 +364,49 @@ function figs = pfem_plot_sweep_summary(results, sweep_param, yaml_path, varargi
             sprintf('Displacement Vectors — %s — %s sweep', case_title, sweep_label), ...
             nc2, nr, vis);
         figs.vec = fig4;
-
+        vec_axes = gobjects(n,1);
         for i = 1:n
             ax  = subplot(nr, nc2, i, 'Parent', fig4);
+            col = scenario_colors(i,:);
             lbl = panel_labels{i};
             if results(i).status ~= 0
                 show_na(ax, [lbl newline '[FAIL]']);
+                title(ax, lbl,'FontSize',8,'Color',col,'Interpreter','none');
             elseif ~isempty(vec_arr{i})
-                draw_ps_vecs(ax, vec_arr{i});
-                title(ax, lbl,'FontSize',8,'Color',[0.80 0.80 0.80],'Interpreter','none');
+                draw_ps_vecs(ax, vec_arr{i}, col);
+                title(ax, lbl,'FontSize',9,'Color',col,'FontWeight','bold','Interpreter','none');
             else
                 show_na(ax, [lbl newline 'N/A']);
             end
+            vec_axes(i) = ax;
         end
-
+        linkaxes(vec_axes, 'xy');
         do_save(fig4, save_prefix, 'vec');
+    end
+end
+
+
+function colors = scenario_color_map(n)
+% Return n visually distinct, high-contrast colors on a dark background.
+    if n <= 1
+        colors = [0.40 0.85 0.50];
+        return;
+    end
+    % Use a curated palette for small n, fall back to HSV for large n
+    palette = [ ...
+        0.29 0.78 0.35;   % green
+        0.98 0.55 0.24;   % orange
+        0.38 0.70 0.98;   % blue
+        0.95 0.33 0.33;   % red
+        0.75 0.45 0.95;   % purple
+        0.98 0.88 0.22;   % yellow
+        0.35 0.93 0.88;   % teal
+        0.98 0.55 0.75;   % pink
+    ];
+    if n <= size(palette,1)
+        colors = palette(1:n,:);
+    else
+        colors = hsv(n);
     end
 end
 
@@ -296,7 +417,7 @@ end
 
 function fig = make_dark_figure(name, ncols, nrows, vis)
     fig = figure('Name', name, ...
-                 'Position', [80 80 min(340*ncols, 1400) 280*nrows], ...
+                 'Position', [80 80 min(360*ncols, 1440) 300*nrows], ...
                  'Color', [0.11 0.11 0.14], ...
                  'Visible', vis);
 end
@@ -353,11 +474,11 @@ function draw_ps_mesh(ax, patches, edge_col)
 end
 
 
-function draw_ps_vecs(ax, arrows)
+function draw_ps_vecs(ax, arrows, col)
 % Draw displacement arrows from .vec file data.
+    if nargin < 3, col = [0.55 0.80 0.55]; end
     hold(ax,'on'); axis(ax,'equal'); axis(ax,'off');
     set(ax,'Color',[0.08 0.08 0.10]);
-    col = [0.55 0.80 0.55];
     for k = 1:size(arrows,1)
         x1 = arrows(k,1); y1 = arrows(k,2);
         x2 = arrows(k,3); y2 = arrows(k,4);
@@ -368,27 +489,27 @@ function draw_ps_vecs(ax, arrows)
 end
 
 
-function draw_load_disp(ax, load_disp, fmt)
+function draw_load_disp(ax, load_disp, fmt, col)
 % Draw load-displacement or consolidation curve.
 %   fmt='B' (default): Format B load-step — X=max|u|, Y=Load
 %   fmt='C':           Format C seepage   — X=Time,   Y=Uav
+%   col: RGB line color (default green/teal)
     if nargin < 3, fmt = 'B'; end
+    if nargin < 4 || isempty(col)
+        if strcmp(fmt,'C'), col = [0.40 0.75 0.75]; else, col = [0.40 0.75 0.40]; end
+    end
     hold(ax,'on'); grid(ax,'on');
     set(ax,'Color',[0.08 0.08 0.10], ...
            'XColor',[0.70 0.70 0.70], 'YColor',[0.70 0.70 0.70], ...
            'GridColor',[0.30 0.30 0.30], 'GridAlpha',0.4);
     if strcmp(fmt, 'C')
-        % Seepage: col1=Time, col2=Uav — plot time on X, Uav on Y
         plot(ax, load_disp(:,1), load_disp(:,2), 'o-', ...
-             'Color',[0.40 0.75 0.75], 'MarkerFaceColor',[0.40 0.75 0.75], ...
-             'LineWidth',1.5, 'MarkerSize',4);
+             'Color',col, 'MarkerFaceColor',col, 'LineWidth',2, 'MarkerSize',5);
         xlabel(ax,'Time', 'Color',[0.70 0.70 0.70],'FontSize',8);
         ylabel(ax,'Uav',  'Color',[0.70 0.70 0.70],'FontSize',8);
     else
-        % Load-step: col1=Load, col2=max_disp — plot disp on X, load on Y
         plot(ax, abs(load_disp(:,2)), load_disp(:,1), 'o-', ...
-             'Color',[0.40 0.75 0.40], 'MarkerFaceColor',[0.40 0.75 0.40], ...
-             'LineWidth',1.5, 'MarkerSize',4);
+             'Color',col, 'MarkerFaceColor',col, 'LineWidth',2, 'MarkerSize',5);
         xlabel(ax,'max|u|','Color',[0.70 0.70 0.70],'FontSize',8);
         ylabel(ax,'Load',  'Color',[0.70 0.70 0.70],'FontSize',8);
     end
