@@ -53,7 +53,8 @@ function figs = pfem_plot_sweep_summary(results, sweep_param, yaml_path, varargi
     end
 
     % ---- Collect all result data ----------------------------------------
-    load_disp_arr = cell(n,1);   % Format B: [load, max_disp] per step
+    load_disp_arr = cell(n,1);   % Format B/C: [col1, col2] per step
+    ld_fmt_arr    = repmat({'B'}, n, 1);  % 'B'=load-step, 'C'=seepage
     nodes_arr     = cell(n,1);   % Format A: node coordinates
     disp_arr      = cell(n,1);   % Format A: per-node displacements
     ec_arr        = cell(n,1);   % Format A: element connectivity
@@ -74,11 +75,12 @@ function figs = pfem_plot_sweep_summary(results, sweep_param, yaml_path, varargi
         else
             ov = struct();
         end
-        [nd, dm, ec, ld] = parse_res(results(i).out, yaml_path, ov);
+        [nd, dm, ec, ld, ld_fmt] = parse_res(results(i).out, yaml_path, ov);
         nodes_arr{i}     = nd;
         disp_arr{i}      = dm;
         ec_arr{i}        = ec;
         load_disp_arr{i} = ld;
+        if ~isempty(ld_fmt), ld_fmt_arr{i} = ld_fmt; end
 
         if ~isempty(dm)
             nc = min(2, size(dm,2));
@@ -124,11 +126,17 @@ function figs = pfem_plot_sweep_summary(results, sweep_param, yaml_path, varargi
     % ====================================================================
     % Figure 1 — Load / Displacement  (.res)
     % ====================================================================
+    % Detect dominant format for axis labels (C = seepage if any scenario is C)
+    is_seepage = any(strcmp(ld_fmt_arr, 'C'));
+    res_ylabel = 'max|u|';
+    if is_seepage, res_ylabel = 'final Uav'; end
+
     if has_res
         [nr_p, nc_p] = panel_layout(n);
         n_rows_total = nr_p + 1;   % row 1 = summary curve; rows 2..end = panels
-        fig1 = make_dark_figure( ...
-            sprintf('Load–Disp — %s — %s sweep', case_title, sweep_label), ...
+        fig1_title = sprintf('%s — %s sweep', case_title, sweep_label);
+        if is_seepage, fig1_title = ['Consolidation — ' fig1_title]; end
+        fig1 = make_dark_figure(fig1_title, ...
             nc_p, n_rows_total, vis);
         figs.res = fig1;
 
@@ -153,7 +161,7 @@ function figs = pfem_plot_sweep_summary(results, sweep_param, yaml_path, varargi
                       'XTickLabelRotation', 20, 'TickLabelInterpreter', 'none');
         end
         xlabel(ax_c, sweep_label, 'Color',[0.75 0.75 0.75], 'FontSize',9);
-        ylabel(ax_c, 'max|u|',    'Color',[0.75 0.75 0.75], 'FontSize',9);
+        ylabel(ax_c, res_ylabel,  'Color',[0.75 0.75 0.75], 'FontSize',9);
         title(ax_c, sprintf('%s — sweep of  %s', case_title, sweep_label), ...
               'Color',[0.88 0.88 0.88], 'FontSize',10, 'Interpreter','none');
         hold(ax_c,'off');
@@ -168,9 +176,14 @@ function figs = pfem_plot_sweep_summary(results, sweep_param, yaml_path, varargi
                 show_na(ax, [lbl newline '[FAIL]']);
 
             elseif ~isempty(load_disp_arr{i})
-                draw_load_disp(ax, load_disp_arr{i});
+                draw_load_disp(ax, load_disp_arr{i}, ld_fmt_arr{i});
                 if ~isnan(maxu_vec(i))
-                    lbl = sprintf('%s\nmax|u| = %.3e', lbl, maxu_vec(i));
+                    val_lbl = sprintf('%.3e', maxu_vec(i));
+                    if strcmp(ld_fmt_arr{i}, 'C')
+                        lbl = sprintf('%s\nfinal Uav = %s', lbl, val_lbl);
+                    else
+                        lbl = sprintf('%s\nmax|u| = %s', lbl, val_lbl);
+                    end
                 end
                 title(ax, lbl, 'FontSize',8,'Color',[0.80 0.80 0.80],'Interpreter','none');
 
@@ -355,17 +368,30 @@ function draw_ps_vecs(ax, arrows)
 end
 
 
-function draw_load_disp(ax, load_disp)
-% Draw load vs displacement curve (Format B .res data).
+function draw_load_disp(ax, load_disp, fmt)
+% Draw load-displacement or consolidation curve.
+%   fmt='B' (default): Format B load-step — X=max|u|, Y=Load
+%   fmt='C':           Format C seepage   — X=Time,   Y=Uav
+    if nargin < 3, fmt = 'B'; end
     hold(ax,'on'); grid(ax,'on');
     set(ax,'Color',[0.08 0.08 0.10], ...
            'XColor',[0.70 0.70 0.70], 'YColor',[0.70 0.70 0.70], ...
            'GridColor',[0.30 0.30 0.30], 'GridAlpha',0.4);
-    plot(ax, abs(load_disp(:,2)), load_disp(:,1), 'o-', ...
-         'Color',[0.40 0.75 0.40], 'MarkerFaceColor',[0.40 0.75 0.40], ...
-         'LineWidth',1.5, 'MarkerSize',4);
-    xlabel(ax,'max|u|','Color',[0.70 0.70 0.70],'FontSize',8);
-    ylabel(ax,'Load',  'Color',[0.70 0.70 0.70],'FontSize',8);
+    if strcmp(fmt, 'C')
+        % Seepage: col1=Time, col2=Uav — plot time on X, Uav on Y
+        plot(ax, load_disp(:,1), load_disp(:,2), 'o-', ...
+             'Color',[0.40 0.75 0.75], 'MarkerFaceColor',[0.40 0.75 0.75], ...
+             'LineWidth',1.5, 'MarkerSize',4);
+        xlabel(ax,'Time', 'Color',[0.70 0.70 0.70],'FontSize',8);
+        ylabel(ax,'Uav',  'Color',[0.70 0.70 0.70],'FontSize',8);
+    else
+        % Load-step: col1=Load, col2=max_disp — plot disp on X, load on Y
+        plot(ax, abs(load_disp(:,2)), load_disp(:,1), 'o-', ...
+             'Color',[0.40 0.75 0.40], 'MarkerFaceColor',[0.40 0.75 0.40], ...
+             'LineWidth',1.5, 'MarkerSize',4);
+        xlabel(ax,'max|u|','Color',[0.70 0.70 0.70],'FontSize',8);
+        ylabel(ax,'Load',  'Color',[0.70 0.70 0.70],'FontSize',8);
+    end
     hold(ax,'off');
 end
 
@@ -480,14 +506,16 @@ function arrows = parse_pfem_vec(vec_path)
 end
 
 
-function [nodes, disp_mat, elem_conn, load_disp] = parse_res(out, yaml_path, overrides)
+function [nodes, disp_mat, elem_conn, load_disp, ld_fmt] = parse_res(out, yaml_path, overrides)
 % Parse a PFEM .res file.
 %
 % Format A (elastic/structural): per-node displacement table.
-%   Returns: nodes (Nx2), disp_mat (Nx2+), elem_conn, load_disp=[]
+%   Returns: nodes (Nx2), disp_mat (Nx2+), elem_conn, load_disp=[], ld_fmt=''
 % Format B (nonlinear load-step): "step load disp iters" table.
-%   Returns: nodes=[], disp_mat=[], elem_conn=[], load_disp (Nx2 [load, max_disp])
-    nodes = []; disp_mat = []; elem_conn = []; load_disp = [];
+%   Returns: nodes=[], disp_mat=[], elem_conn=[], load_disp (Nx2 [load, max_disp]), ld_fmt='B'
+% Format C (seepage/consolidation): "Time  Uav  Pressure" table.
+%   Returns: nodes=[], disp_mat=[], elem_conn=[], load_disp (Nx2 [time, Uav]), ld_fmt='C'
+    nodes = []; disp_mat = []; elem_conn = []; load_disp = []; ld_fmt = '';
 
     if ~isfield(out,'files') || isempty(out.files), return; end
     res_files = out.files(cellfun(@(f) endsWith(f,'.res'), out.files));
@@ -556,7 +584,7 @@ function [nodes, disp_mat, elem_conn, load_disp] = parse_res(out, yaml_path, ove
                     ld(end+1,:) = [v(2), v(3)]; %#ok<AGROW>
                 end
             end
-            if ~isempty(ld), load_disp = ld; end
+            if ~isempty(ld), load_disp = ld; ld_fmt = 'B'; end
             return;
         end
     end
@@ -576,7 +604,7 @@ function [nodes, disp_mat, elem_conn, load_disp] = parse_res(out, yaml_path, ove
                     ld(end+1,:) = [v(1), v(2)]; %#ok<AGROW>  [time, Uav]
                 end
             end
-            if ~isempty(ld), load_disp = ld; end
+            if ~isempty(ld), load_disp = ld; ld_fmt = 'C'; end
             return;
         end
     end

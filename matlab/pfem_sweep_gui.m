@@ -504,7 +504,8 @@ function cb_open_figs(fig, res_tbl)
 
         runs_dir   = fullfile(st.repo_root, 'runs', chap_str, cn);
         if ~exist(runs_dir, 'dir'), mkdir(runs_dir); end
-        fig_prefix = fullfile(runs_dir, sprintf('%s_sweep', cn));
+        ts         = datestr(now, 'yyyymmdd_HHMMSS'); %#ok<TNOW1,DATST>
+        fig_prefix = fullfile(runs_dir, sprintf('%s_sweep_%s', cn, ts));
         try
             figs_out = pfem_plot_sweep_summary(all_sc, sweep_disp, yaml_path, ...
                 'Title', sprintf('PFEM %s  [%d scenario(s)]', cn, numel(all_sc)), ...
