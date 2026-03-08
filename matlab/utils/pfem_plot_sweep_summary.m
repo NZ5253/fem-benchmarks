@@ -46,7 +46,7 @@ function figs = pfem_plot_sweep_summary(results, sweep_param, yaml_path, varargi
     % Per-result display labels (scenario label if present, else param=val)
     has_labels = all(arrayfun(@(r) isfield(r,'label') && ~isempty(r.label), results));
     if has_labels
-        panel_labels = {results.label};
+        panel_labels = cellfun(@wrap_label, {results.label}, 'UniformOutput', false);
     else
         panel_labels = arrayfun(@(r) sprintf('%s = %.4g', sweep_label, r.value), ...
                                 results, 'UniformOutput', false);
@@ -257,7 +257,7 @@ function figs = pfem_plot_sweep_summary(results, sweep_param, yaml_path, varargi
             if results(i).status ~= 0
                 show_na(ax, [lbl newline '[FAIL]']);
                 % Colored title bar to indicate failure
-                title(ax, lbl, 'FontSize',8, 'Color',col, 'Interpreter','none');
+                title(ax, lbl, 'FontSize',10, 'Color',col, 'Interpreter','none');
 
             elseif ~isempty(load_disp_arr{i})
                 draw_load_disp(ax, load_disp_arr{i}, ld_fmt_arr{i}, col);
@@ -272,7 +272,7 @@ function figs = pfem_plot_sweep_summary(results, sweep_param, yaml_path, varargi
                         lbl = sprintf('%s\nmax|u| = %s', lbl, val_lbl);
                     end
                 end
-                title(ax, lbl, 'FontSize',8, 'Color',col, 'Interpreter','none');
+                title(ax, lbl, 'FontSize',10, 'Color',col, 'Interpreter','none');
 
             elseif ~isempty(disp_arr{i})
                 dm  = disp_arr{i};
@@ -283,7 +283,7 @@ function figs = pfem_plot_sweep_summary(results, sweep_param, yaml_path, varargi
                 ylabel(ax,'|u|', 'Color',[0.70 0.70 0.70],'FontSize',8);
                 grid(ax,'on');
                 lbl = sprintf('%s\nmax|u| = %.3e', lbl, maxu_vec(i));
-                title(ax, lbl, 'FontSize',8, 'Color',col, 'Interpreter','none');
+                title(ax, lbl, 'FontSize',10, 'Color',col, 'Interpreter','none');
 
             else
                 show_na(ax, [lbl newline 'N/A']);
@@ -313,7 +313,7 @@ function figs = pfem_plot_sweep_summary(results, sweep_param, yaml_path, varargi
                 title(ax, lbl,'FontSize',8,'Color',col,'Interpreter','none');
             elseif ~isempty(msh_arr{i})
                 draw_ps_mesh(ax, msh_arr{i}, col);
-                title(ax, lbl,'FontSize',9,'Color',col,'FontWeight','bold','Interpreter','none');
+                title(ax, lbl,'FontSize',11,'Color',col,'FontWeight','bold','Interpreter','none');
             else
                 show_na(ax, [lbl newline 'N/A']);
             end
@@ -345,7 +345,7 @@ function figs = pfem_plot_sweep_summary(results, sweep_param, yaml_path, varargi
                 if ~isnan(maxu_vec(i))
                     lbl = sprintf('%s\nmax|u| = %.3e', lbl, maxu_vec(i));
                 end
-                title(ax, lbl,'FontSize',9,'Color',col,'FontWeight','bold','Interpreter','none');
+                title(ax, lbl,'FontSize',11,'Color',col,'FontWeight','bold','Interpreter','none');
             else
                 show_na(ax, [lbl newline 'N/A']);
             end
@@ -374,7 +374,7 @@ function figs = pfem_plot_sweep_summary(results, sweep_param, yaml_path, varargi
                 title(ax, lbl,'FontSize',8,'Color',col,'Interpreter','none');
             elseif ~isempty(vec_arr{i})
                 draw_ps_vecs(ax, vec_arr{i}, col);
-                title(ax, lbl,'FontSize',9,'Color',col,'FontWeight','bold','Interpreter','none');
+                title(ax, lbl,'FontSize',11,'Color',col,'FontWeight','bold','Interpreter','none');
             else
                 show_na(ax, [lbl newline 'N/A']);
             end
@@ -383,6 +383,20 @@ function figs = pfem_plot_sweep_summary(results, sweep_param, yaml_path, varargi
         linkaxes(vec_axes, 'xy');
         do_save(fig4, save_prefix, 'vec');
     end
+end
+
+
+function lbl = wrap_label(lbl, max_per_line)
+% Wrap a space-separated "key=val key=val ..." label every max_per_line tokens.
+    if nargin < 2, max_per_line = 3; end
+    parts = strsplit(strtrim(lbl), ' ');
+    parts = parts(~cellfun(@isempty, parts));
+    lines = {};
+    for k = 1:max_per_line:numel(parts)
+        chunk = parts(k : min(k+max_per_line-1, numel(parts)));
+        lines{end+1} = strjoin(chunk, '  '); %#ok<AGROW>
+    end
+    lbl = strjoin(lines, newline);
 end
 
 
@@ -417,7 +431,7 @@ end
 
 function fig = make_dark_figure(name, ncols, nrows, vis)
     fig = figure('Name', name, ...
-                 'Position', [80 80 min(360*ncols, 1440) 300*nrows], ...
+                 'Position', [80 80 min(380*ncols, 1520) 340*nrows], ...
                  'Color', [0.11 0.11 0.14], ...
                  'Visible', vis);
 end
