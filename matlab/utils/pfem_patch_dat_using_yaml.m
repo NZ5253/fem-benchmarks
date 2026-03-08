@@ -81,6 +81,70 @@ function pfem_patch_dat_using_yaml(dat_path, y, overrides)
     if ~isempty(new_nxe) || ~isempty(new_nye)
         regen_structured_coords(dat_path, y, new_nxe, new_nye);
     end
+
+    % ── qinc post-patch ───────────────────────────────────────────────────
+    % Programs p61/p62/p66/p67/p68 read qinc(incs) immediately after incs.
+    % Changing incs without regenerating qinc causes Fortran to read past
+    % end-of-data and crash.  Redistribute total load uniformly.
+    if isKey(tunable_map, 'load_increments') && isfield(overrides, 'load_increments')
+        regen_qinc(dat_path, y, tunable_map, round(overrides.load_increments));
+    end
+end
+
+
+function regen_qinc(dat_path, y, tunable_map, new_incs)
+% Regenerate the qinc array in the .dat file after load_increments changed.
+%
+% Programs p61/p62/p66/p67/p68 do:
+%   READ(10,*) tol, limit, incs
+%   ALLOCATE(qinc(incs))
+%   READ(10,*) qinc           ← size depends on incs!
+%
+% Strategy: keep total load the same, redistribute as new_incs equal steps.
+
+    if ~isfield(y,'inputs') || ~isfield(y.inputs,'all_tokens'), return; end
+
+    incs_tok_idx = tunable_map('load_increments');  % 1-based global token index
+    tokens_yaml  = y.inputs.all_tokens;
+
+    % Original incs value and qinc values from YAML
+    orig_incs = round(str2double(tokens_yaml{incs_tok_idx}));
+    if isnan(orig_incs) || orig_incs < 1, return; end
+    if new_incs == orig_incs, return; end   % nothing changed
+
+    qinc_start = incs_tok_idx + 1;          % 1-based
+    qinc_end   = incs_tok_idx + orig_incs;
+    if qinc_end > numel(tokens_yaml), return; end
+
+    orig_qinc  = cellfun(@str2double, tokens_yaml(qinc_start:qinc_end));
+    total_load = sum(orig_qinc);
+
+    % New qinc: uniform fractions summing to same total
+    new_qinc = repmat(total_load / new_incs, 1, new_incs);
+
+    % Locate qinc lines in the (already token-patched) .dat file
+    [~, tok_pos, dat_lines] = tokenize_dat(dat_path);
+    if qinc_end > size(tok_pos,1), return; end
+
+    first_line = tok_pos(qinc_start, 1);
+    last_line  = tok_pos(qinc_end,   1);
+
+    % Build replacement lines (8 values per line)
+    new_lines_qinc = {};
+    for k = 1:8:new_incs
+        chunk = new_qinc(k : min(k+7, new_incs));
+        new_lines_qinc{end+1} = strjoin( ...
+            arrayfun(@(v) sprintf('%.6g',v), chunk, 'UniformOutput',false), '  '); %#ok<AGROW>
+    end
+
+    rebuilt = [dat_lines(1:first_line-1); new_lines_qinc(:); dat_lines(last_line+1:end)];
+
+    fid = fopen(dat_path, 'w');
+    if fid == -1, return; end
+    for i = 1:numel(rebuilt)
+        fprintf(fid, '%s\n', rebuilt{i});
+    end
+    fclose(fid);
 end
 
 
