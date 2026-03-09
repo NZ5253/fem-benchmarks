@@ -141,8 +141,16 @@ for prog in $PROGRAMS; do
 
     echo "  Building $prog..."
 
+    # Some programs need extra libraries
+    EXTRA_LIBS=""
+    if grep -q "dsaupd\|dseupd\|dsaup2\|dneupd\|dnaupd" "$SOURCE_FILE" 2>/dev/null; then
+        EXTRA_LIBS="-larpack -llapack -lblas"
+    elif grep -q "dsymm\|ddot\|daxpy\|dgemm\|dnrm2" "$SOURCE_FILE" 2>/dev/null; then
+        EXTRA_LIBS="-lblas"
+    fi
+
     # Compile program (same as pfem_build_and_run.sh)
-    if gfortran -O2 "$SOURCE_FILE" -I"$MOD" "$LIB" -o "$EXE_FILE" 2>&1; then
+    if gfortran -O2 "$SOURCE_FILE" -I"$MOD" "$LIB" $EXTRA_LIBS -o "$EXE_FILE" 2>&1; then
         echo "    ✓ $prog: built successfully"
         ((success_count++)) || true
     else

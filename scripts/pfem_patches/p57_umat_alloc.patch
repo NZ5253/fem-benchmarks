@@ -1,0 +1,15 @@
+--- a/pfem/source/chap05/p57.f03
++++ b/pfem/source/chap05/p57.f03
+@@ -60,7 +60,17 @@
+  ALLOCATE(props(nprops)) ! Abaqus UMAT
+- READ(10,*)prop
++!-----------initialise UMAT arrays (not allocated in original source)-----
++ nstatv=1; nshr=3; npt=1; kstep=1; kinc=1; layer=1; kspt=1
++ ALLOCATE(statev(nstatv),ddsddt(nst),drplde(nst),drpldt(1),stran(nst),   &
++   time(2),predef(1),dpred(1),drot(3,3),dfgrd0(3,3),dfgrd1(3,3))
++ statev=zero; ddsddt=zero; drplde=zero; drpldt=zero; stran=zero
++ time=zero; predef=zero; dpred=zero; drot=zero; dfgrd0=zero; dfgrd1=zero
++ drot(1,1)=one; drot(2,2)=one; drot(3,3)=one
++ dfgrd0(1,1)=one; dfgrd0(2,2)=one; dfgrd0(3,3)=one
++ dfgrd1(1,1)=one; dfgrd1(2,2)=one; dfgrd1(3,3)=one
++ READ(10,*)prop

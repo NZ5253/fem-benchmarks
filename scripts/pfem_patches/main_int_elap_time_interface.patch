@@ -1,0 +1,11 @@
+--- a/pfem/source/library/main/main_int.f03
++++ b/pfem/source/library/main/main_int.f03
+@@ END SUBROUTINE vmflow
++!
++FUNCTION elap_time() RESULT(t)
++ IMPLICIT NONE
++ INTEGER,PARAMETER::iwp=SELECTED_REAL_KIND(15)
++ REAL(iwp)::t
++END FUNCTION elap_time
+ !
+ END INTERFACE

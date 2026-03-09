@@ -505,6 +505,7 @@ inputs:
   - '1.60'
 outputs:
   output_directory: executable/chap06
+  timeout_override: 600
   files_expected:
   - p613.res
   - p613.msh

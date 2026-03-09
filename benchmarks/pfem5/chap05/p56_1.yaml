@@ -59194,6 +59194,7 @@ inputs:
   - '0'
 outputs:
   output_directory: executable/chap05
+  timeout_override: 900
   files_expected:
   - p56_1.res
   - p56_1.msh

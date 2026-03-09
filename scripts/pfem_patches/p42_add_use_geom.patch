@@ -1,0 +1,10 @@
+--- /dev/fd/63	2026-03-09 02:06:56.338236088 +0100
++++ pfem/source/chap04/p42.f03	2026-03-08 23:40:53.009205822 +0100
+@@ -5,6 +5,7 @@
+ !             elements in 2- or 3-dimensions
+ !-------------------------------------------------------------------------
+  USE main
++ USE geom
+  IMPLICIT NONE
+  INTEGER,PARAMETER::iwp=SELECTED_REAL_KIND(15)
+  INTEGER::fixed_freedoms,i,iel,k,loaded_nodes,ndim,ndof=2,nels,neq,nod=2, &

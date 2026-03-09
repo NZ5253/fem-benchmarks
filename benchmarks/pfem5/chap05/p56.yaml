@@ -166,7 +166,7 @@ input_schema:
 inputs:
   working_directory: executable/chap05
   basename: p56
-  dat_file: executable/chap05/p56.dat
+  dat_file: source/chap05/p56.dat
   all_tokens:
   - '20'
   - '1'
