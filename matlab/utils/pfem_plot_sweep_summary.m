@@ -87,6 +87,7 @@ function figs = pfem_plot_sweep_summary(results, sweep_param, yaml_path, varargi
             nc = min(2, size(dm,2));
             maxu_vec(i) = max(sqrt(sum(dm(:,1:nc).^2, 2)));
         elseif ~isempty(ld)
+            % For SRF format col2=displacement, for B format col2=disp too
             maxu_vec(i) = max(abs(ld(:,2)));
         end
 
@@ -153,11 +154,15 @@ function figs = pfem_plot_sweep_summary(results, sweep_param, yaml_path, varargi
     % ====================================================================
     % Figure 1 — Load / Displacement  (.res)
     % ====================================================================
-    % Detect dominant format for axis labels (C = seepage if any scenario is C)
+    % Detect dominant format for axis labels
     is_seepage = any(strcmp(ld_fmt_arr, 'C'));
+    is_srf_fmt = any(strcmp(ld_fmt_arr, 'S'));
     if is_seepage
         ov_xlabel = 'Time';  ov_ylabel = 'Uav';
         sum_ylabel = 'final Uav';
+    elseif is_srf_fmt
+        ov_xlabel = 'SRF';   ov_ylabel = '\delta_{max}';
+        sum_ylabel = 'max disp';
     else
         ov_xlabel = 'max|u|'; ov_ylabel = 'Load';
         sum_ylabel = 'max|u|';
@@ -165,12 +170,10 @@ function figs = pfem_plot_sweep_summary(results, sweep_param, yaml_path, varargi
 
     if has_res
         [nr_p, nc_p] = panel_layout(n);
-        % Layout: row 1 = overlay (full width)
-        %         row 2 = summary sweep curve (full width)
-        %         rows 3+ = individual panels
         n_rows_total = nr_p + 2;
         fig1_title = sprintf('%s — %s sweep', case_title, sweep_label);
         if is_seepage, fig1_title = ['Consolidation — ' fig1_title]; end
+        if is_srf_fmt,  fig1_title = ['SRF Analysis — ' fig1_title]; end
         fig1 = make_dark_figure(fig1_title, nc_p, n_rows_total, vis);
         figs.res = fig1;
 
@@ -190,10 +193,12 @@ function figs = pfem_plot_sweep_summary(results, sweep_param, yaml_path, varargi
                 ld = load_disp_arr{i};
                 if is_seepage
                     xd = ld(:,1); yd = ld(:,2);
+                elseif strcmp(ld_fmt_arr{i},'S')
+                    xd = ld(:,1); yd = ld(:,2);   % SRF, disp
                 else
                     xd = abs(ld(:,2)); yd = ld(:,1);
                 end
-                leg_handles(i) = plot(ax_ov, xd, yd, 'o-', ...
+                leg_handles(i) = plot(ax_ov, xd, yd, 's-', ...
                     'Color',col, 'MarkerFaceColor',col, ...
                     'LineWidth',2, 'MarkerSize',5);
                 leg_labels{i}  = panel_labels{i};
@@ -209,6 +214,7 @@ function figs = pfem_plot_sweep_summary(results, sweep_param, yaml_path, varargi
                 leg_labels{i}  = [panel_labels{i} '  [N/A]'];
             end
         end
+        if is_srf_fmt, set(ax_ov,'YDir','reverse'); end
         xlabel(ax_ov, ov_xlabel, 'Color',[0.75 0.75 0.75], 'FontSize',9);
         ylabel(ax_ov, ov_ylabel, 'Color',[0.75 0.75 0.75], 'FontSize',9);
         title(ax_ov, sprintf('Overlay — %s  [%d scenarios]', case_title, n), ...
@@ -416,20 +422,21 @@ function figs = pfem_plot_sweep_summary(results, sweep_param, yaml_path, varargi
     % Matches book Figure 6.55 style for p612/p613 slope problems.
     % ====================================================================
     if has_ensi
-        % Determine subplot layout: 2 view columns × n scenario rows
-        n_rows_e = n;
+        % One panel per scenario — 3D deformed mesh at failure (Figure 6.55 style)
+        [nr_e, nc_e] = panel_layout(n);
         fig5 = make_dark_figure( ...
-            sprintf('Deformed Shape (3D) — %s — %s sweep', case_title, sweep_label), ...
-            2, n_rows_e, vis);
+            sprintf('Deformed Mesh at Failure (3D) — %s — %s sweep', case_title, sweep_label), ...
+            nc_e, nr_e, vis);
         figs.ensi = fig5;
 
-        % Global color limits: max displacement across all scenarios + steps
+        % Global displacement range for consistent colourscale
         global_maxu = 0;
         for i = 1:n
             if isempty(ensi_arr{i}), continue; end
-            for s = 1:numel(ensi_arr{i}.displ)
-                if isempty(ensi_arr{i}.displ{s}), continue; end
-                d = ensi_arr{i}.displ{s};
+            last_s = numel(ensi_arr{i}.displ);
+            while last_s > 1 && isempty(ensi_arr{i}.displ{last_s}), last_s = last_s-1; end
+            if ~isempty(ensi_arr{i}.displ{last_s})
+                d = ensi_arr{i}.displ{last_s};
                 global_maxu = max(global_maxu, max(sqrt(sum(d.^2,2))));
             end
         end
@@ -438,74 +445,46 @@ function figs = pfem_plot_sweep_summary(results, sweep_param, yaml_path, varargi
         for i = 1:n
             col = scenario_colors(i,:);
             lbl = panel_labels{i};
-
-            ax_side = subplot(n_rows_e, 2, (i-1)*2+1, 'Parent', fig5);
-            ax_plan = subplot(n_rows_e, 2, (i-1)*2+2, 'Parent', fig5);
-            style_ax(ax_side); style_ax(ax_plan);
+            ax  = subplot(nr_e, nc_e, i, 'Parent', fig5);
 
             if results(i).status ~= 0 || isempty(ensi_arr{i})
-                show_na(ax_side, [lbl newline '[N/A]']);
-                show_na(ax_plan, [lbl newline '[N/A]']);
-                title(ax_side, lbl,'Color',col,'FontSize',9,'Interpreter','none');
-                title(ax_plan, '(plan)','Color',col,'FontSize',9,'Interpreter','none');
-                continue;
+                show_na(ax, [lbl newline '[N/A]']); continue;
             end
 
-            en    = ensi_arr{i};
-            nodes = en.nodes;     % N×3
-            srf_v = en.srf;
+            en = ensi_arr{i};
 
-            % Use last displacement step (failure / highest SRF)
+            % Find last valid displacement step
             last_s = numel(en.displ);
-            while last_s > 1 && isempty(en.displ{last_s})
-                last_s = last_s - 1;
-            end
+            while last_s > 1 && isempty(en.displ{last_s}), last_s = last_s-1; end
             if isempty(en.displ{last_s})
-                show_na(ax_side, [lbl newline 'no displ']);
-                show_na(ax_plan, [lbl newline 'no displ']);
-                continue;
+                show_na(ax, [lbl newline 'no displ']); continue;
             end
-            d_last = en.displ{last_s};          % N×3 displacement at last SRF
-            mag    = sqrt(sum(d_last.^2, 2));   % N×1 magnitude
+            d_last = en.displ{last_s};
+            mag    = sqrt(sum(d_last.^2, 2));
 
-            % Scale factor: amplify displ so it is ~8% of domain width
-            domain_w = max(nodes(:,1)) - min(nodes(:,1));
+            % Scale factor: amplify ~8% of domain width for visibility
+            domain_w = max(en.nodes(:,1)) - min(en.nodes(:,1));
             sf = 0;
             if max(mag) > 0, sf = 0.08 * domain_w / max(mag); end
 
-            % Deformed node positions
-            xd = nodes(:,1) + sf * d_last(:,1);
-            yd = nodes(:,2) + sf * d_last(:,2);
-            zd = nodes(:,3) + sf * d_last(:,3);
-
             srf_lbl = '';
-            if ~isempty(srf_v) && last_s <= numel(srf_v)
-                srf_lbl = sprintf('  SRF=%.3g', srf_v(last_s));
+            if ~isempty(en.srf) && last_s <= numel(en.srf)
+                srf_lbl = sprintf('  SRF=%.3g', en.srf(last_s));
             end
             max_lbl = sprintf('  max|u|=%.3e', max(mag));
 
-            % ── Side view: x–y (deformed, colored by |u|) ──────────────
-            draw_ensi_scatter(ax_side, xd, yd, mag, [0 global_maxu], col);
-            draw_ensi_edges(ax_side, xd, yd, en.conn, [0.25 0.28 0.32]);
-            xlabel(ax_side,'x','Color',[0.7 0.7 0.7],'FontSize',8);
-            ylabel(ax_side,'y','Color',[0.7 0.7 0.7],'FontSize',8);
-            title(ax_side, [lbl newline 'Side view (x-y)' srf_lbl max_lbl], ...
+            % 3D boundary-face patch — matches book Figure 6.55
+            draw_ensi_3d(ax, en.nodes, en.conn, d_last, sf, [0 global_maxu]);
+            title(ax, [lbl newline srf_lbl max_lbl], ...
                 'Color',col,'FontSize',9,'FontWeight','bold','Interpreter','none');
 
-            % ── Plan view: x–z (deformed, colored by |u|) ──────────────
-            draw_ensi_scatter(ax_plan, xd, zd, mag, [0 global_maxu], col);
-            draw_ensi_edges(ax_plan, xd, zd, en.conn, [0.25 0.28 0.32]);
-            xlabel(ax_plan,'x','Color',[0.7 0.7 0.7],'FontSize',8);
-            ylabel(ax_plan,'z','Color',[0.7 0.7 0.7],'FontSize',8);
-            title(ax_plan, 'Plan view (x-z)', ...
-                'Color',[0.7 0.7 0.7],'FontSize',9,'Interpreter','none');
-
-            % Colorbar on plan axis
-            cb = colorbar(ax_plan);
-            cb.Color = [0.7 0.7 0.7];
-            cb.Label.String = '|u|';
-            cb.Label.Color  = [0.7 0.7 0.7];
-            clim(ax_plan, [0 global_maxu]);
+            % Colorbar on last panel only
+            if i == n
+                cb = colorbar(ax);
+                cb.Color = [0.7 0.7 0.7];
+                cb.Label.String = '|u|';
+                cb.Label.Color  = [0.7 0.7 0.7];
+            end
         end
 
         do_save(fig5, save_prefix, 'ensi');
@@ -632,9 +611,9 @@ end
 
 function draw_load_disp(ax, load_disp, fmt, col)
 % Draw load-displacement or consolidation curve.
-%   fmt='B' (default): Format B load-step — X=max|u|, Y=Load
-%   fmt='C':           Format C seepage   — X=Time,   Y=Uav
-%   col: RGB line color (default green/teal)
+%   fmt='B': Format B load-step  — X=max|u|, Y=Load
+%   fmt='S': SRF format          — X=SRF,    Y=δmax (Y inverted, iter annotated)
+%   fmt='C': seepage              — X=Time,   Y=Uav
     if nargin < 3, fmt = 'B'; end
     if nargin < 4 || isempty(col)
         if strcmp(fmt,'C'), col = [0.40 0.75 0.75]; else, col = [0.40 0.75 0.40]; end
@@ -643,11 +622,44 @@ function draw_load_disp(ax, load_disp, fmt, col)
     set(ax,'Color',[0.08 0.08 0.10], ...
            'XColor',[0.70 0.70 0.70], 'YColor',[0.70 0.70 0.70], ...
            'GridColor',[0.30 0.30 0.30], 'GridAlpha',0.4);
+
     if strcmp(fmt, 'C')
         plot(ax, load_disp(:,1), load_disp(:,2), 'o-', ...
              'Color',col, 'MarkerFaceColor',col, 'LineWidth',2, 'MarkerSize',5);
         xlabel(ax,'Time', 'Color',[0.70 0.70 0.70],'FontSize',8);
         ylabel(ax,'Uav',  'Color',[0.70 0.70 0.70],'FontSize',8);
+
+    elseif strcmp(fmt, 'S')
+        % SRF format — matches book Figure 6.54 style
+        xd = load_disp(:,1);   % SRF
+        yd = load_disp(:,2);   % δmax
+        plot(ax, xd, yd, 's-', 'Color',col, 'MarkerFaceColor',col, ...
+             'LineWidth',1.5, 'MarkerSize',6);
+        set(ax,'YDir','reverse');
+        xlabel(ax,'SRF',           'Color',[0.70 0.70 0.70],'FontSize',8);
+        ylabel(ax,'\delta_{max}',  'Color',[0.70 0.70 0.70],'FontSize',8);
+        % Annotate iteration counts (3rd column when available)
+        if size(load_disp,2) >= 3
+            iters  = load_disp(:,3);
+            ilimit = max(iters(~isnan(iters)));   % assume highest = limit
+            for k = 1:numel(xd)
+                it = iters(k);
+                if isnan(it), continue; end
+                itlbl = sprintf('%g', it);
+                if it >= ilimit, itlbl = [itlbl '+']; end %#ok<AGROW>
+                text(ax, xd(k), yd(k), ['  ' itlbl], ...
+                     'Color',[0.80 0.80 0.60], 'FontSize',7, ...
+                     'VerticalAlignment','middle');
+            end
+            % Mark FS at last non-diverged point (iters < limit)
+            fs_k = find(iters < ilimit, 1, 'last');
+            if ~isempty(fs_k)
+                text(ax, xd(fs_k)*1.01, yd(fs_k), ...
+                     sprintf('  FS=%.2g', xd(fs_k)), ...
+                     'Color',[0.95 0.75 0.30], 'FontSize',8, 'FontWeight','bold');
+            end
+        end
+
     else
         plot(ax, abs(load_disp(:,2)), load_disp(:,1), 'o-', ...
              'Color',col, 'MarkerFaceColor',col, 'LineWidth',2, 'MarkerSize',5);
@@ -845,16 +857,24 @@ function [nodes, disp_mat, elem_conn, load_disp, ld_fmt] = parse_res(out, yaml_p
                 if isempty(ln2), break; end
                 v = sscanf(ln2,'%f');
                 if is_srf
-                    if numel(v) >= 2
-                        ld(end+1,:) = [v(1), v(2)]; %#ok<AGROW>  [srf, max_disp]
+                    if numel(v) >= 3
+                        ld(end+1,:) = [v(1), v(2), v(3)]; %#ok<AGROW> [srf, max_disp, iters]
+                    elseif numel(v) >= 2
+                        ld(end+1,:) = [v(1), v(2), NaN];  %#ok<AGROW>
                     end
                 else
-                    if numel(v) >= 3
-                        ld(end+1,:) = [v(2), v(3)]; %#ok<AGROW>  [load, disp]
+                    if numel(v) >= 4
+                        ld(end+1,:) = [v(2), v(3), v(4)]; %#ok<AGROW> [load, disp, iters]
+                    elseif numel(v) >= 3
+                        ld(end+1,:) = [v(2), v(3), NaN];  %#ok<AGROW>
                     end
                 end
             end
-            if ~isempty(ld), load_disp = ld; ld_fmt = 'B'; end
+            % 'S' = SRF format (X=srf, Y=disp inverted); 'B' = standard load-disp
+            if ~isempty(ld)
+                load_disp = ld;
+                if is_srf, ld_fmt = 'S'; else, ld_fmt = 'B'; end
+            end
             return;
         end
     end
@@ -885,41 +905,71 @@ end
 % EnSight drawing helpers
 % ==========================================================================
 
-function draw_ensi_scatter(ax, px, py, mag, clim_range, ~)
-% Scatter plot of projected node positions, colored by displacement magnitude.
-    hold(ax,'on'); axis(ax,'equal');
-    set(ax,'Color',[0.06 0.06 0.08]);
-    scatter(ax, px, py, 4, mag, 'filled');
-    colormap(ax, 'turbo');
-    clim(ax, clim_range);
-    hold(ax,'off');
+function face_nodes = get_boundary_faces(conn)
+% Extract boundary (external surface) faces from hex8 corner connectivity.
+% Returns Nf×4 face node index array.
+    % Standard hex8 face definitions (local corner indices 1..8)
+    hf = [1 2 3 4; 5 6 7 8; 1 2 6 5; 2 3 7 6; 3 4 8 7; 4 1 5 8];
+    n_elem = size(conn,1);
+    n_hf   = size(hf,1);
+    total  = n_elem * n_hf;
+
+    orig = zeros(total,4);
+    srt  = zeros(total,4);
+    for e = 1:n_elem
+        cn = conn(e,1:8);
+        for fi = 1:n_hf
+            idx = (e-1)*n_hf + fi;
+            fn = cn(hf(fi,:));
+            orig(idx,:) = fn;
+            srt(idx,:)  = sort(fn);
+        end
+    end
+
+    [~, ia, ic] = unique(srt, 'rows', 'stable');
+    counts = accumarray(ic, 1);
+    face_nodes = orig(ia(counts == 1), :);
 end
 
 
-function draw_ensi_edges(ax, px, py, conn, edge_col)
-% Draw element edge outlines projected to the (px,py) plane.
-% Uses only the 8 corner nodes of each hexa20 element.
-% Faces drawn: bottom quad (nodes 1-2-3-4) and top quad (5-6-7-8).
-    if isempty(conn), return; end
-    if nargin < 5, edge_col = [0.30 0.33 0.38]; end
+function draw_ensi_3d(ax, nodes, conn, displ, sf, clim_range)
+% Render the deformed 3D mesh as a surface patch coloured by |u|.
+% Matches book Figure 6.55 style: boundary faces, gray-to-white colormap.
+    if isempty(conn) || isempty(displ), return; end
 
-    % Corner face index sets for a standard hex8: bottom, top, 4 sides
-    hex_faces = {[1 2 3 4]; [5 6 7 8]; [1 2 6 5]; [2 3 7 6]; [3 4 8 7]; [4 1 5 8]};
+    mag = sqrt(sum(displ.^2, 2));
 
-    hold(ax,'on');
-    for e = 1:size(conn,1)
-        nids = conn(e,:);
-        nids = nids(nids >= 1 & nids <= numel(px));
-        if numel(nids) < 4, continue; end
-        for fi = 1:numel(hex_faces)
-            f = hex_faces{fi};
-            f = f(f <= numel(nids));
-            if numel(f) < 3, continue; end
-            ns = nids(f);
-            xf = px(ns([1:end 1]));
-            yf = py(ns([1:end 1]));
-            plot(ax, xf, yf, '-', 'Color', edge_col, 'LineWidth', 0.4);
-        end
+    % Deformed node positions
+    def = nodes;
+    def(:,1) = nodes(:,1) + sf * displ(:,1);
+    def(:,2) = nodes(:,2) + sf * displ(:,2);
+    def(:,3) = nodes(:,3) + sf * displ(:,3);
+
+    % Boundary faces only
+    try
+        fn = get_boundary_faces(conn);
+    catch
+        fn = [];
     end
+    if isempty(fn), return; end
+
+    % Per-face colour = mean node displacement magnitude
+    face_mag = mean(mag(fn), 2);
+
+    % Draw with patch
+    hold(ax,'on');
+    patch(ax, 'Faces', fn, 'Vertices', def, ...
+          'FaceVertexCData', mag, ...
+          'FaceColor', 'interp', ...
+          'EdgeColor', [0.35 0.35 0.35], 'LineWidth', 0.4);
+    colormap(ax, flipud(gray));   % white = max displacement (like book)
+    clim(ax, clim_range);
+    axis(ax,'equal','vis3d');
+    view(ax, -35, 25);            % perspective matching Figure 6.55
+    set(ax,'Color',[0.08 0.08 0.10], ...
+           'XColor',[0.60 0.60 0.60], 'YColor',[0.60 0.60 0.60], ...
+           'ZColor',[0.60 0.60 0.60]);
+    camlight(ax,'headlight');
+    lighting(ax,'flat');
     hold(ax,'off');
 end
