@@ -38,7 +38,9 @@ function [status, outputs] = pfem_runner(pfem_root, chapter, program, case_name,
     cmd = sprintf('cd "%s" && printf "%s\\n" | "%s"', work_dir, case_name, exe_path);
     fprintf('Running: %s\n', cmd);
 
+    t_start = tic;
     [status, cmdout] = system(['bash -lc ''' cmd '''']);
+    outputs.elapsed_sec = toc(t_start);
     outputs.status = status;
     outputs.command_output = cmdout;
 
@@ -57,5 +59,5 @@ function [status, outputs] = pfem_runner(pfem_root, chapter, program, case_name,
     outputs.files = files;
     outputs.num_files = numel(files);
 
-    fprintf('✓ PFEM run completed (%d output file(s))\n', outputs.num_files);
+    fprintf('✓ PFEM run completed (%d output file(s), %.2f s)\n', outputs.num_files, outputs.elapsed_sec);
 end

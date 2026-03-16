@@ -427,7 +427,7 @@ function run_sweep(yaml_path, pfem_root, repo_root, yaml, tparams, ...
     n  = numel(sweep_values);
     results = struct('value',{}, 'status',{}, 'out',{}, ...
                      'nodes',{}, 'disp_mat',{}, 'elem_conn',{}, 'meta',{}, ...
-                     'max_u',{});
+                     'max_u',{}, 'elapsed_sec',{});
 
     for i = 1:n
         v = sweep_values(i);
@@ -452,6 +452,12 @@ function run_sweep(yaml_path, pfem_root, repo_root, yaml, tparams, ...
         results(i).value  = v;
         results(i).status = status;
         results(i).out    = out;
+
+        if isfield(out, 'elapsed_sec')
+            results(i).elapsed_sec = out.elapsed_sec;
+        else
+            results(i).elapsed_sec = NaN;
+        end
 
         if status == 0
             [nd, dm, ec, mt] = parse_pfem_results(out, yaml_path, overrides);
@@ -487,8 +493,9 @@ function run_sweep(yaml_path, pfem_root, repo_root, yaml, tparams, ...
     end
 
     n_ok = sum([results.status]==0);
+    total_time = sum([results.elapsed_sec], 'omitnan');
     sweep_label = strrep(sweep_param,'_',' ');
-    set(stats_txt,'String', sprintf('Sweep done: %d/%d OK\nSee sweep figure for comparison.', n_ok, n));
+    set(stats_txt,'String', sprintf('Sweep done: %d/%d OK  (total %.2f s)\nSee sweep figure for comparison.', n_ok, n, total_time));
 
     % ---- Open sweep summary figure ----
     plot_sweep_summary(results, sweep_param, sweep_label, yaml.title, yaml_path);
@@ -540,7 +547,7 @@ function plot_sweep_summary(results, sweep_param, sweep_label, case_title, yaml_
         r = results(i);
         if r.status == 0 && ~isempty(r.nodes) && ~isempty(r.disp_mat)
             plot_deformed(ax, r.nodes, r.disp_mat, r.elem_conn, r.meta, struct());
-            lbl = sprintf('%s = %.4g\nmax|u| = %.3e', sweep_label, r.value, r.max_u);
+            lbl = sprintf('%s = %.4g\nmax|u| = %.3e  (%.2fs)', sweep_label, r.value, r.max_u, r.elapsed_sec);
         else
             axis(ax, 'off');
             text(ax, 0.5, 0.5, sprintf('%s = %.4g\nFailed', sweep_label, r.value), ...
@@ -719,8 +726,11 @@ function txt = build_stats(disp_mat, stresses, changed, out)
             lines{end+1}=sprintf('  max|%s| = %+.4e',slbl{d},max(abs(stresses(:,d))));
         end
     end
+    if isfield(out,'elapsed_sec')
+        lines{end+1}=''; lines{end+1}=sprintf('  time: %.3f s', out.elapsed_sec);
+    end
     if isfield(out,'param_key')&&~isempty(out.param_key)
-        lines{end+1}=''; lines{end+1}=['  run: ' out.param_key];
+        lines{end+1}=['  run: ' out.param_key];
     end
     txt=strjoin(lines,newline);
 end

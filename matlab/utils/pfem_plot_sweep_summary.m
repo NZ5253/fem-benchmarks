@@ -706,17 +706,25 @@ function [nodes, disp_mat, elem_conn, load_disp, ld_fmt] = parse_res(out, yaml_p
         return;
     end
 
-    % --- Try Format B: "step load disp iters" header ---
+    % --- Try Format B: "step load disp iters" OR "srf max disp iters" header ---
     for i = 1:numel(lines)
         ln = strtrim(lines{i});
-        if contains(ln,'step') && contains(ln,'load') && contains(ln,'disp')
+        is_srf = contains(ln,'srf') && contains(ln,'disp');
+        is_std = contains(ln,'step') && contains(ln,'load') && contains(ln,'disp');
+        if is_srf || is_std
             ld = [];
             for j = i+1:numel(lines)
                 ln2 = strtrim(lines{j});
                 if isempty(ln2), break; end
                 v = sscanf(ln2,'%f');
-                if numel(v) >= 3
-                    ld(end+1,:) = [v(2), v(3)]; %#ok<AGROW>
+                if is_srf
+                    if numel(v) >= 2
+                        ld(end+1,:) = [v(1), v(2)]; %#ok<AGROW>  [srf, max_disp]
+                    end
+                else
+                    if numel(v) >= 3
+                        ld(end+1,:) = [v(2), v(3)]; %#ok<AGROW>  [load, disp]
+                    end
                 end
             end
             if ~isempty(ld), load_disp = ld; ld_fmt = 'B'; end

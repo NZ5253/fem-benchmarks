@@ -137,7 +137,7 @@ function regen_qinc(dat_path, y, tunable_map, new_incs)
             arrayfun(@(v) sprintf('%.6g',v), chunk, 'UniformOutput',false), '  '); %#ok<AGROW>
     end
 
-    rebuilt = [dat_lines(1:first_line-1); new_lines_qinc(:); dat_lines(last_line+1:end)];
+    rebuilt = [dat_lines(1:first_line-1)'; new_lines_qinc(:); dat_lines(last_line+1:end)'];
 
     fid = fopen(dat_path, 'w');
     if fid == -1, return; end
@@ -252,9 +252,9 @@ function regen_structured_coords(dat_path, y, new_nxe, new_nye)
     y_line_new = strjoin(arrayfun(@(v) sprintf('%.10g',v), new_y, 'UniformOutput',false), '  ');
 
     % Replace x_coords lines (x_line_first..x_line_last) with one new line
-    new_lines = [dat_lines(1:x_line_first-1); {x_line_new}; ...
-                 dat_lines(x_line_last+1:y_line_first-1); {y_line_new}; ...
-                 dat_lines(y_line_last+1:end)];
+    new_lines = [dat_lines(1:x_line_first-1)'; {x_line_new}; ...
+                 dat_lines(x_line_last+1:y_line_first-1)'; {y_line_new}; ...
+                 dat_lines(y_line_last+1:end)'];
 
     % ---- Step 5: write ---------------------------------------------------
     fid = fopen(dat_path, 'w');

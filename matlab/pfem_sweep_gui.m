@@ -176,10 +176,10 @@ function pfem_sweep_gui()
     rsg.BackgroundColor = [0.10 0.10 0.12];
 
     res_tbl = uitable(rsg, ...
-        'ColumnName',     {'', 'Case', 'Scenario', 'Status', 'max|u|', 'Run Directory'}, ...
-        'ColumnFormat',   {'logical', 'char', 'char', 'char', 'char', 'char'}, ...
-        'ColumnEditable', [true, false, false, false, false, false], ...
-        'ColumnWidth',    {24, 70, 205, 52, 100, 350}, ...
+        'ColumnName',     {'', 'Case', 'Scenario', 'Status', 'max|u|', 'Time (s)', 'Run Directory'}, ...
+        'ColumnFormat',   {'logical', 'char', 'char', 'char', 'char', 'char', 'char'}, ...
+        'ColumnEditable', [true, false, false, false, false, false, false], ...
+        'ColumnWidth',    {24, 70, 205, 52, 100, 62, 310}, ...
         'Data',           {}, ...
         'FontSize',       10);
     res_tbl.Layout.Row = 1;  res_tbl.Layout.Column = 1;
@@ -389,11 +389,17 @@ function cb_run(fig, param_tbl, sweep_dd, log_ta, prog_lbl, res_tbl)
             case_results(si).out     = out;
 
             max_u = get_max_u_str(out);
+            if isfield(out, 'elapsed_sec')
+                t_str = sprintf('%.2f', out.elapsed_sec);
+            else
+                t_str = '-';
+            end
             if status == 0
-                append_log(log_ta, sprintf('    OK  — %d file(s)   max|u| = %s', out.num_files, max_u));
+                append_log(log_ta, sprintf('    OK  — %d file(s)   max|u| = %s   t = %s s', out.num_files, max_u, t_str));
             else
                 append_log(log_ta, sprintf('    FAILED (exit %d)', status));
                 max_u = '-';
+                t_str = '-';
             end
 
             % Append row to results table (col1 = checkbox)
@@ -403,7 +409,8 @@ function cb_run(fig, param_tbl, sweep_dd, log_ta, prog_lbl, res_tbl)
             row_data{n,3} = label;
             row_data{n,4} = ifelse(status==0, 'OK', 'FAIL');
             row_data{n,5} = max_u;
-            row_data{n,6} = out.run_dir;
+            row_data{n,6} = t_str;
+            row_data{n,7} = out.run_dir;
             res_tbl.Data  = row_data;
             drawnow;
         end
@@ -770,15 +777,19 @@ function s = get_max_u_str(out)
             end
         end
 
-        % Format B: load-step table
+        % Format B: load-step table ("step load disp iters" or "srf max disp iters")
         for i = 1:numel(lines)
-            if contains(lines{i},'step') && contains(lines{i},'load') && contains(lines{i},'disp')
+            hdr = lines{i};
+            is_srf = contains(hdr,'srf') && contains(hdr,'disp');
+            is_std = contains(hdr,'step') && contains(hdr,'load') && contains(hdr,'disp');
+            if is_srf || is_std
                 last_u = nan;
+                disp_col = 3; if is_srf, disp_col = 2; end
                 for j = i+1:numel(lines)
                     ln = strtrim(lines{j});
                     if isempty(ln), break; end
                     v = sscanf(ln, '%f');
-                    if numel(v) >= 3, last_u = v(3); end
+                    if numel(v) >= disp_col, last_u = v(disp_col); end
                 end
                 if ~isnan(last_u), s = sprintf('%.3e', abs(last_u)); end
                 return;

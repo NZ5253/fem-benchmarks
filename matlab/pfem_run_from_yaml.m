@@ -163,6 +163,9 @@ function write_run_info(run_dir, case_name, yaml_path, overrides, param_key, sta
     fprintf(fid, 'Param key: %s\n', param_key);
     fprintf(fid, 'YAML     : %s\n', yaml_path);
     fprintf(fid, 'Status   : %s\n', ifelse(status==0, 'SUCCESS', sprintf('FAILED (code %d)', status)));
+    if isfield(out, 'elapsed_sec')
+        fprintf(fid, 'Time     : %.3f s\n', out.elapsed_sec);
+    end
     fprintf(fid, '\n');
 
     % overrides
