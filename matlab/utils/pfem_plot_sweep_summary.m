@@ -61,6 +61,7 @@ function figs = pfem_plot_sweep_summary(results, sweep_param, yaml_path, varargi
     msh_arr       = cell(n,1);   % PS .msh polygons (undeformed)
     dis_arr       = cell(n,1);   % PS .dis polygons (deformed)
     vec_arr       = cell(n,1);   % PS .vec arrows
+    ensi_arr      = cell(n,1);   % EnSight Gold: {nodes, conn, displ_steps, srf_vals, ld_srf}
     maxu_vec      = NaN(n,1);
 
     for i = 1:n
@@ -112,16 +113,39 @@ function figs = pfem_plot_sweep_summary(results, sweep_param, yaml_path, varargi
         if ~isempty(vec_f) && exist(vec_f{1},'file')
             vec_arr{i} = parse_pfem_vec(vec_f{1});
         end
+
+        % EnSight Gold (.ensi.case) — 3D programs (p612, p613, p57, …)
+        ensi_f = out_files(cellfun(@(f) endsWith(f,'.ensi.case'), out_files));
+        if ~isempty(ensi_f) && exist(ensi_f{1},'file')
+            try
+                [en_nodes, en_conn, en_displ, en_srf] = parse_pfem_ensi(ensi_f{1});
+                % Pull SRF values from .res load_disp table if available
+                % (ensi time values are just step indices 1,2,3,…)
+                ld_srf = en_srf;
+                if ~isempty(load_disp_arr{i})
+                    ld_srf = load_disp_arr{i}(:,1);  % actual srf from .res
+                end
+                ensi_arr{i} = struct('nodes',en_nodes, 'conn',en_conn, ...
+                    'displ',{en_displ}, 'srf',ld_srf);
+                % Update maxu_vec from EnSight last step if not already set
+                if isnan(maxu_vec(i)) && ~isempty(en_displ) && ~isempty(en_displ{end})
+                    d = en_displ{end};
+                    maxu_vec(i) = max(sqrt(sum(d.^2, 2)));
+                end
+            catch
+            end
+        end
     end
 
     has_res  = any(~cellfun(@isempty, load_disp_arr)) || any(~cellfun(@isempty, disp_arr));
     has_msh  = any(~cellfun(@isempty, msh_arr));
     has_dis  = any(~cellfun(@isempty, dis_arr));
     has_vecs = any(~cellfun(@isempty, vec_arr));
+    has_ensi = any(~cellfun(@isempty, ensi_arr));
 
     vis  = 'off';
     if do_show, vis = 'on'; end
-    figs = struct('res',[],'msh',[],'dis',[],'vec',[]);
+    figs = struct('res',[],'msh',[],'dis',[],'vec',[],'ensi',[]);
 
     % Distinct color per scenario — used consistently across every figure type
     scenario_colors = scenario_color_map(n);
@@ -382,6 +406,109 @@ function figs = pfem_plot_sweep_summary(results, sweep_param, yaml_path, varargi
         end
         linkaxes(vec_axes, 'xy');
         do_save(fig4, save_prefix, 'vec');
+    end
+
+    % ====================================================================
+    % Figure 5 — 3D EnSight: deformed shape panels per scenario
+    %   Left column : side view  (x–y projection, z = slice near z_min)
+    %   Right column: plan view  (x–z projection, y = slice near y_max)
+    % Each row is one sweep scenario; color = displacement magnitude.
+    % Matches book Figure 6.55 style for p612/p613 slope problems.
+    % ====================================================================
+    if has_ensi
+        % Determine subplot layout: 2 view columns × n scenario rows
+        n_rows_e = n;
+        fig5 = make_dark_figure( ...
+            sprintf('Deformed Shape (3D) — %s — %s sweep', case_title, sweep_label), ...
+            2, n_rows_e, vis);
+        figs.ensi = fig5;
+
+        % Global color limits: max displacement across all scenarios + steps
+        global_maxu = 0;
+        for i = 1:n
+            if isempty(ensi_arr{i}), continue; end
+            for s = 1:numel(ensi_arr{i}.displ)
+                if isempty(ensi_arr{i}.displ{s}), continue; end
+                d = ensi_arr{i}.displ{s};
+                global_maxu = max(global_maxu, max(sqrt(sum(d.^2,2))));
+            end
+        end
+        if global_maxu == 0, global_maxu = 1; end
+
+        for i = 1:n
+            col = scenario_colors(i,:);
+            lbl = panel_labels{i};
+
+            ax_side = subplot(n_rows_e, 2, (i-1)*2+1, 'Parent', fig5);
+            ax_plan = subplot(n_rows_e, 2, (i-1)*2+2, 'Parent', fig5);
+            style_ax(ax_side); style_ax(ax_plan);
+
+            if results(i).status ~= 0 || isempty(ensi_arr{i})
+                show_na(ax_side, [lbl newline '[N/A]']);
+                show_na(ax_plan, [lbl newline '[N/A]']);
+                title(ax_side, lbl,'Color',col,'FontSize',9,'Interpreter','none');
+                title(ax_plan, '(plan)','Color',col,'FontSize',9,'Interpreter','none');
+                continue;
+            end
+
+            en    = ensi_arr{i};
+            nodes = en.nodes;     % N×3
+            srf_v = en.srf;
+
+            % Use last displacement step (failure / highest SRF)
+            last_s = numel(en.displ);
+            while last_s > 1 && isempty(en.displ{last_s})
+                last_s = last_s - 1;
+            end
+            if isempty(en.displ{last_s})
+                show_na(ax_side, [lbl newline 'no displ']);
+                show_na(ax_plan, [lbl newline 'no displ']);
+                continue;
+            end
+            d_last = en.displ{last_s};          % N×3 displacement at last SRF
+            mag    = sqrt(sum(d_last.^2, 2));   % N×1 magnitude
+
+            % Scale factor: amplify displ so it is ~8% of domain width
+            domain_w = max(nodes(:,1)) - min(nodes(:,1));
+            sf = 0;
+            if max(mag) > 0, sf = 0.08 * domain_w / max(mag); end
+
+            % Deformed node positions
+            xd = nodes(:,1) + sf * d_last(:,1);
+            yd = nodes(:,2) + sf * d_last(:,2);
+            zd = nodes(:,3) + sf * d_last(:,3);
+
+            srf_lbl = '';
+            if ~isempty(srf_v) && last_s <= numel(srf_v)
+                srf_lbl = sprintf('  SRF=%.3g', srf_v(last_s));
+            end
+            max_lbl = sprintf('  max|u|=%.3e', max(mag));
+
+            % ── Side view: x–y (deformed, colored by |u|) ──────────────
+            draw_ensi_scatter(ax_side, xd, yd, mag, [0 global_maxu], col);
+            draw_ensi_edges(ax_side, xd, yd, en.conn, [0.25 0.28 0.32]);
+            xlabel(ax_side,'x','Color',[0.7 0.7 0.7],'FontSize',8);
+            ylabel(ax_side,'y','Color',[0.7 0.7 0.7],'FontSize',8);
+            title(ax_side, [lbl newline 'Side view (x-y)' srf_lbl max_lbl], ...
+                'Color',col,'FontSize',9,'FontWeight','bold','Interpreter','none');
+
+            % ── Plan view: x–z (deformed, colored by |u|) ──────────────
+            draw_ensi_scatter(ax_plan, xd, zd, mag, [0 global_maxu], col);
+            draw_ensi_edges(ax_plan, xd, zd, en.conn, [0.25 0.28 0.32]);
+            xlabel(ax_plan,'x','Color',[0.7 0.7 0.7],'FontSize',8);
+            ylabel(ax_plan,'z','Color',[0.7 0.7 0.7],'FontSize',8);
+            title(ax_plan, 'Plan view (x-z)', ...
+                'Color',[0.7 0.7 0.7],'FontSize',9,'Interpreter','none');
+
+            % Colorbar on plan axis
+            cb = colorbar(ax_plan);
+            cb.Color = [0.7 0.7 0.7];
+            cb.Label.String = '|u|';
+            cb.Label.Color  = [0.7 0.7 0.7];
+            clim(ax_plan, [0 global_maxu]);
+        end
+
+        do_save(fig5, save_prefix, 'ensi');
     end
 end
 
@@ -751,4 +878,48 @@ function [nodes, disp_mat, elem_conn, load_disp, ld_fmt] = parse_res(out, yaml_p
             return;
         end
     end
+end
+
+
+% ==========================================================================
+% EnSight drawing helpers
+% ==========================================================================
+
+function draw_ensi_scatter(ax, px, py, mag, clim_range, ~)
+% Scatter plot of projected node positions, colored by displacement magnitude.
+    hold(ax,'on'); axis(ax,'equal');
+    set(ax,'Color',[0.06 0.06 0.08]);
+    scatter(ax, px, py, 4, mag, 'filled');
+    colormap(ax, 'turbo');
+    clim(ax, clim_range);
+    hold(ax,'off');
+end
+
+
+function draw_ensi_edges(ax, px, py, conn, edge_col)
+% Draw element edge outlines projected to the (px,py) plane.
+% Uses only the 8 corner nodes of each hexa20 element.
+% Faces drawn: bottom quad (nodes 1-2-3-4) and top quad (5-6-7-8).
+    if isempty(conn), return; end
+    if nargin < 5, edge_col = [0.30 0.33 0.38]; end
+
+    % Corner face index sets for a standard hex8: bottom, top, 4 sides
+    hex_faces = {[1 2 3 4]; [5 6 7 8]; [1 2 6 5]; [2 3 7 6]; [3 4 8 7]; [4 1 5 8]};
+
+    hold(ax,'on');
+    for e = 1:size(conn,1)
+        nids = conn(e,:);
+        nids = nids(nids >= 1 & nids <= numel(px));
+        if numel(nids) < 4, continue; end
+        for fi = 1:numel(hex_faces)
+            f = hex_faces{fi};
+            f = f(f <= numel(nids));
+            if numel(f) < 3, continue; end
+            ns = nids(f);
+            xf = px(ns([1:end 1]));
+            yf = py(ns([1:end 1]));
+            plot(ax, xf, yf, '-', 'Color', edge_col, 'LineWidth', 0.4);
+        end
+    end
+    hold(ax,'off');
 end

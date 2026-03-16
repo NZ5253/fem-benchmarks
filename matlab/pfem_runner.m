@@ -56,6 +56,9 @@ function [status, outputs] = pfem_runner(pfem_root, chapter, program, case_name,
         f = fullfile(work_dir, [case_name exts{i}]);
         if exist(f,'file'), files{end+1} = f; end %#ok<AGROW>
     end
+    % EnSight Gold output (3D programs: p57, p612, p613, etc.)
+    ensi_case = fullfile(work_dir, [case_name '.ensi.case']);
+    if exist(ensi_case,'file'), files{end+1} = ensi_case; end %#ok<AGROW>
     outputs.files = files;
     outputs.num_files = numel(files);
 

@@ -25,12 +25,29 @@ function pfem_patch_dat_using_yaml(dat_path, y, overrides)
     end
 
     % Build map: tunable name -> global_token_index
+    % Also build linked-token map: name -> struct(indices, scale_factors)
     tp = y.tunable_parameters;
-    tunable_map = containers.Map();
+    tunable_map  = containers.Map();
+    linked_map   = containers.Map();
     for i = 1:numel(tp)
         name = tp{i}.name;
-        idx = tp{i}.global_token_index;
+        idx  = tp{i}.global_token_index;
         tunable_map(name) = idx;
+        if isfield(tp{i}, 'linked_token_indices') && ...
+                ~isempty(tp{i}.linked_token_indices)
+            lti = tp{i}.linked_token_indices;
+            if isnumeric(lti), lti = num2cell(lti); end
+            lsf = ones(numel(lti),1);
+            if isfield(tp{i}, 'linked_scale_factors') && ...
+                    ~isempty(tp{i}.linked_scale_factors)
+                sf = tp{i}.linked_scale_factors;
+                if isnumeric(sf), sf = sf(:); else
+                    sf = cellfun(@(x) double(x), sf(:));
+                end
+                lsf = sf;
+            end
+            linked_map(name) = struct('indices', {lti}, 'scales', lsf);
+        end
     end
 
     % Tokenize the file
@@ -60,6 +77,17 @@ function pfem_patch_dat_using_yaml(dat_path, y, overrides)
             tokens{token_idx} = num2str(new_val, '%.12g');
         else
             tokens{token_idx} = char(new_val);
+        end
+
+        % Proportionally patch any linked tokens (e.g. multi-zone cohesion)
+        if isKey(linked_map, name) && isnumeric(new_val)
+            lnk = linked_map(name);
+            for li = 1:numel(lnk.indices)
+                lt_idx = lnk.indices{li};
+                if lt_idx >= 1 && lt_idx <= numel(tokens)
+                    tokens{lt_idx} = num2str(new_val * lnk.scales(li), '%.12g');
+                end
+            end
         end
     end
 

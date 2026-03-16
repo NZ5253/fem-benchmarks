@@ -55,12 +55,22 @@ tunable_parameters:
   global_token_index: 15
   line: 5
   type: real
-  description: Cohesion (shear strength intercept)
+  description: Cohesion of zone 1 (scales all 5 zones proportionally)
   unit_category: stress
   current_value: '60.0'
   suggested_range:
   - 0.6
   - 6000.0
+  linked_token_indices:
+  - 21
+  - 27
+  - 33
+  - 39
+  linked_scale_factors:
+  - 0.91667
+  - 0.83333
+  - 0.75
+  - 0.66667
 - name: dilation_angle_psi
   global_token_index: 16
   line: 5
