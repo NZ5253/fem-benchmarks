@@ -173,9 +173,69 @@ pfem_sweep_gui()
 7. **Open Figures** — click after run to show Load–Disp, reference mesh, deformed shape, and vector panels
 8. **Print Comparison** — prints text diff tables to MATLAB command window
 
+### Stochastic mode
+
+Select **Stochastic (distributions)** from the Mode dropdown. The counter widget
+controls sample count (default 50, range 10 to 500, step 10). **Fill Ranges**
+auto-fills `lognormal(mu, COV)` from each parameter's YAML default with a
+physics-based COV (cohesion 0.40, friction 0.10, E 0.30, nu 0.10, unit weight
+0.05, permeability 0.50). Solver and mesh parameters are skipped because
+varying them stochastically destabilises the Fortran solver.
+
+```
+lognormal(60, 0.30)              % mu, COV
+normal(0.3, 0.10)                % mu, COV
+truncnormal(0.3, 0.10, 0, 0.499) % mu, COV, lo, hi
+uniform(40, 80)                  % lo, hi
+```
+
+The GUI auto-detects each case's type via `pfem_detect_case_type` and extracts
+the right Quantity of Interest via `pfem_extract_qoi`:
+
+| Case type | QoI label | Cases |
+|---|---|---|
+| `slope_srf` | FS | chap6 p64-p69, p612, p613 (8 cases) |
+| `plasticity_load` | P_lim | chap6 p61-p63, p610, p611; chap4 p45; chap9 p96; chap11 p118 (11 cases) |
+| `elastic_static` | u_max | chap4 p41-p46; chap5 all; chap9 p93-p95 (28 cases) |
+| `seepage_steady` | h_max | chap7 p71, p72, p74, p75 (6 cases) |
+| `consolidation` | Uav_end | chap8 p81-p88; chap9 p91, p92 (13 cases) |
+| `eigenvalue` | lambda_1 | chap10 (5 cases) |
+| `dynamic_transient` | u_peak | chap4 p47; chap7 p73; chap8 p810, p84, p89; chap11 (15 cases) |
+| `thermal` | T_max | chap8 p811 (1 case) |
+
+For `slope_srf` cases the report also includes `P(failure) = P(FS < 1.0)` and the
+reliability index `beta = -sqrt(2) * erfinv(2*P_f - 1)`. Histograms, CDFs, and
+per-parameter scatter plots are saved as PDF + PNG in
+`runs/<chap>/<case>/<case>_stochastic_<ts>_*`.
+
+### Stochastic helpers (matlab/utils/)
+
+```matlab
+% Draw samples from a named distribution (no Statistics Toolbox needed)
+s = pfem_sample_distribution('lognormal', 60, 0.40, 100, 'Seed', 42);
+s = pfem_sample_distribution('truncnormal', 0.3, 0.10, 50, 'Bounds', [0, 0.499]);
+
+% Classify a YAML into a case type
+ct = pfem_detect_case_type('benchmarks/pfem5/chap06/p612.yaml');  % 'slope_srf'
+
+% Extract the right QoI from a PFEM run output
+q = pfem_extract_qoi(out, ct);   % q.value, q.label, q.unit, q.ok
+```
+
+### Stochastic from a script (`pfem_stochastic_sweep`)
+
+The same Monte Carlo pipeline is also available as a CLI-style function:
+
+```matlab
+result = pfem_stochastic_sweep('benchmarks/pfem5/chap06/p612.yaml', ...
+    struct('cohesion_c', struct('dist','lognormal','mu',60,'cov',0.40)), ...
+    'NumSamples', 100, 'Seed', 42);
+% result.qoi_values  result.mean  result.std  result.pf  result.beta
+```
+
 ### Auto-Build
 
-Binaries are compiled automatically — no manual build step needed:
+Binaries are compiled automatically, no manual build step needed:
 
 ```
 [build] Binary not found: pfem/build/bin/p61

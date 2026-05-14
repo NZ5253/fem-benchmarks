@@ -248,19 +248,32 @@ pfem_sweep_gui()
 3. Enter sweep values in the **Values** column (comma-separated, e.g. `50, 100, 200, 500`),
    or click **Fill Ranges** to auto-fill N log-spaced values — adjust N with the `−`/`+` counter
 4. Select **Sweep mode**:
-   - **Lockstep** — all enabled parameters vary together step-by-step.
-     `yield_stress=[50,100]` + `youngs_modulus_E=[1e4,2e4]` → 2 scenarios: (50,1e4) and (100,2e4).
+   - **Lockstep**: all enabled parameters vary together step by step.
+     `yield_stress=[50,100]` + `youngs_modulus_E=[1e4,2e4]` produces 2 scenarios: (50,1e4) and (100,2e4).
      Arrays must be the same length.
-   - **Grid** — Cartesian product of all enabled parameter arrays.
-     `yield_stress=[50,100]` + `youngs_modulus_E=[1e4,2e4]` → 4 scenarios.
+   - **Grid**: Cartesian product of all enabled parameter arrays.
+     `yield_stress=[50,100]` + `youngs_modulus_E=[1e4,2e4]` produces 4 scenarios.
      Capped at 500 combinations.
+   - **Stochastic (distributions)**: Monte Carlo with named distributions
+     (`lognormal(mu, COV)`, `normal(mu, COV)`, `truncnormal(mu, COV, lo, hi)`,
+     `uniform(lo, hi)`). The counter widget sets the sample count
+     (default 50, range 10 to 500, step 10). **Fill Ranges** auto-fills
+     `lognormal(mu, COV)` using each parameter's YAML default as `mu` and a
+     physics-based COV per parameter family. Solver and mesh parameters are
+     skipped because varying them stochastically destabilises the solver.
 5. Click **Preview Scenarios** to see the full list in the log before running
 6. Click **Run All**:
    - Binaries are compiled automatically via `pfem_ensure_built` if missing
-   - Every case × every scenario runs; results table fills live
+   - Every case x every scenario runs; results table fills live
    - Stop button interrupts cleanly at any time
+   - In stochastic mode, the GUI auto-detects each case's type via
+     `pfem_detect_case_type` and extracts the right Quantity of Interest via
+     `pfem_extract_qoi` (FS for slope, P_lim for plasticity, u_max for elastic,
+     etc.). Histograms, CDFs, and per-parameter scatter plots are saved per
+     case. For `slope_srf` cases the report also includes `P(failure)` and
+     reliability index `beta`.
 7. When the run finishes, click **Open Figures** to view comparison plots:
-   Load–Displacement, reference mesh, deformed shape, and displacement vectors
+   Load-Displacement, reference mesh, deformed shape, and displacement vectors
 8. Click **Print Comparison** to print text diff tables to the command window
 
 **Auto-build**: if `pfem/build/bin/<program>` is missing, `pfem_build_chapter.sh` is

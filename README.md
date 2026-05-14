@@ -5,11 +5,11 @@ A comprehensive benchmark catalogue for **Programming the Finite Element Method 
 ## Overview
 
 This repository provides:
-- 📋 **Structured YAML metadata** for 90 PFEM benchmark cases across chapters 4-11
-- 🔧 **Build and execution scripts** for all PFEM programs
-- 📊 **MATLAB interface** for running cases and performing parametric studies
-- 📝 **Comprehensive documentation** with detailed input/output schemas
-- ✅ **Validation tools** to ensure YAML correctness and completeness
+- **Structured YAML metadata** for 87 PFEM benchmark cases across chapters 4-11
+- **Build and execution scripts** for all PFEM programs
+- **MATLAB interface** for running cases and performing deterministic + stochastic parametric studies
+- **Per-case-type output extraction** (FS, limit load, max displacement, settlement, eigenvalue, peak response, etc.)
+- **Validation tools** to ensure YAML correctness and completeness
 
 ## Quick Start
 
@@ -45,10 +45,13 @@ scripts/pfem_build_and_run.sh pfem chap05 p51 p51_3 --rebuild
 pfem_sweep_gui()
 ```
 - Click **Add YAML(s)** → select any benchmark files from `benchmarks/pfem5/`
-- Parameters auto-populate with suggested ranges; enter comma-separated values or click **Fill Ranges**
-- Choose **Lockstep** (params vary together) or **Grid** (all combinations) sweep mode
+- Parameters auto-populate from YAML defaults; enter comma-separated values or click **Fill Ranges**
+- Choose sweep mode:
+  - **Lockstep**: parameters vary in parallel; arrays must be same length
+  - **Grid**: Cartesian product of all parameter values
+  - **Stochastic (distributions)**: Monte Carlo with `lognormal(mu, COV)`, `normal`, `truncnormal`, `uniform`; counter sets sample count (10 to 500)
 - Click **Run All** → binaries are compiled automatically if missing; live log shows progress
-- Click **Open Figures** after the run to view Load–Displacement, mesh, deformed shape, and vector panels
+- Click **Open Figures** after the run to view per-case-type results (FS distribution, load-displacement, mesh, deformed shape, etc.)
 
 ### From MATLAB — PFEM Studio (single-case interactive)
 ```matlab
@@ -172,7 +175,43 @@ pfem_sweep_gui()
 Supports any number of cases and scenarios simultaneously.  Parameters not present in a
 given case's YAML are silently skipped, so one scenario set covers all cases.
 
-### Parametric Study — Single Case Interactive (pfem_studio)
+### Parametric Study, Stochastic (Monte Carlo)
+
+Select **Stochastic (distributions)** from the Mode dropdown to run Monte Carlo
+sweeps over named distributions. The counter widget sets the sample count
+(default 50, range 10 to 500, step 10).
+
+**Fill Ranges** auto-fills `lognormal(mu, COV)` using the YAML default as `mu`
+and a physics-based COV per parameter type:
+
+| Parameter family | Default COV | Rationale |
+|---|---|---|
+| Cohesion (`cohesion_c`, `cohesion_fill`, `cohesion_embankment`, `yield_stress`) | 0.40 | High natural variability |
+| Friction angle, dilation angle | 0.10 | Tighter physical bounds |
+| Young's modulus | 0.30 | Stiffness scatter |
+| Poisson's ratio | 0.10 | Bounded in (0, 0.5) |
+| Unit weight, density | 0.05 | Low variability |
+| Permeability | 0.50 | Multi-order-of-magnitude |
+| Solver / mesh parameters (tolerance, iteration limit, time step, nxe, ...) | skipped | Must remain at YAML default to keep Fortran solver stable |
+
+You can override the auto-fill manually:
+
+```
+lognormal(60, 0.30)
+normal(0.3, 0.10)
+truncnormal(0.3, 0.10, 0, 0.499)
+uniform(40, 80)
+```
+
+For each case the GUI:
+1. Detects the case type and the QoI to extract (FS, P_lim, u_max, ...)
+2. Generates samples (seed fixed at 42 for reproducibility)
+3. Runs Monte Carlo with `pfem_run_from_yaml`; the log updates per sample
+4. Extracts the QoI from each run's `.res` file via `pfem_extract_qoi`
+5. Reports `mean`, `std`, `COV`, range; for `slope_srf` cases also `P(failure)` and reliability index `beta`
+6. Saves histogram, CDF, and per-parameter scatter plots as PDF + PNG
+
+### Parametric Study, Single Case Interactive (pfem_studio)
 
 ```matlab
 % Open studio with file picker
@@ -307,8 +346,9 @@ The `generate_yamls_v2.py` script creates comprehensive benchmark files:
 
 | Function | Purpose |
 |---|---|
-| `pfem_sweep_gui` | **Sweep GUI** — multi-case × multi-param, auto-build, live log, on-demand figures |
-| `pfem_studio` | Single-case interactive GUI — load YAML, edit params, run, see deformed mesh |
+| `pfem_sweep_gui` | **Sweep GUI**: multi-case x multi-param, deterministic + stochastic modes, auto-build, live log, on-demand figures |
+| `pfem_stochastic_sweep` | CLI-style Monte Carlo runner independent of the GUI |
+| `pfem_studio` | Single-case interactive GUI: load YAML, edit params, run, see deformed mesh |
 | `pfem_diagram` | Standalone textbook-style mesh diagram with BC/load annotations |
 | `pfem_run_from_yaml` | Programmatic runner: patches .dat from YAML overrides, auto-generates baseline |
 | `pfem_extract_coords` | Extract exact node coordinates from YAML tokens (all chapters) |
@@ -320,7 +360,10 @@ The `generate_yamls_v2.py` script creates comprehensive benchmark files:
 | `pfem_make_scenarios` | Build scenario struct arrays for single- or multi-parameter sweeps |
 | `pfem_plot_sweep_summary` | One figure window per output type (res/msh/dis/vec) for sweep results |
 | `pfem_ensure_built` | Auto-compile a PFEM binary from source if the binary is missing |
-| `NZ.m` | Configurable multi-case × multi-scenario sweep script |
+| `NZ.m` | Configurable multi-case x multi-scenario sweep script |
+| `utils/pfem_sample_distribution` | Draw n samples from lognormal / normal / truncnormal / uniform; no Statistics Toolbox needed |
+| `utils/pfem_detect_case_type` | Classify a YAML into one of 8 case types from chapter, program, physics, regime |
+| `utils/pfem_extract_qoi` | Extract the correct Quantity of Interest per case type (FS, P_lim, u_max, h_max, Uav_end, lambda_1, u_peak, T_max) |
 
 Runs are saved to `runs/<chap>/<case>/<param_key>/`, for example:
 - `runs/chap06/p61/default/` — auto-generated baseline (used when book .res absent)
@@ -338,14 +381,30 @@ Runs are saved to `runs/<chap>/<case>/<param_key>/`, for example:
 | Chapter | Program Range | Cases | Topics |
 |---------|---------------|-------|--------|
 | 4       | p41-p47      | 13    | 1D Problems |
-| 5       | p51-p57      | 14    | 2D Linear Elasticity |
-| 6       | p61-p69      | 19    | Material Nonlinearity (von Mises, Mohr-Coulomb) |
+| 5       | p51-p57      | 15    | 2D Linear Elasticity |
+| 6       | p61-p613     | 15    | Material Nonlinearity (von Mises, Mohr-Coulomb, SRF) |
 | 7       | p71-p75      | 8     | Steady State Flow |
-| 8       | p81-p811     | 16    | Transient Problems |
-| 9       | p91-p96      | 7     | Coupled Problems (Biot, Navier-Stokes) |
+| 8       | p81-p811     | 16    | Transient Problems (consolidation, thermal, dynamic) |
+| 9       | p91-p96      | 7     | Coupled Problems (Biot, dynamic) |
 | 10      | p101-p104    | 5     | Eigenvalue Problems |
 | 11      | p111-p118    | 8     | Dynamics & Explicit Plasticity |
-| **Total** |            | **90** | |
+| **Total** |            | **87** | |
+
+## Case Types and Quantities of Interest
+
+Each case is auto-classified into one of 8 types via `pfem_detect_case_type`. The
+correct Quantity of Interest is extracted by `pfem_extract_qoi`:
+
+| Case type | Where it applies | QoI | Label |
+|---|---|---|---|
+| `slope_srf` | chap6: p64-p69, p612, p613 | Factor of Safety (last converged SRF) | FS |
+| `plasticity_load` | chap6: p61-p63, p610, p611; chap4: p45; chap9: p96; chap11: p118 | Limit load at last converged step | P_lim |
+| `elastic_static` | chap4: p41-p46; chap5: all; chap9: p93-p95 | Max nodal displacement | u_max |
+| `seepage_steady` | chap7: p71, p72, p74, p75 | Max total head | h_max |
+| `consolidation` | chap8: p81-p88 (excluding dynamic/thermal); chap9: p91, p92 | Degree of consolidation at final time | Uav_end |
+| `eigenvalue` | chap10: all | First eigenvalue | lambda_1 |
+| `dynamic_transient` | chap4: p47; chap7: p73; chap8: p810, p84, p89; chap11: all | Peak displacement | u_peak |
+| `thermal` | chap8: p811 | Max temperature | T_max |
 
 ## Licensing Note
 

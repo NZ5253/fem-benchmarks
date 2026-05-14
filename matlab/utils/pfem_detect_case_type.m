@@ -44,15 +44,15 @@ function ctype = pfem_detect_case_type(yaml_or_path)
         ctype = 'plasticity_load';  return;   % p61, p62, p63, p610, p611
     end
 
-    % ---- Chapter 9: Biot (slope-plastic, elastic-steady, dynamic) ----
+    % ---- Chapter 9: Biot (consolidation, dynamic, plasticity) ----
     if strcmp(chap, '9')
         if strcmp(prog, 'p96')
             ctype = 'plasticity_load';  return;
         end
-        if strcmp(phys, 'dynamics') || strcmp(regime, 'transient')
-            ctype = 'consolidation';    return;   % Biot transient
-        end
-        ctype = 'elastic_static';  return;
+        % p91-p95 are Biot time-stepping (consolidation/dynamic).
+        % YAML may list phys="linear" but they all write time-series output.
+        ctype = 'consolidation';
+        return;
     end
 
     % ---- Chapter 8: consolidation / thermal / dynamic ----

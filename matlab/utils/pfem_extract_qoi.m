@@ -71,50 +71,248 @@ end
 % Per-case-type extractors
 % =========================================================================
 function q = qoi_slope_srf(res_file)
-% Format: lines of [srf max_disp iters], FS = last srf with iters < limit.
+% Two formats: standard SRF (p64-p68, p612, p613) and embankment lift (p69).
+%   Standard:    lines of [srf max_disp iters], FS = last srf with iters < limit
+%   Lift (p69):  "Max displacement is X" per lift; QoI = final max disp
     q = struct('value', NaN, 'label', 'FS', 'unit', '', 'raw', [], 'ok', false);
     nums = read_numeric_table(res_file, 3);
-    if isempty(nums), return; end
-    srf = nums(:,1);  dmax = nums(:,2);  it = nums(:,3);
-    q.raw = nums;
-    ilim = max(it);
-    if ilim < 10
-        q.value = srf(end);  q.ok = true;  return;
+    if ~isempty(nums)
+        srf = nums(:,1);  dmax = nums(:,2);  it = nums(:,3);
+        q.raw = nums;
+        ilim = max(it);
+        if ilim < 10
+            q.value = srf(end);  q.ok = true;  return;
+        end
+        k = find(it < ilim, 1, 'last');
+        if isempty(k)
+            q.value = srf(1);
+        else
+            q.value = srf(k);
+        end
+        q.ok = true;
+        return;
     end
-    k = find(it < ilim, 1, 'last');
-    if isempty(k)
-        q.value = srf(1);
-    else
-        q.value = srf(k);
+
+    % Fallback for embankment-lift programs (p69): regex on "Max displacement is X"
+    fid = fopen(res_file, 'r');
+    if fid < 0, return; end
+    raw = textscan(fid, '%s', 'Delimiter', '\n', 'Whitespace', '');
+    fclose(fid);
+    dmaxs = [];
+    for j = 1:numel(raw{1})
+        tok = regexp(raw{1}{j}, 'Max displacement is\s+([-+0-9.eE]+)', 'tokens', 'once');
+        if ~isempty(tok)
+            v = str2double(tok{1});
+            if ~isnan(v), dmaxs(end+1) = v; end %#ok<AGROW>
+        end
     end
-    q.ok = true;
+    if ~isempty(dmaxs)
+        q.label = 'u_max_final_lift';
+        q.unit  = 'm';
+        q.value = dmaxs(end);
+        q.raw   = dmaxs(:);
+        q.ok    = true;
+    end
 end
 
 
 function q = qoi_plasticity_load(res_file)
-% Format: [step load disp iters]. QoI = last converged load (limit load).
+% Heterogeneous .res formats across chap06 plasticity programs.
+% Strategy: count actual data columns first, then parse header tokens to
+% locate the load/stress and iteration columns within that width.
+%
+%   p61, p62  : "step   load        disp      iters [cg iters]"  (4-5 cols)
+%   p63       : "step   disp        load1    load2  iters"        (5 cols)
+%   p611      : "step   disp      dev stress  pore press  iters" (5 cols)
+%   p118      : "time   load        x-disp      y-disp"           (4 cols, no iters)
     q = struct('value', NaN, 'label', 'P_lim', 'unit', '', 'raw', [], 'ok', false);
-    nums = read_numeric_table(res_file, 4);
-    if isempty(nums)
-        nums = read_numeric_table(res_file, 3);   % some variants drop step col
-        if isempty(nums), return; end
-        load_v = nums(:,1);  disp_v = nums(:,2);  it = nums(:,3);
-    else
-        load_v = nums(:,2);  disp_v = nums(:,3);  it = nums(:,4);
+
+    % Step 1: read all rows that are numeric, find dominant column count
+    [nums, ncols] = read_widest_numeric_table(res_file, 3);
+    if isempty(nums), return; end
+
+    % Step 2: find the header line preceding the data
+    header_tokens = find_header_tokens(res_file, ncols);
+
+    % Step 3: identify load/stress and iters columns from header tokens
+    [load_col, iter_col] = identify_columns_from_tokens(header_tokens, ncols);
+
+    load_v = nums(:, load_col);
+    q.raw  = nums;
+
+    if iter_col > 0 && iter_col <= size(nums, 2)
+        it   = nums(:, iter_col);
+        ilim = max(it);
+        if ilim >= 10
+            k = find(it < ilim, 1, 'last');
+            if isempty(k)
+                q.value = load_v(end);
+            else
+                q.value = load_v(k);
+            end
+            q.ok = true;
+            return;
+        end
     end
-    q.raw = [load_v disp_v it];
-    ilim = max(it);
-    if ilim < 10
-        q.value = load_v(end);  q.ok = true;  return;
-    end
-    k = find(it < ilim, 1, 'last');
-    if isempty(k)
-        q.value = load_v(end);
-    else
-        q.value = load_v(k);
-    end
-    q.ok = true;
+    % No iteration column or no obvious non-converged tail: take last load
+    q.value = load_v(end);
+    q.ok    = true;
 end
+
+
+function [nums, ncols] = read_widest_numeric_table(res_file, min_cols)
+% Read consecutive numeric rows in blocks; pick the block that follows the
+% first header containing "Time", "step", "srf" or "time" (the analysis-
+% history block, not a per-node block).
+    if nargin < 2, min_cols = 2; end
+    nums = [];  ncols = 0;
+    [blocks, headers] = read_blocks(res_file, min_cols);
+    if isempty(blocks), return; end
+
+    % Prefer the first block whose preceding header names a time-like axis
+    pick = 0;
+    for b = 1:numel(blocks)
+        h = lower(headers{b});
+        if contains(h, 'time') || contains(h, 'step') || contains(h, 'srf') ...
+                || contains(h, 'srf  max disp')
+            pick = b;  break;
+        end
+    end
+    if pick == 0
+        % Fallback: largest block
+        [~, pick] = max(cellfun(@(b) size(b,1), blocks));
+    end
+    nums  = blocks{pick};
+    ncols = size(nums, 2);
+end
+
+
+function [blocks, headers] = read_blocks(res_file, min_cols)
+% Split the .res file into consecutive numeric blocks. blocks{k} is a matrix
+% of same-width numeric rows. headers{k} is the most recent non-numeric line.
+    blocks = {};  headers = {};
+    fid = fopen(res_file, 'r');
+    if fid < 0, return; end
+    raw = textscan(fid, '%s', 'Delimiter', '\n', 'Whitespace', '');
+    fclose(fid);
+    lines = raw{1};
+
+    cur_header = '';
+    cur_rows = {};
+    cur_width = 0;
+    for j = 1:numel(lines)
+        L = strtrim(lines{j});
+        if isempty(L)
+            if ~isempty(cur_rows)
+                [blocks, headers, cur_rows, cur_width] = flush(blocks, headers, cur_rows, cur_width, cur_header);
+            end
+            continue;
+        end
+        v = str2num(L); %#ok<ST2NM>
+        if isempty(v) || numel(v) < min_cols
+            if isempty(v)
+                cur_header = L;
+                if ~isempty(cur_rows)
+                    [blocks, headers, cur_rows, cur_width] = flush(blocks, headers, cur_rows, cur_width, cur_header);
+                end
+            end
+            continue;
+        end
+        if isempty(cur_rows)
+            cur_width = numel(v);
+            cur_rows{1} = v(:)';
+        elseif numel(v) == cur_width
+            cur_rows{end+1} = v(:)'; %#ok<AGROW>
+        else
+            [blocks, headers, cur_rows, cur_width] = flush(blocks, headers, cur_rows, cur_width, cur_header);
+            cur_width = numel(v);
+            cur_rows{1} = v(:)';
+        end
+    end
+    if ~isempty(cur_rows)
+        [blocks, headers, ~, ~] = flush(blocks, headers, cur_rows, cur_width, cur_header);
+    end
+end
+
+
+function [blocks, headers, cur_rows, cur_width] = flush(blocks, headers, cur_rows, cur_width, cur_header)
+    if isempty(cur_rows)
+        return;
+    end
+    M = zeros(numel(cur_rows), cur_width);
+    for ii = 1:numel(cur_rows)
+        M(ii, :) = cur_rows{ii};
+    end
+    blocks{end+1} = M;
+    headers{end+1} = cur_header;
+    cur_rows = {};
+    cur_width = 0;
+end
+
+
+function toks = find_header_tokens(res_file, expected_ncols)
+% Find a header line near the data with token count >= expected_ncols.
+    toks = {};
+    fid = fopen(res_file, 'r');
+    if fid < 0, return; end
+    raw = textscan(fid, '%s', 'Delimiter', '\n', 'Whitespace', '');
+    fclose(fid);
+    lines = raw{1};
+    for j = 1:numel(lines)
+        L = strtrim(lines{j});
+        if isempty(L), continue; end
+        v = str2num(L); %#ok<ST2NM>
+        if ~isempty(v), continue; end
+        Llow = lower(L);
+        if ~contains(Llow, 'step') && ~contains(Llow, 'time') && ~contains(Llow, 'srf')
+            continue;
+        end
+        % Merge known two-word labels
+        parts = strsplit(L);
+        merged = {};
+        i = 1;
+        while i <= numel(parts)
+            t = lower(parts{i});
+            if i+1 <= numel(parts) && any(strcmp(t, {'dev','pore','x','y','z','total','max'}))
+                merged{end+1} = [t '_' lower(parts{i+1})]; %#ok<AGROW>
+                i = i + 2;
+            else
+                merged{end+1} = t; %#ok<AGROW>
+                i = i + 1;
+            end
+        end
+        toks = merged;
+        return;
+    end
+end
+
+
+function [load_col, iter_col] = identify_columns_from_tokens(toks, ncols)
+% Match tokens to data columns. If tokens > ncols, take first ncols.
+    load_col = 0;  iter_col = 0;
+    if isempty(toks)
+        load_col = 2;  return;
+    end
+    if numel(toks) > ncols
+        toks = toks(1:ncols);
+    end
+
+    for k = 1:min(ncols, numel(toks))
+        t = toks{k};
+        if (~isempty(regexp(t, '^load', 'once')) || strcmp(t, 'load1')) && load_col == 0
+            load_col = k;
+        elseif ~isempty(regexp(t, 'stress$', 'once')) && load_col == 0
+            load_col = k;
+        end
+        if startsWith(t, 'iter') && iter_col == 0
+            iter_col = k;
+        end
+    end
+
+    if load_col == 0, load_col = 2; end
+end
+
+
 
 
 function q = qoi_elastic_static(res_file)
@@ -144,23 +342,43 @@ end
 
 
 function q = qoi_consolidation(res_file)
-% chap08 .res: "Time Uav Pressure(node...)" -> final Uav (degree of consolidation).
-% Uav lies in [0, 1]; the value at the largest reported time is the QoI.
+% Several formats across chap08 (Terzaghi) and chap09 (Biot):
+%   3-col  "Time | Uav | Pressure(node)"           -> Uav_end (chap08 p81-p85)
+%   2-col  "Time | Pressure(node)"                  -> P_end  (chap08 p86, p87, p88)
+%   5-col  "Time | Uav | Uavs | Settle | Pressure"  -> Uav_end (chap09 p93-p95)
+%   4-col  Biot dynamic time-history                -> u_peak
     q = struct('value', NaN, 'label', 'Uav_end', 'unit', '', 'raw', [], 'ok', false);
-    tbl = read_numeric_table(res_file, 3);
+    [tbl, ncols] = read_widest_numeric_table(res_file);
     if isempty(tbl), return; end
-    % Only keep rows whose 2nd column is in [0,1] (Uav block, not depth block)
-    mask = tbl(:,2) >= 0 & tbl(:,2) <= 1 + 1e-6;
-    if any(mask)
-        sub = tbl(mask, :);
-        [~, idx] = max(sub(:,1));   % latest time
-        q.value = sub(idx, 2);
-        q.raw   = sub;
-    else
-        q.value = tbl(end, 2);
-        q.raw   = tbl;
+
+    if ncols >= 3
+        % Locate the Uav-like column: numeric values in [0, 1] across all rows
+        uav_col = 0;
+        for c = 2:min(ncols, 5)
+            vals = tbl(:, c);
+            if all(vals >= -1e-6) && all(vals <= 1 + 1e-3)
+                uav_col = c;  break;
+            end
+        end
+        if uav_col > 0
+            [~, idx] = max(tbl(:, 1));   % latest time
+            q.value = tbl(idx, uav_col);
+            q.raw   = tbl;
+            q.label = 'Uav_end';
+            q.ok    = true;
+            return;
+        end
     end
-    q.ok = true;
+
+    % 2-col Time|Pressure format -> report final pressure as QoI
+    if ncols >= 2
+        [~, idx] = max(tbl(:, 1));
+        q.value = tbl(idx, end);
+        q.raw   = tbl;
+        q.label = 'P_end';
+        q.ok    = true;
+        return;
+    end
 end
 
 
