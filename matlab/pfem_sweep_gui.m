@@ -103,13 +103,14 @@ function pfem_sweep_gui()
     lbl_mode.Layout.Row = 1;  lbl_mode.Layout.Column = 1; %#ok<NASGU>
 
     sweep_dd = uidropdown(sw, ...
-        'Items', {'Lockstep  (same-length arrays)', 'Grid  (Cartesian product)', 'Stochastic  (distributions)'}, ...
+        'Items', {'Lockstep  (same-length arrays)', 'Grid  (Cartesian product)', 'Stochastic  (distributions)', 'Sensitivity  (tornado)'}, ...
         'Value', 'Lockstep  (same-length arrays)', ...
         'BackgroundColor', [0.15 0.15 0.18], ...
         'FontColor', [0.85 0.85 0.85], 'FontSize', 11, ...
         'Tooltip', sprintf(['Lockstep: parameters vary together — E=[1e4,2e4], nu=[0.2,0.3] → 2 scenarios\n' ...
                             'Grid: all combinations — E=[1e4,2e4], nu=[0.2,0.3] → 4 scenarios (max 500)\n' ...
-                            'Stochastic: sample from distributions — enter lognormal(60,0.3) or normal(0.3,0.1)']));
+                            'Stochastic: sample from distributions — enter lognormal(60,0.3) or normal(0.3,0.1)\n' ...
+                            'Sensitivity: OAT analysis at mu and mu+/-sigma per param; produces a tornado plot (2k+1 PFEM runs)']));
     sweep_dd.Layout.Row = 1;  sweep_dd.Layout.Column = 2;
 
     btn_fill = sbtn(sw, 'Fill Ranges', [0.22 0.22 0.10], 1, 3);
@@ -536,6 +537,12 @@ function cb_run(fig, param_tbl, sweep_dd, log_ta, prog_lbl, res_tbl, count_lbl, 
         n_samples = max(10, min(500, round(str2double(count_lbl.Text))));
         use_lhs = nargin >= 8 && isvalid(lhs_cb) && lhs_cb.Value;
         cb_run_stochastic(fig, param_tbl, log_ta, prog_lbl, res_tbl, n_samples, use_lhs);
+        return;
+    end
+
+    % ---- Sensitivity mode: OAT analysis with tornado plot per case ----
+    if contains(sweep_dd.Value, 'Sensitivity')
+        cb_run_sensitivity(fig, param_tbl, log_ta, prog_lbl, res_tbl);
         return;
     end
 
@@ -969,6 +976,157 @@ function cb_run_stochastic(fig, param_tbl, log_ta, prog_lbl, res_tbl, n_samples,
 
     prog_lbl.Text = 'Done (stochastic)';
     append_log(log_ta, '=== Stochastic sweep complete ===');
+end
+
+
+function cb_run_sensitivity(fig, param_tbl, log_ta, prog_lbl, res_tbl)
+% Sensitivity (one-at-a-time) mode: each enabled stochastic parameter is
+% perturbed by +/- 1 sigma (geometric for lognormal) while the others stay
+% at their means. Produces a tornado plot per case.
+
+    st = getappdata(fig, 'state');
+    data = param_tbl.Data;
+
+    % Collect enabled parameters with distribution specs.
+    specs = struct('name', {}, 'dist', {}, 'mu', {}, 'cov', {}, 'bounds', {});
+    fixed = struct();
+    for i = 1:size(data, 1)
+        if ~data{i, 1}, continue; end
+        pname = data{i, 2};
+        vs    = strtrim(data{i, 3});
+        if isempty(vs), continue; end
+
+        tok = regexp(vs, '^\s*(\w+)\s*\(\s*(.+)\s*\)\s*$', 'tokens');
+        if ~isempty(tok)
+            dist_type = lower(tok{1}{1});
+            args = str2num(tok{1}{2}); %#ok<ST2NM>
+            if isempty(args) || numel(args) < 2
+                uialert(fig, sprintf('Bad distribution for "%s": %s', pname, vs), 'Parse error');
+                return;
+            end
+            spec = struct('name', pname, 'dist', dist_type, ...
+                'mu', args(1), 'cov', args(2), 'bounds', []);
+            if numel(args) >= 4
+                spec.bounds = [args(3), args(4)];
+            elseif strcmp(dist_type, 'uniform')
+                spec.bounds = [args(1), args(2)];
+                spec.mu = (args(1) + args(2)) / 2;
+                spec.cov = 0;
+            end
+            specs(end+1) = spec; %#ok<AGROW>
+        else
+            % Solver/mesh params skipped, fixed values respected.
+            if isnan(default_cov(pname)), continue; end
+            v = str2num(vs); %#ok<ST2NM>
+            if isempty(v) || numel(v) ~= 1, continue; end
+            fixed.(pname) = v;
+        end
+    end
+
+    if isempty(specs)
+        uialert(fig, sprintf(['No distribution specs found.\n\n' ...
+            'Sensitivity needs at least one parameter entered as a distribution\n' ...
+            '(e.g. lognormal(60, 0.40)). Switch to Stochastic mode and use\n' ...
+            'Fill Ranges to populate, then switch back to Sensitivity.']), ...
+            'No specs');
+        return;
+    end
+
+    n_cases = numel(st.yaml_paths);
+    if n_cases == 0
+        uialert(fig, 'Add at least one YAML case first.', 'No cases'); return;
+    end
+
+    append_log(log_ta, sprintf('=== Sensitivity (tornado), %d case(s) x (%d params, %d runs each) ===', ...
+        n_cases, numel(specs), 2 * numel(specs) + 1));
+    fn = fieldnames(fixed);
+    for k = 1:numel(fn)
+        append_log(log_ta, sprintf('  fixed: %s = %.4g', fn{k}, fixed.(fn{k})));
+    end
+
+    row_data = res_tbl.Data;
+    for ci = 1:n_cases
+        yaml_path = st.yaml_paths{ci};
+        [~, case_name] = fileparts(yaml_path);
+
+        try
+            y_tmp   = pfem_yaml_load(yaml_path);
+            program = y_tmp.authors.source.program;
+            chap    = sprintf('chap%02d', y_tmp.authors.source.chapter);
+        catch ex
+            append_log(log_ta, sprintf('  YAML error: %s', ex.message));
+            continue;
+        end
+
+        prog_lbl.Text = sprintf('Building %s...', program); drawnow;
+        if ~pfem_ensure_built(st.repo_root, st.pfem_root, program, chap)
+            append_log(log_ta, sprintf('  Build failed for %s', program));
+            continue;
+        end
+
+        prog_lbl.Text = sprintf('Sensitivity: %s (1/%d)', case_name, 2 * numel(specs) + 1);
+        drawnow;
+
+        append_log(log_ta, sprintf('--- Case: %s (%s) ---', case_name, chap));
+        try
+            result = pfem_sensitivity_oat(st.repo_root, st.pfem_root, yaml_path, specs, ...
+                'Fixed', fixed, 'Verbose', false);
+        catch ex
+            append_log(log_ta, sprintf('  ERROR: %s', ex.message));
+            continue;
+        end
+
+        if isnan(result.qoi_baseline)
+            append_log(log_ta, '  Baseline run failed; skipping case.');
+            continue;
+        end
+
+        append_log(log_ta, sprintf('  baseline %s = %.4g', result.qoi_label, result.qoi_baseline));
+        append_log(log_ta, '  parameter ranking by absolute sensitivity:');
+        for ii = 1:numel(result.order)
+            j = result.order(ii);
+            if isnan(result.qoi_low(j)) || isnan(result.qoi_high(j))
+                append_log(log_ta, sprintf('    %d. %-22s (run failed)', ii, result.param_names{j}));
+            else
+                append_log(log_ta, sprintf('    %d. %-22s %s: %.4g -> %.4g  (spread %.4g)', ...
+                    ii, result.param_names{j}, result.qoi_label, ...
+                    result.qoi_low(j), result.qoi_high(j), result.qoi_high(j) - result.qoi_low(j)));
+            end
+        end
+
+        ts = datestr(now, 'yyyymmdd_HHMMSS'); %#ok<TNOW1,DATST>
+        save_prefix = fullfile(st.repo_root, 'runs', chap, case_name, ...
+            sprintf('%s_tornado_%s', case_name, ts));
+        try
+            pfem_plot_tornado(result, ...
+                'Title', sprintf('%s sensitivity (mu, mu+/-sigma)', case_name), ...
+                'Save', save_prefix);
+            append_log(log_ta, sprintf('  tornado saved: %s_*', save_prefix));
+        catch ex
+            append_log(log_ta, sprintf('  tornado plot ERROR: %s', ex.message));
+        end
+
+        % Add summary row to results table.
+        nr = size(row_data, 1) + 1;
+        row_data{nr, 1} = false;
+        row_data{nr, 2} = case_name;
+        row_data{nr, 3} = sprintf('--- TORNADO k=%d ---', numel(specs));
+        row_data{nr, 4} = sprintf('%s base=%.3g', result.qoi_label, result.qoi_baseline);
+        if ~isempty(result.order)
+            j_top = result.order(1);
+            row_data{nr, 5} = sprintf('top: %s spread=%.3g', result.param_names{j_top}, ...
+                result.qoi_high(j_top) - result.qoi_low(j_top));
+        else
+            row_data{nr, 5} = '-';
+        end
+        row_data{nr, 6} = '-';
+        row_data{nr, 7} = fileparts(save_prefix);
+        res_tbl.Data = row_data;
+        drawnow;
+    end
+
+    prog_lbl.Text = 'Done (sensitivity)';
+    append_log(log_ta, '=== Sensitivity sweep complete ===');
 end
 
 
@@ -1474,9 +1632,13 @@ end
 function on_mode_change(sweep_dd, count_lbl, lhs_cb, btn_corr)
 % Update counter label when user switches mode; enable LHS toggle and Corr button only in stochastic mode.
     is_stoch = contains(sweep_dd.Value, 'Stochastic');
+    is_sens  = contains(sweep_dd.Value, 'Sensitivity');
     if is_stoch
         count_lbl.Text = '50';
         count_lbl.Tooltip = 'Number of Monte Carlo samples — use +/- to adjust (10–500)';
+    elseif is_sens
+        count_lbl.Text = '-';
+        count_lbl.Tooltip = 'Sensitivity mode runs 2k+1 simulations (k = enabled stochastic params) — counter not used';
     else
         count_lbl.Text = '4';
         count_lbl.Tooltip = 'Number of values generated by Fill Ranges (1–20)';
