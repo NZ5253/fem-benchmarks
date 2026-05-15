@@ -169,21 +169,37 @@ function [nums, ncols] = read_widest_numeric_table(res_file, min_cols)
     [blocks, headers] = read_blocks(res_file, min_cols);
     if isempty(blocks), return; end
 
-    % Prefer the first block whose preceding header names a time-like axis
+    % Pick the LARGEST block whose preceding header names a time-like
+    % column. We match "time", "step" or "srf" as a column name (start of
+    % the header line, possibly preceded by whitespace) rather than as a
+    % free-text mention so blocks like "Depth  Pressure (time=...)" do
+    % not get mistaken for a time-history block.
     pick = 0;
+    pick_size = -1;
     for b = 1:numel(blocks)
         h = lower(headers{b});
-        if contains(h, 'time') || contains(h, 'step') || contains(h, 'srf') ...
-                || contains(h, 'srf  max disp')
-            pick = b;  break;
+        if header_is_time_axis(h)
+            sz = size(blocks{b}, 1);
+            if sz > pick_size
+                pick = b;
+                pick_size = sz;
+            end
         end
     end
     if pick == 0
-        % Fallback: largest block
+        % Fallback: largest block overall
         [~, pick] = max(cellfun(@(b) size(b,1), blocks));
     end
     nums  = blocks{pick};
     ncols = size(nums, 2);
+end
+
+
+function tf = header_is_time_axis(h_lower)
+% Recognise headers whose first column is time/step/srf (an analysis-history
+% block), not headers that merely mention time inside a depth profile etc.
+% MATLAB's \b after ^\s* is unreliable, so match the whitespace explicitly.
+    tf = ~isempty(regexp(h_lower, '^\s*(time|step|srf)(\s|$)', 'once'));
 end
 
 
