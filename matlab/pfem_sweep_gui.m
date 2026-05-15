@@ -39,7 +39,8 @@ function pfem_sweep_gui()
         'bench_root',      bench_root, ...
         'yaml_paths',      {{}}, ...
         'case_result_map', {{}}, ...
-        'stop_flag',       false);
+        'stop_flag',       false, ...
+        'corr_pairs',      []);  % Nx3 [name_i, name_j, rho] cell array — see cb_correlations
     setappdata(fig, 'state', st);
 
     %% ── Outer grid: 3 rows ──────────────────────────────────────────────────
@@ -91,9 +92,9 @@ function pfem_sweep_gui()
     param_tbl.Layout.Row = 1;  param_tbl.Layout.Column = 1;
 
     % Sweep mode toolbar
-    sw = uigridlayout(pg, [1, 9]);
+    sw = uigridlayout(pg, [1, 10]);
     sw.Layout.Row = 2;  sw.Layout.Column = 1;
-    sw.ColumnWidth = {'fit', 210, 'fit', 28, 34, 28, 'fit', 'fit', '1x'};
+    sw.ColumnWidth = {'fit', 210, 'fit', 28, 34, 28, 'fit', 'fit', 'fit', '1x'};
     sw.RowHeight = {'1x'};  sw.Padding = [0 2 0 2];  sw.ColumnSpacing = 4;
     sw.BackgroundColor = [0.10 0.10 0.12];
 
@@ -136,7 +137,15 @@ function pfem_sweep_gui()
         'Enable', 'off');
     lhs_cb.Layout.Row = 1;  lhs_cb.Layout.Column = 7;
 
-    btn_preview = sbtn(sw, 'Preview Scenarios', [0.16 0.28 0.16], 1, 8);
+    btn_corr = uibutton(sw, ...
+        'Text', 'Corr...', ...
+        'BackgroundColor', [0.20 0.20 0.26], ...
+        'FontColor', [0.85 0.85 0.85], 'FontSize', 11, ...
+        'Tooltip', 'Stochastic mode: enter pairwise correlations between sampled parameters (Iman-Conover, preserves LHS marginals)', ...
+        'Enable', 'off');
+    btn_corr.Layout.Row = 1;  btn_corr.Layout.Column = 8;
+
+    btn_preview = sbtn(sw, 'Preview Scenarios', [0.16 0.28 0.16], 1, 9);
 
     %% ── ROW 2: Run (left) | Log (right) ────────────────────────────────────
     r2 = uigridlayout(gl, [1, 2]);
@@ -211,10 +220,11 @@ function pfem_sweep_gui()
     %% ── Wire callbacks ──────────────────────────────────────────────────────
     btn_add.ButtonPushedFcn     = @(~,~) cb_add_cases(fig, case_lb, param_tbl);
     btn_rem.ButtonPushedFcn     = @(~,~) cb_remove_cases(fig, case_lb, param_tbl);
-    sweep_dd.ValueChangedFcn    = @(~,~) on_mode_change(sweep_dd, count_lbl, lhs_cb);
+    sweep_dd.ValueChangedFcn    = @(~,~) on_mode_change(sweep_dd, count_lbl, lhs_cb, btn_corr);
     btn_fill.ButtonPushedFcn    = @(~,~) cb_fill_ranges(fig, param_tbl, count_lbl, sweep_dd);
     btn_minus.ButtonPushedFcn   = @(~,~) adj_count(count_lbl, -1, sweep_dd);
     btn_plus.ButtonPushedFcn    = @(~,~) adj_count(count_lbl, +1, sweep_dd);
+    btn_corr.ButtonPushedFcn    = @(~,~) cb_correlations(fig, param_tbl);
     btn_preview.ButtonPushedFcn = @(~,~) cb_preview(param_tbl, sweep_dd, log_ta);
     btn_run.ButtonPushedFcn     = @(~,~) cb_run(fig, param_tbl, sweep_dd, log_ta, prog_lbl, res_tbl, count_lbl, lhs_cb);
     btn_stop.ButtonPushedFcn    = @(~,~) cb_stop(fig);
@@ -362,6 +372,138 @@ function cov = default_cov(pname)
     else
         cov = 0.20;  % generic material property
     end
+end
+
+
+function cb_correlations(fig, param_tbl)
+% Modal dialog for editing pairwise parameter correlations.
+% Stores corr_pairs as an Nx3 cell array {name_i, name_j, rho} on the
+% main figure's app state. Used by cb_run_stochastic to build the
+% correlation matrix passed to pfem_lhs_sample.
+
+    st = getappdata(fig, 'state');
+    if ~isfield(st, 'corr_pairs') || isempty(st.corr_pairs)
+        existing = cell(0, 3);
+    else
+        existing = st.corr_pairs;
+    end
+
+    % Collect names of currently-checked stochastic params (for the user's reference).
+    data = param_tbl.Data;
+    enabled_names = {};
+    for i = 1:size(data, 1)
+        if data{i, 1} && ~isempty(strtrim(data{i, 3}))
+            enabled_names{end+1} = data{i, 2}; %#ok<AGROW>
+        end
+    end
+
+    dlg = uifigure('Name', 'Parameter Correlations', ...
+        'Position', [200 200 640 360], ...
+        'Color', [0.10 0.10 0.12], ...
+        'WindowStyle', 'modal');
+    dlg_gl = uigridlayout(dlg, [4, 1]);
+    dlg_gl.RowHeight = {'fit', '1x', '1x', 'fit'};
+    dlg_gl.BackgroundColor = [0.10 0.10 0.12];
+
+    if isempty(enabled_names)
+        info_text = 'No stochastic parameters detected. Enable parameters and enter distributions first.';
+    else
+        info_text = sprintf('Checked stochastic params: %s', strjoin(enabled_names, ', '));
+    end
+    info = uilabel(dlg_gl, 'Text', info_text, ...
+        'FontColor', [0.85 0.85 0.85], 'FontSize', 11, 'WordWrap', 'on'); %#ok<NASGU>
+
+    note = uilabel(dlg_gl, 'Text', ...
+        sprintf(['Enter pairwise correlations as rows: parameter 1, parameter 2, rho in [-1, 1].\n' ...
+                 'Names must match parameters in the main table. Iman-Conover preserves LHS marginals.']), ...
+        'FontColor', [0.65 0.65 0.65], 'FontSize', 10, 'WordWrap', 'on'); %#ok<NASGU>
+
+    if isempty(existing)
+        starter = cell(3, 3);
+        starter(:) = {''};
+    else
+        starter = existing;
+        % Pad to at least 3 rows
+        if size(starter, 1) < 3
+            extra = cell(3 - size(starter, 1), 3);
+            extra(:) = {''};
+            starter = [starter; extra];
+        end
+    end
+
+    tbl = uitable(dlg_gl, ...
+        'Data', starter, ...
+        'ColumnName', {'parameter 1', 'parameter 2', 'rho'}, ...
+        'ColumnEditable', [true, true, true], ...
+        'RowName', {}, ...
+        'BackgroundColor', [0.16 0.16 0.20; 0.13 0.13 0.16], ...
+        'ForegroundColor', [0.92 0.92 0.92], ...
+        'ColumnWidth', {220, 220, 80});
+
+    btn_row = uigridlayout(dlg_gl, [1, 4]);
+    btn_row.ColumnWidth = {'1x', 'fit', 'fit', 'fit'};
+    btn_row.BackgroundColor = [0.10 0.10 0.12];
+
+    spacer = uilabel(btn_row, 'Text', ''); spacer.Layout.Column = 1; %#ok<NASGU>
+
+    btn_clear = uibutton(btn_row, 'Text', 'Clear All', ...
+        'BackgroundColor', [0.30 0.20 0.20], 'FontColor', [0.92 0.92 0.92]);
+    btn_clear.Layout.Column = 2;
+    btn_clear.ButtonPushedFcn = @(~,~) clear_table(tbl);
+
+    btn_cancel = uibutton(btn_row, 'Text', 'Cancel', ...
+        'BackgroundColor', [0.20 0.20 0.26], 'FontColor', [0.92 0.92 0.92]);
+    btn_cancel.Layout.Column = 3;
+    btn_cancel.ButtonPushedFcn = @(~,~) close(dlg);
+
+    btn_ok = uibutton(btn_row, 'Text', 'OK', ...
+        'BackgroundColor', [0.16 0.40 0.20], 'FontColor', [1 1 1]);
+    btn_ok.Layout.Column = 4;
+    btn_ok.ButtonPushedFcn = @(~,~) save_and_close(fig, dlg, tbl);
+end
+
+
+function clear_table(tbl)
+    blank = cell(size(tbl.Data));
+    blank(:) = {''};
+    tbl.Data = blank;
+end
+
+
+function save_and_close(fig, dlg, tbl)
+    raw = tbl.Data;
+    pairs = cell(0, 3);
+    for i = 1:size(raw, 1)
+        a = strtrim(char_or_empty(raw{i, 1}));
+        b = strtrim(char_or_empty(raw{i, 2}));
+        rho_cell = raw{i, 3};
+        if isempty(a) || isempty(b) || isempty(rho_cell)
+            continue;
+        end
+        if ischar(rho_cell)
+            rho = str2double(strtrim(rho_cell));
+        else
+            rho = double(rho_cell);
+        end
+        if isnan(rho) || abs(rho) > 1
+            uialert(dlg, sprintf('Row %d: rho must be a number in [-1, 1] (got "%s")', i, num2str(rho_cell)), ...
+                'Bad correlation value');
+            return;
+        end
+        pairs(end+1, :) = {a, b, rho}; %#ok<AGROW>
+    end
+    st = getappdata(fig, 'state');
+    st.corr_pairs = pairs;
+    setappdata(fig, 'state', st);
+    close(dlg);
+end
+
+
+function s = char_or_empty(v)
+    if isempty(v),       s = '';        return;  end
+    if ischar(v),        s = v;         return;  end
+    if isstring(v),      s = char(v);   return;  end
+    s = '';
 end
 
 
@@ -607,6 +749,25 @@ function cb_run_stochastic(fig, param_tbl, log_ta, prog_lbl, res_tbl, n_samples,
         param_names{k} = param_defs(k).name;
     end
 
+    % ---- Resolve correlation pairs (set via the Corr... dialog) ----
+    rho_numeric = [];
+    rho_pairs_used = {};
+    rho_pairs_skipped = {};
+    if isfield(st, 'corr_pairs') && ~isempty(st.corr_pairs)
+        for r = 1:size(st.corr_pairs, 1)
+            a = st.corr_pairs{r, 1};
+            b = st.corr_pairs{r, 2};
+            ia = find(strcmp(param_names, a), 1);
+            ib = find(strcmp(param_names, b), 1);
+            if isempty(ia) || isempty(ib) || ia == ib
+                rho_pairs_skipped{end+1} = sprintf('(%s, %s)', a, b); %#ok<AGROW>
+                continue;
+            end
+            rho_numeric(end+1, :) = [ia, ib, st.corr_pairs{r, 3}]; %#ok<AGROW>
+            rho_pairs_used{end+1} = sprintf('%s-%s rho=%+.2f', a, b, st.corr_pairs{r, 3}); %#ok<AGROW>
+        end
+    end
+
     % ---- Generate all samples upfront ----
     if use_lhs
         % Latin Hypercube Sampling: stratified joint draw across all params.
@@ -618,7 +779,12 @@ function cb_run_stochastic(fig, param_tbl, log_ta, prog_lbl, res_tbl, n_samples,
             if ~isempty(pd.bounds), b = pd.bounds; else, b = []; end
             lhs_specs(k) = struct('dist', pd.dist, 'mu', pd.mu, 'cov', pd.cov, 'bounds', b); %#ok<AGROW>
         end
-        all_samples = pfem_lhs_sample(lhs_specs, n_samples, 'Seed', seed);
+        if isempty(rho_numeric)
+            all_samples = pfem_lhs_sample(lhs_specs, n_samples, 'Seed', seed);
+        else
+            all_samples = pfem_lhs_sample(lhs_specs, n_samples, 'Seed', seed, ...
+                'Correlation', rho_numeric);
+        end
     else
         % Plain Monte Carlo with independent draws per parameter.
         all_samples = zeros(n_samples, n_params);
@@ -637,7 +803,16 @@ function cb_run_stochastic(fig, param_tbl, log_ta, prog_lbl, res_tbl, n_samples,
         [~, case_name] = fileparts(yaml_path);
 
         if use_lhs, sample_method = 'LHS'; else, sample_method = 'IID Monte Carlo'; end
-        append_log(log_ta, sprintf('=== Stochastic sweep: %s, %d samples (%s) ===', case_name, n_samples, sample_method));
+        if isempty(rho_numeric)
+            corr_tag = '';
+        else
+            corr_tag = sprintf(', correlated [%s]', strjoin(rho_pairs_used, '; '));
+        end
+        append_log(log_ta, sprintf('=== Stochastic sweep: %s, %d samples (%s%s) ===', case_name, n_samples, sample_method, corr_tag));
+        if ~isempty(rho_pairs_skipped)
+            append_log(log_ta, sprintf('  [warn] correlation pairs skipped (param not enabled in this case): %s', ...
+                strjoin(rho_pairs_skipped, ', ')));
+        end
         for k = 1:n_params
             pd = param_defs(k);
             append_log(log_ta, sprintf('  %s: %s(mu=%.4g, COV=%.2g)', pd.name, pd.dist, pd.mu, pd.cov));
@@ -1296,8 +1471,8 @@ function append_log(log_ta, msg)
 end
 
 
-function on_mode_change(sweep_dd, count_lbl, lhs_cb)
-% Update counter label when user switches mode; enable LHS toggle only in stochastic mode.
+function on_mode_change(sweep_dd, count_lbl, lhs_cb, btn_corr)
+% Update counter label when user switches mode; enable LHS toggle and Corr button only in stochastic mode.
     is_stoch = contains(sweep_dd.Value, 'Stochastic');
     if is_stoch
         count_lbl.Text = '50';
@@ -1307,11 +1482,10 @@ function on_mode_change(sweep_dd, count_lbl, lhs_cb)
         count_lbl.Tooltip = 'Number of values generated by Fill Ranges (1–20)';
     end
     if nargin >= 3 && isvalid(lhs_cb)
-        if is_stoch
-            lhs_cb.Enable = 'on';
-        else
-            lhs_cb.Enable = 'off';
-        end
+        if is_stoch, lhs_cb.Enable = 'on'; else, lhs_cb.Enable = 'off'; end
+    end
+    if nargin >= 4 && isvalid(btn_corr)
+        if is_stoch, btn_corr.Enable = 'on'; else, btn_corr.Enable = 'off'; end
     end
 end
 
