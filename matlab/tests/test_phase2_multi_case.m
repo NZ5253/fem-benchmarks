@@ -8,7 +8,7 @@ function test_phase2_multi_case()
 %
 % Tests:
 %   A. p61  plasticity_load    sensitivity of P_lim wrt yield_stress, E, nu
-%   B. p101 eigenvalue         sensitivity of lambda_1 wrt EI, rhoA
+%   B. p101 eigenvalue         sensitivity of omega^2 wrt EI, rhoA
 %   C. p81_5 consolidation     sensitivity of Uav_end wrt permeability
 %   D. LHS marginals for lognormal, truncnormal, normal, uniform
 %   E. Iman-Conover correlated LHS with 3 mixed distributions

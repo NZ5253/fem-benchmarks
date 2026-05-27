@@ -254,7 +254,7 @@ once binaries are built.
 
 | Item | Description | Severity |
 |---|---|---|
-| p101 lambda label | The eigenvalue solver returns `1 / omega^2`. The QoI label says `lambda_1` but the value is the inverted form. Sensitivity ratios are still correct. | low — cosmetic |
+| ~~p101 lambda label~~ | Resolved 2026-05-27. Relabel `lambda_1` → `omega^2` (with derived `f1` in Hz) in `qoi_eigenvalue`. Earlier note that the solver returned `1/omega^2` was a misdiagnosis: `bandred` + `bisect` on `M^(-1/2) K M^(-1/2)` yields `omega^2` directly, confirmed analytically against the cantilever first mode. | resolved |
 | Some elastic cases bound to BC | Cases like p51_3 set `u_max` from a prescribed displacement boundary, so `u_max` is invariant to material sampling. The extractor works; the chosen QoI just is not sensitive. Could be improved by allowing a user-specified probe node. | low — design choice |
 | p69 embankment lift | Custom output format with text lines like `Max displacement is X`. Extracts a final-lift max displacement, but only 7/10 LHS samples converge across the full c-phi-gamma range. | low — case-specific |
 | chap05 p56_1, p57 | Heavy mesh cases (250s per run) excluded from the n=10 LHS sweep timing. Extractor works; the bulk verification just skipped them. | low — runtime |
@@ -267,7 +267,6 @@ Per the original roadmap:
 - **Phase 3**: pluggable runner interface so non-PFEM codes can plug into the same probabilistic / sensitivity framework (any code that reads an input file and writes an output file).
 - **Phase 4**: mesh-refinement sweeps (`nels`, `nye`) to study discretisation convergence.
 - Add user-selectable probe node for elastic cases so the QoI tracks an internal point rather than a boundary value.
-- Invert the eigenvalue QoI so the label `lambda_1` actually equals omega^2.
 
 ---
 

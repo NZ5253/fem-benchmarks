@@ -14,6 +14,10 @@ function qoi = pfem_extract_qoi(out, case_type)
 %   .raw        optional raw payload (vector / matrix) for plotting
 %   .ok         logical, true if extraction succeeded
 %
+% Case-type-specific extras (present when set by the per-type extractor):
+%   .f1         eigenvalue: first natural cyclic frequency in Hz
+%               (derived from value = omega^2)
+%
 % The QoI is the scalar plotted in histograms and used to compute
 % statistics (mean, std, P(fail), reliability).
 
@@ -399,9 +403,13 @@ end
 
 
 function q = qoi_eigenvalue(res_file)
-% chap10 .res: "The eigenvalues are:" followed by numbers (often omega^2).
-% QoI = smallest eigenvalue (lowest natural frequency or its square).
-    q = struct('value', NaN, 'label', 'lambda_1', 'unit', '', 'raw', [], 'ok', false);
+% chap10 .res: "The eigenvalues are:" followed by ascending eigenvalues
+% of the standard form M^(-1/2) K M^(-1/2), which equal the generalized
+% eigenvalues lambda of K v = lambda M v. For undamped free vibration
+% lambda = omega^2, so the smallest eigenvalue is the squared first
+% natural angular frequency. q.f1 derives the cyclic frequency in Hz.
+    q = struct('value', NaN, 'label', 'omega^2', 'unit', 'rad^2/s^2', ...
+               'raw', [], 'f1', NaN, 'ok', false);
     fid = fopen(res_file, 'r');
     if fid < 0, return; end
     raw = textscan(fid, '%s', 'Delimiter', '\n', 'Whitespace', '');
@@ -428,6 +436,7 @@ function q = qoi_eigenvalue(res_file)
     if isempty(eigs), return; end
     q.value = min(eigs);
     q.raw   = eigs(:);
+    q.f1    = sqrt(q.value) / (2*pi);
     q.ok    = true;
 end
 

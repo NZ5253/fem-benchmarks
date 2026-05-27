@@ -199,7 +199,7 @@ the right Quantity of Interest via `pfem_extract_qoi`:
 | `elastic_static` | u_max | chap4 p41-p46; chap5 all; chap9 p93-p95 (28 cases) |
 | `seepage_steady` | h_max | chap7 p71, p72, p74, p75 (6 cases) |
 | `consolidation` | Uav_end | chap8 p81-p88; chap9 p91, p92 (13 cases) |
-| `eigenvalue` | lambda_1 | chap10 (5 cases) |
+| `eigenvalue` | omega^2 (and derived `f1` in Hz) | chap10 (5 cases) |
 | `dynamic_transient` | u_peak | chap4 p47; chap7 p73; chap8 p810, p84, p89; chap11 (15 cases) |
 | `thermal` | T_max | chap8 p811 (1 case) |
 
