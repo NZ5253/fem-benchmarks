@@ -44,3 +44,13 @@ __pycache__/
 *.log
 *.out
 *.pdf
+
+# LaTeX build artifacts (the presentation PDF is force-added)
+*.aux
+*.nav
+*.snm
+*.toc
+*.vrb
+*.fls
+*.fdb_latexmk
+*.synctex.gz
