@@ -167,6 +167,11 @@ function [nodes, elem_conn, meta] = parse_structured_mesh_generic(vals, yaml, me
     else
         nodes = nodes_orig;
     end
+
+    % Generate element connectivity for 2D structured meshes
+    if meta.ndim == 2 && ~isempty(nxe) && ~isempty(nye)
+        elem_conn = generate_2d_elem_conn(nxe, nye, nod, dir);
+    end
 end
 
 
@@ -365,6 +370,116 @@ function [nodes, meta] = generate_2d_nodes_from_coords(x_coords, y_coords, nxe, 
             for i = 1:(2*nxe+1)
                 for j = 1:(2*nye+1)
                     nodes(node_idx,:) = [x_fine(i), y_fine(j)]; node_idx=node_idx+1;
+                end
+            end
+        end
+    end
+end
+
+
+function ec = generate_2d_elem_conn(nxe, nye, nod, dir)
+% Generate element connectivity for a structured 2D mesh.
+% Supports Q4 (nod=4), Q8 (nod=8, serendipity), Q9 (nod=9, Lagrange).
+% For higher-order elements only corner-node connectivity (4 nodes) is returned,
+% which is sufficient for edge-drawing purposes in draw_edges.
+    ec = [];
+    dir_clean = lower(strrep(char(dir), '''', ''));
+    nels = nxe * nye;
+
+    if nod == 4
+        ec = zeros(nels, 4);
+        if strcmp(dir_clean, 'x')
+            % Nodes: (j-1)*(nxe+1)+i, j=1..nye+1, i=1..nxe+1
+            e = 1;
+            for iy = 1:nye
+                for ix = 1:nxe
+                    n1 = (iy-1)*(nxe+1) + ix;
+                    n2 = (iy-1)*(nxe+1) + ix+1;
+                    n3 =  iy  *(nxe+1) + ix+1;
+                    n4 =  iy  *(nxe+1) + ix;
+                    ec(e,:) = [n1, n2, n3, n4];
+                    e = e + 1;
+                end
+            end
+        else
+            % dir='y': Nodes: (i-1)*(nye+1)+j, i=1..nxe+1, j=1..nye+1
+            e = 1;
+            for ix = 1:nxe
+                for iy = 1:nye
+                    n1 = (ix-1)*(nye+1) + iy;
+                    n2 = (ix-1)*(nye+1) + iy+1;
+                    n3 =  ix  *(nye+1) + iy+1;
+                    n4 =  ix  *(nye+1) + iy;
+                    ec(e,:) = [n1, n2, n3, n4];
+                    e = e + 1;
+                end
+            end
+        end
+
+    elseif nod == 8
+        % Q8 serendipity: return 4-corner connectivity for drawing
+        % dir='x': full rows (2*nxe+1 nodes) alternate with half rows (nxe+1 nodes)
+        % Corner node at element (iy,ix): BL, BR, TR, TL in fine-grid indexing
+        ec = zeros(nels, 4);
+        if strcmp(dir_clean, 'x')
+            row_off = @(jr) floor((jr-1)/2) * (3*nxe+2) + max(0, mod(jr-1,2)) * (2*nxe+1);
+            e = 1;
+            for iy = 1:nye
+                for ix = 1:nxe
+                    jbot = 2*iy - 1;  jtop = 2*iy + 1;
+                    n1 = row_off(jbot) + (2*ix-1);   % BL corner
+                    n2 = row_off(jbot) + (2*ix+1);   % BR corner
+                    n3 = row_off(jtop) + (2*ix+1);   % TR corner
+                    n4 = row_off(jtop) + (2*ix-1);   % TL corner
+                    ec(e,:) = [n1, n2, n3, n4];
+                    e = e + 1;
+                end
+            end
+        else
+            % dir='y': columns are the "full" direction
+            col_off = @(ic) floor((ic-1)/2) * (3*nye+2) + max(0, mod(ic-1,2)) * (2*nye+1);
+            e = 1;
+            for ix = 1:nxe
+                for iy = 1:nye
+                    ileft  = 2*ix - 1;  iright = 2*ix + 1;
+                    n1 = col_off(ileft)  + (2*iy-1);
+                    n2 = col_off(ileft)  + (2*iy+1);
+                    n3 = col_off(iright) + (2*iy+1);
+                    n4 = col_off(iright) + (2*iy-1);
+                    ec(e,:) = [n1, n2, n3, n4];
+                    e = e + 1;
+                end
+            end
+        end
+
+    elseif nod == 9
+        % Q9 Lagrange: corner nodes follow same pattern as Q8
+        ec = zeros(nels, 4);
+        if strcmp(dir_clean, 'x')
+            % Full grid 2*nxe+1 columns x 2*nye+1 rows
+            row_stride = 2*nxe + 1;
+            e = 1;
+            for iy = 1:nye
+                for ix = 1:nxe
+                    n1 = (2*iy-2)*row_stride + (2*ix-1);
+                    n2 = (2*iy-2)*row_stride + (2*ix+1);
+                    n3 = (2*iy  )*row_stride + (2*ix+1);
+                    n4 = (2*iy  )*row_stride + (2*ix-1);
+                    ec(e,:) = [n1, n2, n3, n4];
+                    e = e + 1;
+                end
+            end
+        else
+            col_stride = 2*nye + 1;
+            e = 1;
+            for ix = 1:nxe
+                for iy = 1:nye
+                    n1 = (2*ix-2)*col_stride + (2*iy-1);
+                    n2 = (2*ix-2)*col_stride + (2*iy+1);
+                    n3 = (2*ix  )*col_stride + (2*iy+1);
+                    n4 = (2*ix  )*col_stride + (2*iy-1);
+                    ec(e,:) = [n1, n2, n3, n4];
+                    e = e + 1;
                 end
             end
         end
