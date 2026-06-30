@@ -1,5 +1,8 @@
 % PFEM_TEST_RUN  Quick test script to verify the PFEM pipeline works
 %
+% DEV SCRATCH SCRIPT (manual smoke check, not part of the pipeline). The
+% reproducible test suite lives in matlab/tests/ (test_phase2_multi_case.m).
+%
 % This script tests:
 % 1. YAML loading
 % 2. Running a case without overrides

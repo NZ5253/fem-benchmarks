@@ -1,4 +1,8 @@
 %% pfem_diagram_test.m
+% DEV SCRATCH SCRIPT (not part of the pipeline, not an automated test).
+% Manual visual check for pfem_diagram. The reproducible test suite lives in
+% matlab/tests/ (test_phase2_multi_case.m).
+%
 % Visual test for pfem_diagram: render two diagrams side-by-side:
 %   Left:  original parameters  (E = 1e6, nu = 0.3)
 %   Right: modified parameters  (E = 2e5, nu = 0.45)

@@ -46,6 +46,50 @@ It is not in the repo; see HANDOVER Section 2.3 to restore it.
 
 ---
 
+## 1.5 Zero to first result (linear runbook)
+
+The single straight-line path from a fresh clone to seeing a figure. Each
+step says which document has the detail if you get stuck.
+
+```bash
+# 0. Prerequisites (Linux) -- HANDOVER Section 2.1
+sudo apt install gfortran make python3 python3-pip \
+                 libarpack2-dev liblapack-dev libblas-dev
+pip install pyyaml
+
+# 1. Get the repo
+git clone https://github.com/NZ5253/fem-benchmarks.git
+cd fem-benchmarks
+
+# 2. Restore the PFEM Fortran source into pfem/ (gitignored, licensed)
+#    Then apply the patches -- scripts/pfem_patches/README.md, HANDOVER 2.3
+#    (without the patches several cases SIGSEGV or fail to link)
+
+# 3. Build one chapter (also builds the shared library)
+scripts/pfem_build_chapter.sh ./pfem chap06
+
+# 4. Smoke-test the whole catalogue (optional, ~3 min once built)
+python3 scripts/run_all_tests.py        # expect 87/87 PASSED
+```
+
+```matlab
+% 5. Run one case with an override and get artifacts -- matlab/README.md
+addpath matlab matlab/utils
+repo_root = pwd;  pfem_root = fullfile(repo_root, 'pfem');
+[status, out] = pfem_run_from_yaml(repo_root, pfem_root, ...
+    'benchmarks/pfem5/chap06/p61.yaml', struct('yield_stress', 200));
+% -> runs/chap06/p61/sy_200/  with p61.res, p61.msh, case.yaml, run_info.txt
+
+% 6. See it in the GUI (deterministic + stochastic + sensitivity) -- GUIDE.md
+pfem_sweep_gui
+%   Add YAML(s) -> pick p61.yaml -> Fill Ranges -> Run All -> Open Figures
+```
+
+That is the end-to-end thread. Stages 1-6 here map onto the five pipeline
+stages in Section 2 (build = stage 2, run = stage 3, GUI figures = stages 4-5).
+
+---
+
 ## 2. The pipeline: five stages
 
 Everything in the repo is one of five stages. Data flows left to right.
@@ -191,6 +235,21 @@ pfem_extract_qoi(out, case_type)   case_type from pfem_detect_case_type
    (shared helpers: read_widest_numeric_table, read_blocks, header_is_time_axis,
     find_header_tokens, identify_columns_from_tokens)
 ```
+
+### Files NOT in the main pipeline (so you can ignore them)
+
+A few files live in `matlab/` but are not part of the run/sweep flow above.
+They are labelled as such in their own headers; listed here so a newcomer
+does not mistake them for live code:
+
+| File | What it is |
+|------|-----------|
+| `pfem_parametric_sweep.m` | LEGACY. An older program-specific sweeper, superseded by `pfem_run_from_yaml` + the GUI/NZ.m. Kept for reference. |
+| `pfem_test_run.m` | DEV SCRATCH. Manual smoke check of load/run/patch. Not an automated test. |
+| `pfem_diagram_test.m` | DEV SCRATCH. Manual visual check of `pfem_diagram`. |
+
+The one reproducible, automated test is
+`matlab/tests/test_phase2_multi_case.m` (see Section 10).
 
 ---
 

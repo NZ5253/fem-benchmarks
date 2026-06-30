@@ -1,6 +1,10 @@
 function results = pfem_parametric_sweep(pfem_root, chapter, program, base_case, param_ranges, output_dir)
 % PFEM_PARAMETRIC_SWEEP Run parametric study by varying input parameters
 %
+% LEGACY (not part of the main pipeline). Superseded by pfem_run_from_yaml +
+% pfem_sweep_gui / NZ.m, which patch the .dat by YAML token index instead of
+% the program-specific dat_modifier used here. Kept for reference only.
+%
 % Performs a parameter sweep for a PFEM case by:
 %   1. Loading the base dataset
 %   2. Modifying specified parameters

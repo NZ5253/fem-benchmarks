@@ -527,9 +527,13 @@ have multiple datasets. Verified count of `benchmarks/pfem5/chap*/*.yaml`.)
 ### For Parametric Studies
 
 1. Start with small parameter ranges to test
-2. Use tunable_parameters paths from YAML files
-3. Check dat_modifier function in pfem_parametric_sweep.m
-4. Customize for your specific program's input format
+2. Use the tunable names from the YAML `tunable_parameters` block as override keys
+3. Drive sweeps through `pfem_sweep_gui` (GUI) or `NZ.m` / `pfem_stochastic_sweep`
+   (scripted); both funnel through `pfem_run_from_yaml`, which patches the `.dat`
+   by token index. Manual `.dat` editing is not needed.
+4. Never sweep solver or mesh parameters stochastically (tolerance, iteration
+   limit, time step, nxe/nye) — they destabilise the Fortran solver and are
+   skipped on purpose. See ARCHITECTURE.md gotcha S7.
 
 ### For Version Control
 
