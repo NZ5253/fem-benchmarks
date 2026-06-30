@@ -2,6 +2,11 @@
 
 Complete guide for working with the PFEM benchmark catalogue.
 
+> New to the project? Read [docs/ARCHITECTURE.md](ARCHITECTURE.md) first for
+> the end-to-end flow and how the files connect, then come back here for the
+> task-by-task how-to. For the MATLAB function reference see
+> [matlab/README.md](../matlab/README.md).
+
 ## Table of Contents
 
 1. [Quick Start](#quick-start)
@@ -108,7 +113,7 @@ python3 scripts/generate_yamls_v2.py --chapter chap05 --dry-run
 
 ### Generate All Chapters
 
-Process all 90 cases across chapters 4-11 with one command:
+Process all 87 cases across chapters 4-11 with one command:
 
 ```bash
 python3 scripts/generate_yamls_v2.py --all-chapters
@@ -451,13 +456,13 @@ The script verifies:
 fem-benchmarks/
 ├── benchmarks/pfem5/      # YAML benchmark catalogue
 │   ├── chap04/           # 13 cases
-│   ├── chap05/           # 13 cases
+│   ├── chap05/           # 15 cases
 │   ├── chap06/           # 15 cases
 │   ├── chap07/           # 8 cases
 │   ├── chap08/           # 16 cases
 │   ├── chap09/           # 7 cases
 │   ├── chap10/           # 5 cases
-│   └── chap11/           # 8 cases (90 total)
+│   └── chap11/           # 8 cases (87 total)
 │
 ├── scripts/
 │   ├── generate_yamls_v2.py        # YAML generator (token-based)
@@ -496,14 +501,17 @@ fem-benchmarks/
 | Chapter | Programs | Cases | Topics |
 |---------|----------|-------|--------|
 | 4 | p41-p47   | 13 | 1D Problems |
-| 5 | p51-p57   | 14 | 2D Linear Elasticity |
-| 6 | p61-p69   | 19 | Material Nonlinearity (von Mises, Mohr-Coulomb) |
+| 5 | p51-p57   | 15 | 2D / 3D Linear Elasticity |
+| 6 | p61-p69   | 15 | Material Nonlinearity (von Mises, Mohr-Coulomb, slope SRF) |
 | 7 | p71-p75   | 8  | Steady State Flow |
 | 8 | p81-p811  | 16 | Transient Problems |
 | 9 | p91-p96   | 7  | Coupled Problems (Biot, Navier-Stokes) |
 | 10 | p101-p104 | 5 | Eigenvalue Problems |
 | 11 | p111-p118 | 8 | Dynamics & Explicit Plasticity |
-| **Total** | | **90** | |
+| **Total** | | **87** | |
+
+(Case counts are per distinct dataset, not per program; several programs
+have multiple datasets. Verified count of `benchmarks/pfem5/chap*/*.yaml`.)
 
 ---
 

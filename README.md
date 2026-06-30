@@ -11,6 +11,11 @@ This repository provides:
 - **Per-case-type output extraction** (FS, limit load, max displacement, settlement, eigenvalue, peak response, etc.)
 - **Validation tools** to ensure YAML correctness and completeness
 
+> **New to this project?** Read [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+> first. It explains the end-to-end flow, how every file connects, the call
+> graph, the problems already solved, and what is left for the future, with a
+> recommended reading order for the rest of the docs.
+
 ## Quick Start
 
 ### Prerequisites
@@ -94,7 +99,7 @@ fem-benchmarks/
 ├── benchmarks/           # YAML benchmark catalogue
 │   └── pfem5/
 │       ├── chap04/      # Chapter 4: 13 cases
-│       ├── chap05/      # Chapter 5: 13 cases
+│       ├── chap05/      # Chapter 5: 15 cases
 │       ├── chap06/      # Chapter 6: 15 cases
 │       ├── chap07/      # Chapter 7: 8 cases
 │       ├── chap08/      # Chapter 8: 16 cases
@@ -263,7 +268,7 @@ pfem_batch_figs('chap06')
 % Single case
 pfem_batch_figs('benchmarks/pfem5/chap05/p51_4.yaml')
 
-% All 90 cases (takes a while — compile all chapters first)
+% All 87 cases (takes a while — compile all chapters first)
 pfem_batch_figs('all')
 ```
 
@@ -363,7 +368,7 @@ The `generate_yamls_v2.py` script creates comprehensive benchmark files:
 | `NZ.m` | Configurable multi-case x multi-scenario sweep script |
 | `utils/pfem_sample_distribution` | Draw n samples from lognormal / normal / truncnormal / uniform; no Statistics Toolbox needed |
 | `utils/pfem_detect_case_type` | Classify a YAML into one of 8 case types from chapter, program, physics, regime |
-| `utils/pfem_extract_qoi` | Extract the correct Quantity of Interest per case type (FS, P_lim, u_max, h_max, Uav_end, lambda_1, u_peak, T_max) |
+| `utils/pfem_extract_qoi` | Extract the correct Quantity of Interest per case type (FS, P_lim, u_max, h_max, Uav_end, omega^2, u_peak, T_max) |
 
 Runs are saved to `runs/<chap>/<case>/<param_key>/`, for example:
 - `runs/chap06/p61/default/` — auto-generated baseline (used when book .res absent)
@@ -372,8 +377,19 @@ Runs are saved to `runs/<chap>/<case>/<param_key>/`, for example:
 
 ## Documentation
 
-- **[docs/GUIDE.md](docs/GUIDE.md)**: Complete usage guide with examples
-- **[matlab/README.md](matlab/README.md)**: MATLAB interface guide
+Read in this order (full reading guide in
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) Section 1):
+
+- **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**: Start here. End-to-end
+  flow, how the files connect, the call graph, problems solved, future work
+- **[docs/HANDOVER.md](docs/HANDOVER.md)**: New-machine setup, current git/sync
+  state, what is done / pending, project-specific gotchas
+- **[docs/GUIDE.md](docs/GUIDE.md)**: Task-by-task usage guide with examples
+- **[matlab/README.md](matlab/README.md)**: MATLAB function reference
+- **[docs/PROGRESS.md](docs/PROGRESS.md)**: Supervisor progress report with
+  validation evidence
+- **[scripts/pfem_patches/README.md](scripts/pfem_patches/README.md)**: Fortran
+  source patches required to build on Linux
 - **YAML files**: Each benchmark has inline documentation
 
 ## Dataset Coverage
@@ -402,7 +418,7 @@ correct Quantity of Interest is extracted by `pfem_extract_qoi`:
 | `elastic_static` | chap4: p41-p46; chap5: all; chap9: p93-p95 | Max nodal displacement | u_max |
 | `seepage_steady` | chap7: p71, p72, p74, p75 | Max total head | h_max |
 | `consolidation` | chap8: p81-p88 (excluding dynamic/thermal); chap9: p91, p92 | Degree of consolidation at final time | Uav_end |
-| `eigenvalue` | chap10: all | First eigenvalue | lambda_1 |
+| `eigenvalue` | chap10: all | Smallest eigenvalue (+ derived `f1` in Hz) | omega^2 |
 | `dynamic_transient` | chap4: p47; chap7: p73; chap8: p810, p84, p89; chap11: all | Peak displacement | u_peak |
 | `thermal` | chap8: p811 | Max temperature | T_max |
 
