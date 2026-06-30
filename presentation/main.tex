@@ -117,7 +117,7 @@
 % ===== Title Information =====
 \title{PFEM Benchmark Catalogue}
 \subtitle{From Deterministic Sweeps to Probabilistic Analysis}
-\author{Naeem Zainuddin}
+\author{Naty Manque \& Naeem Zainuddin}
 \date{June 2026}
 
 % ===== Document Start =====
@@ -166,32 +166,50 @@
 % ---------------------------------------------------------
 % 2. What We Built (one concise slide)
 % ---------------------------------------------------------
-\begin{frame}{What We Built}
+\begin{frame}{How It Works --- One Pipeline, Five Stages}
+    \centering
+    \vspace{0.2cm}
+    \begin{tikzpicture}[font=\footnotesize]
+        \tikzstyle{stg}=[rectangle, rounded corners, draw=tugreen, fill=tugreen!12,
+                         minimum width=2.25cm, minimum height=1.5cm, text centered,
+                         text width=2.1cm, font=\footnotesize]
+        \node (g) [stg] {\textbf{1. Generate}\\[3pt]{\scriptsize YAML from Fortran + \texttt{.dat}}};
+        \node (b) [stg, right=0.55cm of g] {\textbf{2. Build}\\[3pt]{\scriptsize compile on Linux gfortran}};
+        \node (r) [stg, right=0.55cm of b] {\textbf{3. Run}\\[3pt]{\scriptsize patch \texttt{.dat} by token, execute}};
+        \node (e) [stg, right=0.55cm of r] {\textbf{4. Extract}\\[3pt]{\scriptsize the right QoI per case type}};
+        \node (a) [stg, right=0.55cm of e] {\textbf{5. Analyze}\\[3pt]{\scriptsize figures, statistics, sensitivity}};
+        \draw[arrow] (g)--(b);
+        \draw[arrow] (b)--(r);
+        \draw[arrow] (r)--(e);
+        \draw[arrow] (e)--(a);
+    \end{tikzpicture}
+
+    \vspace{0.5cm}
     \begin{columns}[t]
         \begin{column}{0.48\textwidth}
-            \textbf{PFEM Benchmark Catalogue}
+            \textbf{Key idea}
             \begin{itemize}
-                \setlength\itemsep{0.5em}
-                \item[\textcolor{tugreen}{\ding{51}}] 87 Fortran programs (Chapters~4--11) running on Linux
-                \item[\textcolor{tugreen}{\ding{51}}] YAML metadata auto-generated from Fortran source
-                \item[\textcolor{tugreen}{\ding{51}}] MATLAB sweep GUI: pick a case, vary parameters, view results
+                \setlength\itemsep{0.25em}
+                \item YAML is the bridge: parameters patched by \textbf{token index}
+                \item The Fortran \textbf{source is never edited}
+                \item One driver runs all \textbf{87} cases
             \end{itemize}
         \end{column}
         \begin{column}{0.48\textwidth}
-            \textbf{How It Works}
-            \begin{enumerate}
-                \setlength\itemsep{0.5em}
-                \item YAML defines tunable parameters per program
-                \item MATLAB injects values into \texttt{.dat} input files
-                \item Fortran binary runs in an isolated sandbox
-                \item Outputs (\texttt{.res}, \texttt{.ensi}) parsed and plotted automatically
-            \end{enumerate}
+            \textbf{Same core, four modes}
+            \begin{itemize}
+                \setlength\itemsep{0.25em}
+                \item Deterministic sweep
+                \item Monte Carlo \,/\, Latin Hypercube
+                \item Correlated sampling
+                \item One-at-a-time sensitivity
+            \end{itemize}
         \end{column}
     \end{columns}
 
-    \vspace{0.4cm}
+    \vspace{0.3cm}
     \centering
-    \textbf{Demo:} 3D slope stability analysis (p6.12) --- Mohr-Coulomb with strength reduction
+    {\small \textbf{Demo today:} 3D slope stability (p6.12) --- Mohr-Coulomb with strength reduction}
 \end{frame}
 
 % =========================================================
@@ -292,66 +310,8 @@
     \end{columns}
 \end{frame}
 
-% ---------------------------------------------------------
-% 6. 3D Deformed Mesh — Overview (all 4 scenarios)
-% ---------------------------------------------------------
-\begin{frame}{p6.12 --- 3D Deformed Mesh at Failure (All Scenarios)}
-    \vspace{-0.2cm}
-    \begin{center}
-        \includegraphics[width=0.96\textwidth, height=0.72\textheight, keepaspectratio]{../runs/chap06/p612/p612_sweep_20260408_122746_ensi.png}
-    \end{center}
-    \vspace{-0.2cm}
-    \begin{itemize}
-        \setlength\itemsep{0.1em}
-        \item Each panel: deformed mesh at the highest converged SRF step; colour = $|u|$
-        \item Top-left ($c{=}50$): severe slope failure. Bottom-right ($c{=}90$): minimal deformation
-    \end{itemize}
-\end{frame}
-
-% ---------------------------------------------------------
-% 7. Zoom — c=50 (weak)
-% ---------------------------------------------------------
-\begin{frame}[shrink=5]{p6.12 --- $c=50$\,kPa: Slope Failure}
-    \begin{columns}[c]
-        \begin{column}{0.58\textwidth}
-            \includegraphics[width=\textwidth]{../runs/chap06/p612/p612_sweep_20260325_231409_ensi_1.png}
-        \end{column}
-        \begin{column}{0.40\textwidth}
-            \textbf{Weak soil scenario}
-            \begin{itemize}
-                \setlength\itemsep{0.4em}
-                \item Newton-Raphson diverges at SRF\,${\approx}$\,1.4
-                \item Clear circular slip surface visible at the slope crest
-                \item Large horizontal displacement at the toe
-                \item Colourmap confirms displacement localisation along failure plane
-            \end{itemize}
-            \vspace{0.2cm}
-            {\small This scenario demonstrates \textbf{how the tool detects failure} automatically.}
-        \end{column}
-    \end{columns}
-\end{frame}
-
-% ---------------------------------------------------------
-% 8. Zoom — c=60 (book default)
-% ---------------------------------------------------------
-\begin{frame}{p6.12 --- $c=60$\,kPa: Book Default}
-    \begin{columns}[c]
-        \begin{column}{0.58\textwidth}
-            \includegraphics[width=\textwidth]{../runs/chap06/p612/p612_sweep_20260325_231409_ensi_2.png}
-        \end{column}
-        \begin{column}{0.40\textwidth}
-            \textbf{Reference scenario}
-            \begin{itemize}
-                \setlength\itemsep{0.4em}
-                \item Incipient failure at SRF\,${\approx}$\,1.6 (iteration limit reached)
-                \item Deformed shape matches book Fig.~6.55 (PFEM 5th~ed.)
-                \item Moderate displacement --- slope is on the verge of collapse
-            \end{itemize}
-            \vspace{0.2cm}
-            {\small Validates our pipeline against the published reference solution.}
-        \end{column}
-    \end{columns}
-\end{frame}
+% (3D deformed-mesh overview and c=50 / c=60 zoom slides moved to the appendix
+%  to keep the main deck concise.)
 
 % ---------------------------------------------------------
 % 9. Verification vs. Book
@@ -899,6 +859,58 @@ tunable_parameters:
 \end{frame}
 
 % ---- p6.12 extra ----
+
+\begin{frame}{p6.12 --- 3D Deformed Mesh at Failure (All Scenarios)}
+    \vspace{-0.2cm}
+    \begin{center}
+        \includegraphics[width=0.96\textwidth, height=0.72\textheight, keepaspectratio]{../runs/chap06/p612/p612_sweep_20260408_122746_ensi.png}
+    \end{center}
+    \vspace{-0.2cm}
+    \begin{itemize}
+        \setlength\itemsep{0.1em}
+        \item Each panel: deformed mesh at the highest converged SRF step; colour = $|u|$
+        \item Top-left ($c{=}50$): severe slope failure. Bottom-right ($c{=}90$): minimal deformation
+    \end{itemize}
+\end{frame}
+
+\begin{frame}[shrink=5]{p6.12 --- $c=50$\,kPa: Slope Failure}
+    \begin{columns}[c]
+        \begin{column}{0.58\textwidth}
+            \includegraphics[width=\textwidth]{../runs/chap06/p612/p612_sweep_20260325_231409_ensi_1.png}
+        \end{column}
+        \begin{column}{0.40\textwidth}
+            \textbf{Weak soil scenario}
+            \begin{itemize}
+                \setlength\itemsep{0.4em}
+                \item Newton-Raphson diverges at SRF\,${\approx}$\,1.4
+                \item Clear circular slip surface visible at the slope crest
+                \item Large horizontal displacement at the toe
+                \item Colourmap confirms displacement localisation along failure plane
+            \end{itemize}
+            \vspace{0.2cm}
+            {\small This scenario demonstrates \textbf{how the tool detects failure} automatically.}
+        \end{column}
+    \end{columns}
+\end{frame}
+
+\begin{frame}{p6.12 --- $c=60$\,kPa: Book Default}
+    \begin{columns}[c]
+        \begin{column}{0.58\textwidth}
+            \includegraphics[width=\textwidth]{../runs/chap06/p612/p612_sweep_20260325_231409_ensi_2.png}
+        \end{column}
+        \begin{column}{0.40\textwidth}
+            \textbf{Reference scenario}
+            \begin{itemize}
+                \setlength\itemsep{0.4em}
+                \item Incipient failure at SRF\,${\approx}$\,1.6 (iteration limit reached)
+                \item Deformed shape matches book Fig.~6.55 (PFEM 5th~ed.)
+                \item Moderate displacement --- slope is on the verge of collapse
+            \end{itemize}
+            \vspace{0.2cm}
+            {\small Validates our pipeline against the published reference solution.}
+        \end{column}
+    \end{columns}
+\end{frame}
 
 \begin{frame}{p6.12 --- SRF Progression (Deformation Sequence)}
     \vspace{-0.2cm}
