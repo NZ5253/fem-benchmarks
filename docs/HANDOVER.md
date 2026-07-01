@@ -123,7 +123,7 @@ Commit `0ad00a8`: per-case-type QoI dispatcher.
   physics, regime)
 - Per-type extractor: slope_srf -> FS, plasticity_load -> P_lim,
   elastic_static -> u_max, seepage_steady -> h_max,
-  consolidation -> Uav_end, eigenvalue -> lambda_1,
+  consolidation -> Uav_end, eigenvalue -> omega^2,
   dynamic_transient -> u_peak, thermal -> T_max
 - 87/87 cases verified to extract a meaningful QoI from their default run
 
@@ -188,8 +188,8 @@ is relabel-only; `q.value` still equals `min(eigs)`.
 | p612 baseline FS at c=60, phi=0 | 1.58 | Book Fig 6.54 | matches |
 | p61 baseline P_lim at sigma_y=100 | 515 | Prandtl `(2+pi)*sigma_y = 514` | within 0.2% |
 | p611_1 baseline P_lim | 121 kPa | deviatoric stress at failure (triaxial) | sensible |
-| p101 lambda_1 sensitivity wrt EI | linear in EI | omega^2 ~ EI/rhoA | exactly linear |
-| p101 lambda_1 sensitivity wrt rhoA | ratio 0.82 at +1 sigma | 1/1.22 = 0.82 | exact |
+| p101 omega^2 sensitivity wrt EI | linear in EI | omega^2 ~ EI/rhoA | exactly linear |
+| p101 omega^2 sensitivity wrt rhoA | ratio 0.82 at +1 sigma | 1/1.22 = 0.82 | exact |
 
 ---
 
