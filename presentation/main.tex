@@ -133,14 +133,14 @@
 % ---------------------------------------------------------
 % 1b. Progress Roadmap
 % ---------------------------------------------------------
-\begin{frame}{Where We Are}
+\begin{frame}[shrink=15]{Where We Are}
     \begin{columns}[t]
         \begin{column}{0.52\textwidth}
             \textbf{Done}
             \begin{itemize}
                 \setlength\itemsep{0.35em}
                 \item[\textcolor{tugreen}{\ding{51}}] \textbf{Foundation:} all 87 PFEM cases build, run and verified on Linux
-                \item[\textcolor{tugreen}{\ding{51}}] \textbf{Deterministic sweeps} + 3D post-processing \\(demo today: p6.12 slope)
+                \item[\textcolor{tugreen}{\ding{51}}] \textbf{Deterministic sweeps} + 3D post-processing \\(example: p6.12 slope)
                 \item[\textcolor{tugreen}{\ding{51}}] \textbf{Phase~1:} universal Quantity-of-Interest extraction + Monte~Carlo
                 \item[\textcolor{tugreen}{\ding{51}}] \textbf{Phase~2:} Latin Hypercube, correlated inputs, sensitivity tornado
             \end{itemize}
@@ -157,10 +157,6 @@
             \textbf{Handover:} complete documentation set and a 3-minute reproducible test, all on GitHub (final slides).
         \end{column}
     \end{columns}
-
-    \vspace{0.3cm}
-    \centering
-    {\small The story: we went from \emph{one number per run} to \emph{full probabilistic and sensitivity analysis} across every case.}
 \end{frame}
 
 % ---------------------------------------------------------
@@ -209,7 +205,7 @@
 
     \vspace{0.3cm}
     \centering
-    {\small \textbf{Demo today:} 3D slope stability (p6.12) --- Mohr-Coulomb with strength reduction}
+    {\small \textbf{Example case:} 3D slope stability (p6.12) --- Mohr-Coulomb with strength reduction}
 \end{frame}
 
 % =========================================================
@@ -268,7 +264,7 @@
 % ---------------------------------------------------------
 % 4. Material Zones
 % ---------------------------------------------------------
-\begin{frame}{p6.12 --- Material Zones}
+\begin{frame}[shrink=12]{p6.12 --- Material Zones}
     \begin{columns}[c]
         \begin{column}{0.58\textwidth}
             \includegraphics[width=\textwidth]{../runs/chap06/p612/p612_sweep_20260325_231409_ensi_zones_single.png}
@@ -356,7 +352,7 @@
 % =========================================================
 
 % ---- Phase 1 concept: universal QoI + Monte Carlo ----
-\begin{frame}{Phase 1 --- From One Answer to a Distribution}
+\begin{frame}[shrink=15]{Phase 1 --- From One Answer to a Distribution}
     \begin{columns}[t]
         \begin{column}{0.52\textwidth}
             \textbf{The problem}
@@ -399,7 +395,7 @@
 \end{frame}
 
 % ---- Phase 1 result: FS distribution + reliability ----
-\begin{frame}{Phase 1 --- Result: Slope Reliability (p6.12)}
+\begin{frame}[shrink=8]{Phase 1 --- Result: Slope Reliability (p6.12)}
     \begin{columns}[c]
         \begin{column}{0.58\textwidth}
             \includegraphics[width=\textwidth]{../runs/chap06/p612/p612_stochastic_20260507_150058_fs_hist.png}
@@ -419,7 +415,7 @@
 \end{frame}
 
 % ---- Phase 2.1: LHS variance reduction + scatter ----
-\begin{frame}{Phase 2 --- Latin Hypercube: Same Cost, Better Coverage}
+\begin{frame}[shrink=12]{Phase 2 --- Latin Hypercube: Same Cost, Better Coverage}
     \begin{columns}[c]
         \begin{column}{0.50\textwidth}
             \includegraphics[width=\textwidth]{../runs/chap06/p612/p612_stochastic_20260507_150058_fs_scatter_cohesion_c.png}
@@ -484,7 +480,7 @@
 \end{frame}
 
 % ---- Phase 2.3: sensitivity tornado ----
-\begin{frame}{Phase 2 --- Sensitivity: Which Input Matters?}
+\begin{frame}[shrink=8]{Phase 2 --- Sensitivity: Which Input Matters?}
     \begin{columns}[c]
         \begin{column}{0.58\textwidth}
             \includegraphics[width=\textwidth]{../runs/chap06/p612/p612_tornado_3param_20260515_124907.png}
@@ -557,7 +553,7 @@
 % ---------------------------------------------------------
 % 10. Conclusions
 % ---------------------------------------------------------
-\begin{frame}{Conclusions \& Next Steps}
+\begin{frame}[shrink=15]{Conclusions \& Next Steps}
     \begin{columns}[t]
         \begin{column}{0.48\textwidth}
             \textbf{What was achieved}
@@ -780,7 +776,7 @@ tunable_parameters:
     \end{columns}
 \end{frame}
 
-\begin{frame}{p5.1 --- Load--Displacement Overlay}
+\begin{frame}[shrink=10]{p5.1 --- Load--Displacement Overlay}
     \begin{columns}[c]
         \begin{column}{0.58\textwidth}
             \includegraphics[width=\textwidth]{../runs/chap05/p51_3/p51_3_sweep_20260325_220808_res_overlay.pdf}
@@ -893,7 +889,7 @@ tunable_parameters:
     \end{columns}
 \end{frame}
 
-\begin{frame}{p6.12 --- $c=60$\,kPa: Book Default}
+\begin{frame}[shrink=8]{p6.12 --- $c=60$\,kPa: Book Default}
     \begin{columns}[c]
         \begin{column}{0.58\textwidth}
             \includegraphics[width=\textwidth]{../runs/chap06/p612/p612_sweep_20260325_231409_ensi_2.png}
