@@ -26,8 +26,7 @@ function b = get_backend(y)
         case 'pfem'
             b = pfem_backend();
         case 'analytic'
-            % M3
-            error('get_backend: analytic backend not implemented yet (Phase 3 M3).');
+            b = analytic_backend();
         case 'external'
             % M4
             error('get_backend: external backend not implemented yet (Phase 3 M4).');

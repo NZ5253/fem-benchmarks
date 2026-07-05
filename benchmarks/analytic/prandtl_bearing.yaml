@@ -1,0 +1,20 @@
+id: analytic_prandtl_bearing
+title: "Prandtl bearing capacity (analytic oracle)"
+purpose: >
+  Closed-form P_lim = (2 + pi) * yield_stress for a rigid strip footing on
+  Tresca (undrained) soil. Used as an independent reference against PFEM
+  p61 (von Mises plane strain) in test_analytic_backend. Absent this
+  cross-check the Phase 3 pluggable-runner refactor has no accuracy proof.
+authors:
+  created_by: Naeem
+  reference: "Prandtl (1921); see also Chen (1975) Limit Analysis and Soil Plasticity"
+runner:
+  type: analytic
+  model: prandtl_bearing
+tunable_parameters:
+  - name: yield_stress
+    current_value: 100.0
+    type: real
+    unit: kPa
+    description: "Undrained yield stress (Tresca c_u); matches PFEM p61 sigma_y default."
+    suggested_range: [50.0, 500.0]
