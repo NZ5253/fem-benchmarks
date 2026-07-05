@@ -29,9 +29,10 @@ function b = external_backend()
 % Behaviour on failure: status = non-zero, out.qoi.ok = false, the raw
 % program stdout+stderr is captured in run_dir/run.log.
 
-    b.name        = 'external';
-    b.run         = @external_run;
-    b.extract_qoi = @(out, ~) out.qoi;
+    b.name           = 'external';
+    b.run            = @external_run;
+    b.extract_qoi    = @(out, ~) out.qoi;
+    b.non_sampleable = @(y) {};   % user-supplied programs get no built-in ban list
 end
 
 

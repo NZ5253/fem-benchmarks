@@ -4,9 +4,10 @@ function b = pfem_backend()
 % Returns a struct of function handles matching the backend contract
 % documented in docs/PHASE3_PLAN.md Section 2:
 %
-%   b.name        = 'pfem'
-%   b.run         = @(ctx, y, overrides) -> [status, out]
-%   b.extract_qoi = @(out, case_type)    -> qoi struct
+%   b.name           = 'pfem'
+%   b.run            = @(ctx, y, overrides) -> [status, out]
+%   b.extract_qoi    = @(out, case_type)    -> qoi struct
+%   b.non_sampleable = @(y)                 -> cell of parameter names
 %
 % ctx must have: repo_root, pfem_root, yaml_path.
 % y   is the loaded YAML (as returned by pfem_yaml_load).
@@ -15,9 +16,34 @@ function b = pfem_backend()
 % of what used to live inside pfem_run_from_yaml.m. Behaviour is byte-for-byte
 % identical: the M0 golden test is expected to pass unchanged.
 
-    b.name        = 'pfem';
-    b.run         = @backend_run;
-    b.extract_qoi = @pfem_extract_qoi;
+    b.name           = 'pfem';
+    b.run            = @backend_run;
+    b.extract_qoi    = @pfem_extract_qoi;
+    b.non_sampleable = @pfem_non_sampleable;
+end
+
+
+function names = pfem_non_sampleable(~)
+% Parameters that the stochastic sweep must never sample: solver
+% tolerances, iteration limits, time steps, and mesh sizes. Sampling any
+% of these destabilises the Fortran solver or changes the discretisation
+% topology mid-sweep. Independent of which specific PFEM case ran, so y
+% is ignored. Kept in one place (this backend) rather than duplicated in
+% the GUI.
+    names = {'convergence_tolerance', 'local_yield_tolerance_ltol', ...
+             'cg_tolerance',          'iteration_limit', ...
+             'cg_iteration_limit',    'load_increments', ...
+             'prescribed_increment',  'nels_or_nxe', ...
+             'np_types_or_nye',       'time_step_dtim', ...
+             'number_of_steps',       'theta_integration', ...
+             'mass_damping_factor',   'stiffness_damping_factor', ...
+             'damping_ratio',         'newmark_beta', ...
+             'newmark_gamma',         'natural_frequency', ...
+             'number_of_modes',       'num_eigenvalues', ...
+             'krylov_subspace_size',  'max_arnoldi_iterations', ...
+             'earth_pressure_coeff_k0', ...
+             'initial_effective_stress', ...
+             'bulk_modulus_ke'};
 end
 
 

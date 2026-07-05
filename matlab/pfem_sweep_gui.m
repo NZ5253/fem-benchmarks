@@ -273,7 +273,7 @@ function cb_remove_cases(fig, case_lb, param_tbl)
 end
 
 
-function cb_fill_ranges(~, param_tbl, count_lbl, sweep_dd)
+function cb_fill_ranges(fig, param_tbl, count_lbl, sweep_dd)
 % Populate Values column.
 % Deterministic: N log-spaced values from suggested range.
 % Stochastic:    lognormal(mu, cov) using current_value as mu, COV=0.3 default.
@@ -309,8 +309,11 @@ function cb_fill_ranges(~, param_tbl, count_lbl, sweep_dd)
             end
             if isempty(mu) || isnan(mu) || mu <= 0, continue; end
 
-            % Skip solver/mesh params entirely in stochastic mode
-            if isnan(default_cov(pname)), continue; end
+            % Skip solver/mesh params entirely in stochastic mode.
+            % Ban list comes from each loaded case's backend
+            % (b.non_sampleable(y)); PFEM contributes the historical list,
+            % analytic/external contribute nothing.
+            if is_non_sampleable(fig, pname), continue; end
 
             % Integer/mesh params — fix value, don't sample
             if is_int_param(pname)
@@ -344,19 +347,11 @@ end
 
 function cov = default_cov(pname)
 % Return sensible default COV for material properties.
-% Returns NaN for solver/mesh settings — these should NOT be sampled.
-    SOLVER_PARAMS = {'convergence_tolerance','local_yield_tolerance_ltol', ...
-                     'cg_tolerance','iteration_limit','cg_iteration_limit', ...
-                     'load_increments','prescribed_increment','nels_or_nxe', ...
-                     'np_types_or_nye','time_step_dtim','number_of_steps', ...
-                     'theta_integration','mass_damping_factor','stiffness_damping_factor', ...
-                     'damping_ratio','newmark_beta','newmark_gamma','natural_frequency', ...
-                     'number_of_modes','num_eigenvalues','krylov_subspace_size', ...
-                     'max_arnoldi_iterations','earth_pressure_coeff_k0', ...
-                     'initial_effective_stress','bulk_modulus_ke'};
-    if any(strcmp(pname, SOLVER_PARAMS))
-        cov = NaN;   % solver/mesh setting — skip in stochastic fill
-    elseif any(strcmp(pname, {'cohesion_c','cohesion_fill','cohesion_embankment','yield_stress'}))
+% The solver/mesh ban list previously lived here; since Phase 3 M5 it
+% moved to pfem_backend.non_sampleable and is consulted via
+% is_non_sampleable(fig, pname) at every call site before default_cov
+% runs, so this function only sees material parameters.
+    if any(strcmp(pname, {'cohesion_c','cohesion_fill','cohesion_embankment','yield_stress'}))
         cov = 0.40;  % strength: high uncertainty
     elseif any(strcmp(pname, {'friction_angle_phi','friction_angle_fill','friction_angle_embankment', ...
                               'dilation_angle_psi'}))
@@ -373,6 +368,42 @@ function cov = default_cov(pname)
     else
         cov = 0.20;  % generic material property
     end
+end
+
+
+function tf = is_non_sampleable(fig, pname)
+% Ask each loaded case's backend whether pname is off-limits for stochastic
+% sampling. Returns true if ANY backend flags it. For legacy PFEM YAMLs the
+% list matches what default_cov used to encode; analytic and external
+% backends contribute an empty list.
+%
+% The union is cached in the app state and rebuilt only when yaml_paths
+% changes, so repeated calls in a fill/run loop stay O(1).
+    st = getappdata(fig, 'state');
+    key = strjoin(sort(st.yaml_paths), '|');
+    if ~isfield(st, 'non_sampleable_cache') || ~isfield(st, 'non_sampleable_key') ...
+            || ~strcmp(st.non_sampleable_key, key)
+        here = fileparts(mfilename('fullpath'));
+        addpath(fullfile(here, 'backends'));
+        addpath(fullfile(here, 'utils'));
+        cache = {};
+        for i = 1:numel(st.yaml_paths)
+            try
+                y  = pfem_yaml_load(st.yaml_paths{i});
+                b  = get_backend(y);
+                ns = b.non_sampleable(y);
+                for k = 1:numel(ns)
+                    if ~any(strcmp(ns{k}, cache)), cache{end+1} = ns{k}; end %#ok<AGROW>
+                end
+            catch
+                % Defensive: an unloadable YAML shouldn't break the guard.
+            end
+        end
+        st.non_sampleable_cache = cache;
+        st.non_sampleable_key   = key;
+        setappdata(fig, 'state', st);
+    end
+    tf = any(strcmp(pname, st.non_sampleable_cache));
 end
 
 
@@ -732,7 +763,7 @@ function cb_run_stochastic(fig, param_tbl, log_ta, prog_lbl, res_tbl, n_samples,
             end
         else
             % Solver/mesh params must not be overridden — use YAML defaults
-            if isnan(default_cov(pname)), continue; end
+            if is_non_sampleable(fig, pname), continue; end
             v = str2num(vs); %#ok<ST2NM>
             if isempty(v) || numel(v) ~= 1
                 uialert(fig, sprintf('For stochastic mode, "%s" must be a distribution spec or a single fixed value.\nGot: %s\n\nExamples:\n  lognormal(60, 0.3)\n  normal(0.3, 0.1)\n  20  (fixed)', pname, vs), 'Parse error');
@@ -1016,7 +1047,7 @@ function cb_run_sensitivity(fig, param_tbl, log_ta, prog_lbl, res_tbl)
             specs(end+1) = spec; %#ok<AGROW>
         else
             % Solver/mesh params skipped, fixed values respected.
-            if isnan(default_cov(pname)), continue; end
+            if is_non_sampleable(fig, pname), continue; end
             v = str2num(vs); %#ok<ST2NM>
             if isempty(v) || numel(v) ~= 1, continue; end
             fixed.(pname) = v;

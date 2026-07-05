@@ -14,9 +14,10 @@ function b = analytic_backend()
 % out.qoi carries the computed QoI struct; b.extract_qoi passes it through so
 % callers see the same {value, label, unit, ok} shape as pfem_extract_qoi.
 
-    b.name        = 'analytic';
-    b.run         = @analytic_run;
-    b.extract_qoi = @(out, ~) out.qoi;
+    b.name           = 'analytic';
+    b.run            = @analytic_run;
+    b.extract_qoi    = @(out, ~) out.qoi;
+    b.non_sampleable = @(y) {};   % nothing off-limits for closed-form models
 end
 
 
