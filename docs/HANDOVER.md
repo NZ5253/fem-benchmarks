@@ -199,10 +199,10 @@ is relabel-only; `q.value` still equals `min(eigs)`.
 
 | Phase | Item | Status |
 |---|---|---|
-| 3 | Pluggable runner interface for non-PFEM codes (any code reading an input file, writing an output) | not started |
-| 3 | Cross-verification against analytical solutions or commercial codes | informal only (Prandtl, omega^2) |
+| 3 | Pluggable runner interface for non-PFEM codes (any code reading an input file, writing an output) | DONE (branch `phase3-pluggable-runner`, M0-M6). See `docs/PHASE3_PLAN.md`. |
+| 3 | Cross-verification against analytical solutions or commercial codes | DONE for Prandtl (analytic + external backends, 0.16 % vs PFEM p61); still informal for omega^2 |
 | 4 | Mesh-refinement sweeps (nxe, nye) to study discretisation convergence | not started |
-| 4 | Automated regression testing against reference outputs | partial — `scripts/run_all_tests.py` checks status only |
+| 4 | Automated regression testing against reference outputs | Phase 3 M0 built `test_golden_qoi.m` for QoI drift (92 records); `run_all_tests.py` still checks status only |
 
 ### 4.2 Known limitations (from `docs/PROGRESS.md` Section 5)
 
@@ -240,12 +240,23 @@ Worth a smoke-run of `pfem_sweep_gui` on p612 to confirm the figures render.
 
 ### 4.4 Sync state
 
-Local master is in sync with origin at `fe0803c`. The earlier divergence
-(origin had been force-pushed, so SHAs differed) was resolved by resetting
-local master to `origin/master`: origin already contained every local
-commit plus the eigenvalue relabel `fe0803c`, so no content was lost. The
-3D-viz commit and this HANDOVER update sit on top of `fe0803c` and have
-NOT been pushed yet — push when ready to share with the supervisor.
+Local master is in sync with origin at `9d78780` (post the earlier laptop
+work). Phase 3 development happens on branch `phase3-pluggable-runner`
+which has 7 additional commits on top of master:
+
+| # | SHA (local) | Milestone |
+|---|---|---|
+| 0 | `0e3d1c9` | Add PHASE3_PLAN.md |
+| 1 | `9d35e4f` | M0 golden harness + `golden_qoi.json` (92 records) |
+| 2 | `84b00f8` | M1 extract `pfem_backend` |
+| 3 | `a9d085b` | M2 `get_backend` factory + `runner.type` YAML key |
+| 4 | `a94a5d5` | M3 analytic backend + Prandtl cross-check (0.16 %) |
+| 5 | `bb72d11` | M4 generic external backend + Python fixture |
+| 6 | `4b7bab8` | M5 `b.non_sampleable(y)` guard in the GUI |
+| 7 | (M6) | Docs update (this section + ARCHITECTURE + PHASE3_PLAN) |
+
+Push when ready. Merging into master is a straight fast-forward (branch
+is ahead of master; no divergence).
 
 ---
 
@@ -333,14 +344,21 @@ fem-benchmarks/
 │   ├── GUIDE.md                         full usage guide
 │   ├── PROGRESS.md                      supervisor progress report
 │   └── HANDOVER.md                      this file
-├── benchmarks/pfem5/chap{04..11}/
-│   └── p*.yaml                          87 benchmark specifications
+├── benchmarks/
+│   ├── pfem5/chap{04..11}/*.yaml        87 benchmark specifications (PFEM)
+│   ├── analytic/prandtl_bearing.yaml    Phase 3 M3: closed-form oracle
+│   └── external/prandtl_external.yaml   Phase 3 M4: generic external solver
 ├── matlab/
 │   ├── pfem_sweep_gui.m                 main GUI entry point
 │   ├── pfem_stochastic_sweep.m          CLI-style stochastic runner
-│   ├── pfem_run_from_yaml.m             low-level runner (called by GUI)
+│   ├── pfem_run_from_yaml.m             30-line dispatcher (delegates to backend)
 │   ├── pfem_studio.m                    single-case interactive GUI
 │   ├── pfem_runner.m, pfem_diagram.m, ...    earlier utilities
+│   ├── backends/                        Phase 3 backends
+│   │   ├── get_backend.m                factory (reads y.runner.type)
+│   │   ├── pfem_backend.m               PFEM pipeline + non_sampleable list
+│   │   ├── analytic_backend.m           closed-form models (prandtl_bearing)
+│   │   └── external_backend.m           template + command + regex parse
 │   ├── utils/
 │   │   ├── pfem_yaml_load.m             YAML parser
 │   │   ├── pfem_patch_dat_using_yaml.m  token-based parameter patcher
@@ -356,7 +374,12 @@ fem-benchmarks/
 │   │   ├── parse_pfem_ensi.m            EnSight viz parser
 │   │   └── pfem_plot_sweep_summary.m    deterministic sweep figures
 │   └── tests/
-│       └── test_phase2_multi_case.m     reproducible Phase 2 verification
+│       ├── test_phase2_multi_case.m     Phase 2 verification (~3 min)
+│       ├── capture_golden_qoi.m         Phase 3 M0 golden capture
+│       ├── golden_qoi.json              92-record reference (~4.6 min to regen)
+│       ├── test_golden_qoi.m            QoI regression gate (~5 min per pass)
+│       ├── test_analytic_backend.m      Phase 3 M3 cross-check
+│       └── test_external_backend.m      Phase 3 M4 end-to-end
 ├── scripts/
 │   ├── generate_yamls_v2.py             YAML generator from Fortran source
 │   ├── pfem_build_chapter.sh            build one chapter
@@ -404,27 +427,33 @@ matlab -batch "addpath matlab matlab/utils matlab/tests; test_phase2_multi_case"
 # 4. GUI launches:
 matlab -nodesktop -nosplash -r "addpath matlab matlab/utils; pfem_sweep_gui"
 # Expected: window opens; click "Add YAML(s)" to load a case
+
+# 5. Phase 3 QoI regression (branch phase3-pluggable-runner or after merge):
+matlab -batch "addpath matlab matlab/utils matlab/tests matlab/backends; test_golden_qoi"
+# Expected: ~5 min, 92/92 passed
 ```
 
 ---
 
 ## 8. Immediate next task (suggested)
 
-Two natural starting points on the new system, pick whichever the
-supervisor prioritises:
+Phase 3 is complete on branch `phase3-pluggable-runner` (M0-M6). The
+natural next-task options are all Phase 4 material:
 
-**A. Smoke-test and refine the 3D-figure work** (commit `d279883`).
-Run `pfem_sweep_gui` on p612 and a 2D structured case to confirm the new
-deformed-mesh, EnSight material-zone, and dark-theme rendering actually
-display correctly in MATLAB on this system. (The p101 eigenvalue-label fix
-that used to be option A is done — see Section 4.2 item 1.)
+**A. Start Phase 4 — mesh-refinement sweeps** (`nxe`, `nye`) to study
+discretisation convergence. This changes mesh topology mid-sweep, which
+is why the current stochastic guard excludes those parameters; a
+convergence study needs a different mode that respects the topology
+change explicitly.
 
-**B. Start Phase 3 — pluggable runner interface**.
-Today `pfem_run_from_yaml.m` is hardcoded to PFEM. Extract the runner
-contract into an interface (write input file from YAML overrides, execute
-external program, parse output) and add at least one second backend
-(e.g., an analytical Prandtl solver as a regression check) to prove the
-abstraction holds.
+**B. Extend the regression net beyond QoI drift**. `test_golden_qoi.m`
+covers the 92 QoI values but not intermediate `.res` block sizes,
+per-node displacements, or the sweep-summary figure files. A
+`test_run_artifacts.m` would catch subtler regressions.
+
+**C. Refine BC-bound QoI cases** (p51_3, p811) with a `qoi_probe_node`
+YAML field so the extractor tracks an internal displacement / temperature
+that actually varies with material sampling. See Section 4.2 item 2.
 
 ---
 
@@ -449,7 +478,10 @@ Project context:
   complete and verified.
 - Phase 2 (Latin Hypercube Sampling, Iman-Conover correlated parameters,
   one-at-a-time sensitivity with tornado plots) is complete and verified.
-- Phase 3 (pluggable runner interface for non-PFEM codes) is NOT started.
+- Phase 3 (pluggable runner interface: pfem / analytic / external
+  backends chosen via a `runner.type` YAML key) is COMPLETE on branch
+  `phase3-pluggable-runner`. `test_golden_qoi.m` is the QoI regression
+  gate (92 records). See docs/PHASE3_PLAN.md for milestones and commits.
 
 My preferences (these override any defaults):
 - I'm the sole author. NEVER add Co-Authored-By: Claude or any AI
@@ -462,16 +494,19 @@ Before doing anything destructive:
 - A clean backup is on USB at fem-benchmarks-cleaned-20260522_140600
   (192 MB). The 1.4 GB pre-cleanup snapshot is at
   fem-benchmarks-backup-20260522_125358 on the same drive.
-- Local master is in sync with origin at fe0803c. There are two local
-  commits on top (3D-viz figures + this HANDOVER) that are not yet pushed
-  — see HANDOVER.md Section 4.4.
+- master should be in sync with origin. Phase 3 work sits on branch
+  phase3-pluggable-runner (7 commits ahead of master); check with
+  `git fetch --all && git log --oneline --graph master..phase3-pluggable-runner`.
+- The QoI regression test writes new run directories under runs/ each
+  time it fires; runs/ is gitignored, so it is safe to re-run.
 
 First task: please confirm the new system is set up correctly. Run the
-4-step smoke test in HANDOVER.md Section 7 and report the results.
+4-step smoke test in HANDOVER.md Section 7 and, additionally,
+`matlab -batch "addpath matlab matlab/utils matlab/tests matlab/backends; test_golden_qoi"`
+(expect 92/92 green in about 5 min).
 
-After that, ask me which of the two next-task options in HANDOVER.md
-Section 8 to start on (smoke-test the 3D-figure work, or Phase 3 pluggable
-runner).
+After that, ask me which of the three next-task options in HANDOVER.md
+Section 8 to start on.
 ```
 
 End of handover.

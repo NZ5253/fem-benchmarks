@@ -143,14 +143,27 @@ Binaries are Linux ELF in `pfem/build/bin/`; the Windows `.exe` files under
 
 ### Stage 3 — Run a case
 
-- **`matlab/pfem_run_from_yaml.m`** is the low-level runner and the single
-  choke point every higher-level tool funnels through. Given a YAML path
-  and an `overrides` struct it: loads the YAML, copies the `.dat` into an
-  isolated run folder, applies the token-based parameter patch, ensures the
-  binary is built, runs it, and locates (or auto-generates) a baseline
-  `.res` for comparison. See Section 4 for the step-by-step.
-- For multi-case datasets the program name and the dataset name differ
-  (e.g. program `p41`, dataset `p41_1`); the runner handles this.
+- **`matlab/pfem_run_from_yaml.m`** is the single choke point every
+  higher-level tool funnels through. Since Phase 3 (M1-M2) it is a 30-line
+  dispatcher: it loads the YAML, asks `get_backend(y)` which backend to use,
+  and forwards the run.
+- **Backends** live in `matlab/backends/` and expose a common contract
+  (`b.name`, `b.run`, `b.extract_qoi`, `b.non_sampleable`). Three ship
+  today:
+  - `pfem_backend.m` — the historical PFEM pipeline (patch `.dat`, ensure
+    binary, run Fortran, cache baseline `.res`). Behaviour is byte-for-byte
+    identical to what used to live inline in `pfem_run_from_yaml.m`.
+  - `analytic_backend.m` — closed-form models (currently `prandtl_bearing`,
+    used as an independent oracle in `matlab/tests/test_analytic_backend.m`).
+  - `external_backend.m` — generic template runner (input template + shell
+    command + regex output-parse) for any code that reads a file and writes
+    a file; see `benchmarks/external/prandtl_external.yaml` for a Python
+    fixture.
+- The chosen backend is selected by an optional YAML key `runner.type`;
+  absence defaults to `pfem`, so every one of the 87 legacy YAMLs works
+  with zero edits.
+- For PFEM multi-case datasets the program name and the dataset name differ
+  (e.g. program `p41`, dataset `p41_1`); the backend handles this.
 
 ### Stage 4 — Extract the Quantity of Interest
 
@@ -210,15 +223,27 @@ ENTRY POINTS (what a user launches)
 └── scripts/run_all_tests.py ................ Python smoke test; mirrors pfem_run_from_yaml
                                               in Python and runs all 87 cases
 
-THE RUN CHOKE POINT
+THE RUN CHOKE POINT (Phase 3: backend-dispatched)
 │
 pfem_run_from_yaml(repo_root, pfem_root, yaml_path, overrides)
    ├── pfem_yaml_load ....................... parse YAML
-   ├── pfem_patch_dat_using_yaml ........... token-based .dat patch from overrides
-   ├── pfem_ensure_built ................... compile binary if missing
-   │      └── (shells out to) pfem_build_chapter.sh
-   ├── system(printf dataset | ./prog) ..... actually run the Fortran binary
-   └── generate_baseline_run (local) ....... cache an unmodified .res if the book one is absent
+   ├── get_backend(y) ....................... reads y.runner.type, defaults to 'pfem'
+   └── b.run(ctx, y, overrides) ............. delegates to the chosen backend
+          │
+          ├── pfem_backend       (default; runner.type absent or 'pfem')
+          │      ├── pfem_patch_dat_using_yaml ... token-based .dat patch
+          │      ├── pfem_ensure_built ........... compile binary if missing
+          │      │      └── (shells out to) pfem_build_chapter.sh
+          │      ├── system(printf dataset | ./prog) . run the Fortran binary
+          │      └── generate_baseline_run ....... cache unmodified .res if absent
+          │
+          ├── analytic_backend   (runner.type = 'analytic')
+          │      └── evaluates y.runner.model ('prandtl_bearing', ...)
+          │
+          └── external_backend   (runner.type = 'external')
+                 ├── template substitution (input file)
+                 ├── system(command)
+                 └── regexp parse of output file
 
 THE QoI DISPATCHER
 │
@@ -299,8 +324,10 @@ Result: a self-contained run folder you can re-run from a plain shell with
    `lognormal(mu, COV)`, `normal(mu, COV)`, `truncnormal(mu, COV, lo, hi)`,
    `uniform(lo, hi)`. **Fill Ranges** auto-fills `lognormal(mu, COV)` from
    the YAML default with a physics-based COV per family (c 0.40, phi 0.10,
-   E 0.30, nu 0.10, gamma 0.05, k 0.50). Solver and mesh parameters return
-   `NaN` COV and are skipped (Section 6, gotcha S7).
+   E 0.30, nu 0.10, gamma 0.05, k 0.50). Solver and mesh parameters are
+   skipped: the guard now consults `b.non_sampleable(y)` on each loaded
+   case's backend (Phase 3 M5). PFEM contributes the historical 25-name
+   ban list; analytic / external contribute nothing.
 3. **Sample** `n` joint realisations: `pfem_lhs_sample` (Latin Hypercube,
    default on; optional Iman-Conover correlation) or
    `pfem_sample_distribution` (IID).
@@ -371,9 +398,11 @@ time; keep this list so the next person does not rediscover them.
 ### Stochastic / sensitivity (Stage 5)
 - **S7. Never sample solver/mesh parameters**: sampling
   `convergence_tolerance`, `iteration_limit`, `nels/nxe`, `time_step` etc.
-  causes Fortran integer-read crashes or solver divergence. `default_cov()`
-  returns `NaN` for these so Fill Ranges skips them, and the same NaN guard
-  is applied in the runner. Do not weaken this guard.
+  causes Fortran integer-read crashes or solver divergence. Since Phase 3
+  M5 the ban list lives on the backend (`pfem_backend.non_sampleable`) and
+  is enforced by `is_non_sampleable(fig, pname)` in `pfem_sweep_gui`, which
+  unions each loaded case's list. Analytic and external backends contribute
+  an empty ban list. Do not weaken this guard.
 - **S8. Eigenvalue label (p101, resolved 2026-05-27)**: the chap10 solver
   (`bandred` + `bisect` on `M^(-1/2) K M^(-1/2)`) returns `omega^2`
   directly. An earlier note claiming it returned `1/omega^2` was a
@@ -406,10 +435,6 @@ time; keep this list so the next person does not rediscover them.
    LHS timing run. Extractor works; just slow.
 
 ### Future work (not started)
-- **Phase 3 — pluggable runner interface**: today `pfem_run_from_yaml.m` is
-  hardcoded to PFEM. Extract the runner contract (write input from overrides,
-  execute, parse output) into an interface and add a second backend (e.g. an
-  analytical Prandtl solver as a regression check) to prove the abstraction.
 - **Phase 4 — mesh-refinement sweeps** (`nxe`, `nye`) to study discretisation
   convergence. Note this changes mesh topology, so it is excluded from the
   current stochastic guard on purpose.

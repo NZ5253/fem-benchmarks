@@ -1,7 +1,8 @@
 # Phase 3 Plan — Pluggable Runner Interface
 
 **Author**: Naeem Zainuddin
-**Status**: scaffolding in progress on branch `phase3-pluggable-runner`
+**Status**: COMPLETE on branch `phase3-pluggable-runner` (M0 through M6). Ready to
+merge to `master`.
 **Goal**: let non-PFEM codes plug into the same probabilistic / sensitivity
 framework, without changing the behaviour of any existing (legacy) mode and
 while staying accurate for every case.
@@ -66,18 +67,18 @@ matlab/tests/
 
 ## 4. Milestones (each shippable, each gated by the golden test)
 
-| # | Milestone | Guarantee |
-|---|-----------|-----------|
-| M0 | **Golden net**: capture QoI (value+label) for all 87 at defaults + a few override points; `test_golden_qoi.m` asserts equality | the "don't break legacy / accurate for all" gate |
-| M1 | **Extract `pfem_backend`**; `pfem_run_from_yaml` delegates to it (pure refactor) | golden test passes identically |
-| M2 | **Factory + `runner.type` key** (absent -> pfem) | legacy YAMLs need zero edits |
-| M3 | **Analytic oracle** (`prandtl_bearing`: `P_lim=(2+pi) sigma_y`) + cross-check vs PFEM p61 (515 vs 514, assert < 1%) | proves a non-PFEM backend is accurate against two independent references |
-| M4 | **Generic external backend** (input template + command + output-parse spec), validated on a small known-answer program | reaches the goal: any code that reads input, writes output |
-| M5 | **Surface in GUI/modes**; convert the stochastic solver/mesh guard to `b.non_sampleable(y)` | all modes get pluggability; guard identical for PFEM |
-| M6 | **Docs + tests**: update the ARCHITECTURE pipeline diagram with the backend layer | handover stays current |
+| # | Milestone | Commit | Gate result |
+|---|-----------|--------|-------------|
+| M0 | **Golden net**: capture QoI for all 87 at defaults + 5 override probes; `test_golden_qoi.m` asserts equality | `9d35e4f` | 92/92 baseline |
+| M1 | **Extract `pfem_backend`**; `pfem_run_from_yaml` delegates to it (pure refactor) | `84b00f8` | 92/92 golden |
+| M2 | **Factory + `runner.type` key** (absent -> pfem) | `a9d085b` | 92/92 golden |
+| M3 | **Analytic oracle** (`prandtl_bearing`: `P_lim=(2+pi) sigma_y`) + cross-check vs PFEM p61 (assert < 1 %) | `a94a5d5` | analytic 514.16 vs PFEM 515: 0.16 % (< 1 %); 92/92 golden |
+| M4 | **Generic external backend** (input template + command + output-parse spec), validated on a small known-answer program | `bb72d11` | Python Prandtl solver: 4 assertions exact + 0.16 % cross-check; 92/92 golden |
+| M5 | **Surface in GUI/modes**; convert the stochastic solver/mesh guard to `b.non_sampleable(y)` | `4b7bab8` | 92/92 golden; GUI opens/closes cleanly |
+| M6 | **Docs**: update ARCHITECTURE.md, HANDOVER.md, this plan | (this commit) | handover stays current |
 
-After M3 there is a working two-backend pluggable system with an accuracy
-proof. M4 is the stretch to arbitrary codes.
+After M3 there was a working two-backend pluggable system with an accuracy
+proof. M4 delivered the stretch goal (arbitrary codes plug in via YAML alone).
 
 ## 5. The two guardrails, concretely
 
@@ -126,9 +127,21 @@ Order of operations when back on the workstation:
 
 ## 8. Current status (this branch)
 
-Only this plan document is committed so far. The code was deliberately NOT
-written blind: every code milestone (M0 golden harness onward) needs MATLAB
-and built PFEM binaries to verify, which only exist on the workstation. So the
-first workstation coding task is to create the scaffolding described in
-Sections 2-3 (all inert, additive, `master` behaviour unchanged) and generate
-`golden_qoi.json` before any refactor.
+**Complete.** All milestones M0-M6 landed; the branch is ready to merge to
+`master`. Concrete artifacts:
+
+- Backends: [matlab/backends/pfem_backend.m](../matlab/backends/pfem_backend.m),
+  [analytic_backend.m](../matlab/backends/analytic_backend.m),
+  [external_backend.m](../matlab/backends/external_backend.m),
+  [get_backend.m](../matlab/backends/get_backend.m)
+- Tests: [matlab/tests/capture_golden_qoi.m](../matlab/tests/capture_golden_qoi.m),
+  [test_golden_qoi.m](../matlab/tests/test_golden_qoi.m),
+  [test_analytic_backend.m](../matlab/tests/test_analytic_backend.m),
+  [test_external_backend.m](../matlab/tests/test_external_backend.m)
+- Golden reference: [matlab/tests/golden_qoi.json](../matlab/tests/golden_qoi.json)
+  (92 records, ~4.6 min per full pass)
+- Non-PFEM examples: [benchmarks/analytic/](../benchmarks/analytic/) and
+  [benchmarks/external/](../benchmarks/external/)
+
+Every legacy YAML in `benchmarks/pfem5/chap*/` still runs unmodified; the
+optional `runner:` key is absent on all 87 of them.
