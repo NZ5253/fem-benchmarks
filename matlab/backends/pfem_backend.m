@@ -1,0 +1,331 @@
+function b = pfem_backend()
+% PFEM_BACKEND  The PFEM backend (Phase 3 milestone M1).
+%
+% Returns a struct of function handles matching the backend contract
+% documented in docs/PHASE3_PLAN.md Section 2:
+%
+%   b.name        = 'pfem'
+%   b.run         = @(ctx, y, overrides) -> [status, out]
+%   b.extract_qoi = @(out, case_type)    -> qoi struct
+%
+% ctx must have: repo_root, pfem_root, yaml_path.
+% y   is the loaded YAML (as returned by pfem_yaml_load).
+%
+% This backend wraps the existing PFEM run pipeline; it is a pure extraction
+% of what used to live inside pfem_run_from_yaml.m. Behaviour is byte-for-byte
+% identical: the M0 golden test is expected to pass unchanged.
+
+    b.name        = 'pfem';
+    b.run         = @backend_run;
+    b.extract_qoi = @pfem_extract_qoi;
+end
+
+
+function [status, out] = backend_run(ctx, y, overrides)
+    repo_root = ctx.repo_root;
+    pfem_root = ctx.pfem_root;
+    yaml_path = ctx.yaml_path;
+    if nargin < 3 || isempty(overrides)
+        overrides = struct();
+    end
+
+    addpath(fullfile(repo_root, 'matlab', 'utils'));
+
+    chap    = sprintf('chap%02d', y.authors.source.chapter);
+    program = y.authors.source.program;
+    base    = y.authors.source.dataset;
+
+    % original .dat template
+    rel_dat = y.inputs.dat_file;
+    dat_src = fullfile(pfem_root, rel_dat);
+    if startsWith(dat_src, '~'), dat_src = replace(dat_src, '~', getenv('HOME')); end
+    if ~exist(dat_src, 'file')
+        error('Base .dat not found: %s', dat_src);
+    end
+
+    % Build param key -> folder name
+    param_key = build_param_key(overrides);
+
+    % Run directory: runs/<chap>/<base>/<param_key>/
+    run_dir = fullfile(repo_root, 'runs', chap, base, param_key);
+    if ~exist(run_dir, 'dir'), mkdir(run_dir); end
+
+    % Case name = base (short; stays within PFEM 20-char limit)
+    new_case = base;
+
+    % ---- stage inputs ----
+    dat_dst = fullfile(run_dir, [new_case '.dat']);
+    copyfile(dat_src, dat_dst);
+
+    % patch using YAML tunables
+    if ~isempty(fieldnames(overrides))
+        pfem_patch_dat_using_yaml(dat_dst, y, overrides);
+    end
+
+    % Auto-build binary if missing, then copy to run dir so it is self-contained.
+    % chmod +x is needed because MATLAB copyfile strips the execute bit on Linux.
+    pfem_ensure_built(repo_root, pfem_root, program, chap);
+    exe_src = fullfile(pfem_root, 'build', 'bin', program);
+    exe_dst = fullfile(run_dir, program);
+    if exist(exe_src, 'file')
+        copyfile(exe_src, exe_dst);
+        system(sprintf('chmod +x "%s"', exe_dst));
+    end
+
+    % parameter snapshots
+    copyfile(yaml_path, fullfile(run_dir, 'case.yaml'));
+    if ~isempty(fieldnames(overrides))
+        save(fullfile(run_dir, 'overrides.mat'), 'overrides');
+    end
+
+    % ---- run ----
+    [status, out] = pfem_runner(pfem_root, chap, program, new_case, run_dir);
+
+    % ---- write run_info.txt ----
+    write_run_info(run_dir, new_case, yaml_path, overrides, param_key, status, out);
+
+    % ---- annotate output struct ----
+    out.original_dat = dat_src;
+
+    % Locate (or auto-generate) the original .res for pfem_compare_results.
+    % PFEM distributable includes pre-computed .res in executable/<chap>/.
+    % When that file is absent (e.g. p63) we run the unmodified .dat once and
+    % cache the result in runs/<chap>/<base>/default/ so future runs find it.
+    book_res = fullfile(pfem_root, 'executable', chap, [base '.res']);
+    if exist(book_res, 'file')
+        out.original_res = book_res;
+    else
+        default_res = fullfile(repo_root, 'runs', chap, base, 'default', [base '.res']);
+        if ~exist(default_res, 'file') && ~isempty(fieldnames(overrides))
+            default_res = generate_baseline_run(repo_root, pfem_root, chap, program, base, dat_src);
+        end
+        out.original_res = default_res;
+    end
+
+    out.param_key = param_key;
+    out.overrides = overrides;
+    out.yaml_path = yaml_path;
+    out.case      = base;
+    out.run_dir   = run_dir;
+end
+
+
+% =========================================================================
+function res_path = generate_baseline_run(repo_root, pfem_root, chap, program, base, dat_src)
+% Run the case with default (unmodified) parameters and cache the .res.
+% Used when pfem/executable/<chap>/<base>.res is absent from the PFEM
+% distribution (e.g. p63 Mohr-Coulomb bearing capacity).
+    res_path = '';
+    default_dir = fullfile(repo_root, 'runs', chap, base, 'default');
+    res_cand    = fullfile(default_dir, [base '.res']);
+
+    if exist(res_cand, 'file')
+        res_path = res_cand;
+        return;
+    end
+
+    if ~exist(default_dir, 'dir'), mkdir(default_dir); end
+
+    dat_dst = fullfile(default_dir, [base '.dat']);
+    copyfile(dat_src, dat_dst);
+
+    exe_src = fullfile(pfem_root, 'build', 'bin', program);
+    exe_dst = fullfile(default_dir, program);
+    if ~exist(exe_src, 'file')
+        fprintf('  [baseline] Binary missing - cannot generate baseline .res for %s.\n', base);
+        return;
+    end
+    copyfile(exe_src, exe_dst);
+    system(sprintf('chmod +x "%s"', exe_dst));
+
+    fprintf('  [baseline] No book .res found - generating baseline for %s ...\n', base);
+    cmd = sprintf('cd "%s" && printf "%s\\n" | ./%s > run.log 2>&1', ...
+                  default_dir, base, program);
+    system(cmd);
+
+    if exist(res_cand, 'file')
+        fprintf('  [baseline] Cached: %s\n', res_cand);
+        res_path = res_cand;
+    else
+        fprintf('  [baseline] Baseline run did not produce a .res file.\n');
+    end
+end
+
+
+% =========================================================================
+function write_run_info(run_dir, case_name, yaml_path, overrides, param_key, status, out)
+    fpath = fullfile(run_dir, 'run_info.txt');
+    fid = fopen(fpath, 'w');
+    if fid == -1, return; end
+
+    fprintf(fid, 'PFEM Run Summary\n');
+    fprintf(fid, '================\n');
+    fprintf(fid, 'Date     : %s\n', datestr(now, 'yyyy-mm-dd HH:MM:SS'));
+    fprintf(fid, 'Case     : %s\n', case_name);
+    fprintf(fid, 'Param key: %s\n', param_key);
+    fprintf(fid, 'YAML     : %s\n', yaml_path);
+    fprintf(fid, 'Status   : %s\n', ifelse(status==0, 'SUCCESS', sprintf('FAILED (code %d)', status)));
+    if isfield(out, 'elapsed_sec')
+        fprintf(fid, 'Time     : %.3f s\n', out.elapsed_sec);
+    end
+    fprintf(fid, '\n');
+
+    if ~isempty(overrides) && ~isempty(fieldnames(overrides))
+        fprintf(fid, 'Parameter overrides:\n');
+        fnames = fieldnames(overrides);
+        for i = 1:numel(fnames)
+            v = overrides.(fnames{i});
+            if isnumeric(v)
+                fprintf(fid, '  %-30s = %g\n', fnames{i}, v);
+            else
+                fprintf(fid, '  %-30s = %s\n', fnames{i}, char(v));
+            end
+        end
+        fprintf(fid, '\n');
+    end
+
+    if isfield(out, 'files') && ~isempty(out.files)
+        fprintf(fid, 'Output files:\n');
+        for i = 1:numel(out.files)
+            [~, fn, ext] = fileparts(out.files{i});
+            info = dir(out.files{i});
+            if ~isempty(info)
+                fprintf(fid, '  %s%s  (%s)\n', fn, ext, format_bytes(info.bytes));
+            else
+                fprintf(fid, '  %s%s\n', fn, ext);
+            end
+        end
+        fprintf(fid, '\n');
+    end
+
+    fprintf(fid, 'To re-run (from this directory):\n');
+    fprintf(fid, '  printf "%s\\n" | ./%s\n', case_name, case_name);
+
+    fclose(fid);
+end
+
+
+function s = ifelse(cond, a, b)
+    if cond, s = a; else, s = b; end
+end
+
+
+function s = format_bytes(n)
+    if n < 1024
+        s = sprintf('%d B', n);
+    elseif n < 1024^2
+        s = sprintf('%.1f KB', n/1024);
+    else
+        s = sprintf('%.1f MB', n/1024^2);
+    end
+end
+
+
+% =========================================================================
+function key = build_param_key(overrides)
+% Build a short, readable folder name from parameter overrides.
+% No overrides -> 'default'
+% One override  -> e.g. 'sy_200'  or  'E_1e5'
+% Multiple      -> e.g. 'E_1e5_nu_0.3'
+    if isempty(overrides) || isempty(fieldnames(overrides))
+        key = 'default';
+        return;
+    end
+
+    abbrev = struct( ...
+        'youngs_modulus_E',          'E',      ...
+        'youngs_modulus_fill',       'E_f',    ...
+        'youngs_modulus_embankment', 'E_e',    ...
+        'poisson_ratio_nu',          'nu',     ...
+        'poisson_ratio_fill',        'nu_f',   ...
+        'poisson_ratio_embankment',  'nu_e',   ...
+        'yield_stress',              'sy',     ...
+        'density_rho',               'rho',    ...
+        'mass_per_length_rhoA',      'rhoA',   ...
+        'unit_weight_gamma',         'UW',     ...
+        'unit_weight_fill',          'UW_f',   ...
+        'unit_weight_embankment',    'UW_e',   ...
+        'friction_angle_phi',        'phi',    ...
+        'friction_angle_fill',       'phi_f',  ...
+        'friction_angle_embankment', 'phi_e',  ...
+        'cohesion_c',                'c',      ...
+        'cohesion_fill',             'c_f',    ...
+        'cohesion_embankment',       'c_e',    ...
+        'dilation_angle_psi',        'psi',    ...
+        'dilation_angle_fill',       'psi_f',  ...
+        'dilation_angle_embankment', 'psi_e',  ...
+        'earth_pressure_coeff_k0',   'k0',     ...
+        'permeability_k_or_cv',      'k',      ...
+        'permeability_kx',           'kx',     ...
+        'permeability_ky',           'ky',     ...
+        'conductivity_kx',           'kx',     ...
+        'conductivity_ky',           'ky',     ...
+        'bulk_modulus_ke',           'ke',     ...
+        'initial_effective_stress',  'cons',   ...
+        'dynamic_viscosity',         'visc',   ...
+        'convergence_tolerance',     'tol',    ...
+        'local_yield_tolerance_ltol','ltol',   ...
+        'cg_tolerance',              'cg_t',   ...
+        'iteration_limit',           'lim',    ...
+        'cg_iteration_limit',        'cg_l',   ...
+        'load_increments',           'incs',   ...
+        'prescribed_increment',      'presc',  ...
+        'time_step_dtim',            'dt',     ...
+        'number_of_steps',           'nstep',  ...
+        'theta_integration',         'theta',  ...
+        'mass_damping_factor',       'fm',     ...
+        'stiffness_damping_factor',  'fk',     ...
+        'damping_ratio',             'dr',     ...
+        'newmark_beta',              'beta',   ...
+        'newmark_gamma',             'gam',    ...
+        'natural_frequency',         'omega',  ...
+        'number_of_modes',           'nmodes', ...
+        'num_eigenvalues',           'nev',    ...
+        'krylov_subspace_size',      'ncv',    ...
+        'max_arnoldi_iterations',    'maxitr', ...
+        'nels_or_nxe',               'nxe',    ...
+        'np_types_or_nye',           'nye',    ...
+        'stiffness_E_or_EI',         'EI',     ...
+        'axial_stiffness_EA',        'EA'      ...
+    );
+
+    fnames = fieldnames(overrides);
+    parts  = {};
+    for i = 1:numel(fnames)
+        pname = fnames{i};
+        pval  = overrides.(pname);
+
+        if isfield(abbrev, pname)
+            label = abbrev.(pname);
+        else
+            label = regexprep(pname, '^(youngs_modulus_|poisson_ratio_|permeability_|convergence_|iteration_|num_)', '');
+            label = label(1:min(8, end));
+        end
+
+        if isnumeric(pval)
+            val_str = format_sci(pval);
+        else
+            val_str = regexprep(char(pval), '[^a-zA-Z0-9_]', '_');
+        end
+
+        parts{end+1} = sprintf('%s_%s', label, val_str); %#ok<AGROW>
+    end
+
+    key = strjoin(parts, '_');
+    key = regexprep(key, '[^a-zA-Z0-9_\-\.]', '_');
+    if length(key) > 60
+        key = key(1:60);
+    end
+end
+
+
+function s = format_sci(v)
+% Compact scientific notation: 0->'0', 100->'100', 1e5->'1e5', 1.5e4->'1.5e4'
+    if v == 0
+        s = '0';
+        return;
+    end
+    s = sprintf('%.4g', v);
+    s = regexprep(s, 'e\+0*(\d)', 'e$1');
+    s = regexprep(s, 'e-0*(\d)',  'e-$1');
+end
