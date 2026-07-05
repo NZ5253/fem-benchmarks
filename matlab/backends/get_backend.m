@@ -28,8 +28,7 @@ function b = get_backend(y)
         case 'analytic'
             b = analytic_backend();
         case 'external'
-            % M4
-            error('get_backend: external backend not implemented yet (Phase 3 M4).');
+            b = external_backend();
         otherwise
             error('get_backend: unknown runner.type "%s"', kind);
     end
