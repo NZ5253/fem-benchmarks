@@ -21,10 +21,15 @@ function [status, out] = pfem_run_from_yaml(repo_root, pfem_root, yaml_path, ove
 %   overrides.youngs_modulus_E = 1e7;
 %   overrides.poisson_ratio_nu = 0.30;
 %
-% Phase 3: since M1, this function is a thin dispatcher that delegates to
-% the PFEM backend. Signature and behaviour are unchanged. M2 will switch
-% the direct pfem_backend() call for get_backend(y) so a YAML with a
-% runner.type key can select a different backend.
+% Phase 3: since M1, this function is a thin dispatcher that delegates to a
+% backend. Signature and behaviour are unchanged for the PFEM path. M2 added
+% get_backend(y) so a YAML with the optional key
+%
+%   runner:
+%     type: pfem | analytic | external
+%
+% selects a different backend. Absent key defaults to pfem, keeping all 87
+% legacy YAMLs working with no edits.
 
     if nargin < 4, overrides = struct(); end
 
@@ -33,7 +38,7 @@ function [status, out] = pfem_run_from_yaml(repo_root, pfem_root, yaml_path, ove
     addpath(fullfile(here, 'utils'));
 
     y   = pfem_yaml_load(yaml_path);
-    b   = pfem_backend();
+    b   = get_backend(y);
     ctx = struct('repo_root', repo_root, ...
                  'pfem_root', pfem_root, ...
                  'yaml_path', yaml_path);
