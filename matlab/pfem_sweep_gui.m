@@ -949,7 +949,9 @@ function cb_run_stochastic(fig, param_tbl, log_ta, prog_lbl, res_tbl, n_samples,
             row_data{nr,3} = label;
             row_data{nr,4} = ifelse(status_vec(si)==0, 'OK', 'FAIL');
             row_data{nr,5} = ifelse(~isnan(qoi_vec(si)), sprintf('%s=%.4g', qoi_label, qoi_vec(si)), '-');
-            row_data{nr,6} = ifelse(status_vec(si)==0, sprintf('%.1f', out.elapsed_sec), '-');
+            row_dt = 0;
+            if isfield(out, 'elapsed_sec'), row_dt = out.elapsed_sec; end
+            row_data{nr,6} = ifelse(status_vec(si)==0, sprintf('%.1f', row_dt), '-');
             row_data{nr,7} = ifelse(isfield(out,'run_dir'), out.run_dir, '-');
             res_tbl.Data = row_data;
             drawnow;
