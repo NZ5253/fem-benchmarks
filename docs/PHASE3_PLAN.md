@@ -1,8 +1,8 @@
 # Phase 3 Plan — Pluggable Runner Interface
 
 **Author**: Naeem Zainuddin
-**Status**: COMPLETE on branch `phase3-pluggable-runner` (M0 through M6). Ready to
-merge to `master`.
+**Status**: COMPLETE. Original scope M0-M6 landed on `master` (`2f41407`);
+follow-up coverage extension M7 landed on branch `phase3-complete-coverage`.
 **Goal**: let non-PFEM codes plug into the same probabilistic / sensitivity
 framework, without changing the behaviour of any existing (legacy) mode and
 while staying accurate for every case.
@@ -54,15 +54,32 @@ will do `b = get_backend(y)` and call the handles. Every caller stays unchanged.
 
 ```
 matlab/backends/
-  README.md            contract + status
   get_backend.m        factory, default -> pfem
   pfem_backend.m       wraps the existing PFEM entry points
-  analytic_backend.m   closed-form oracle (M3)
-  external_backend.m   generic template runner (M4, later)
+  analytic_backend.m   closed-form oracles (9 models, M3 + M7)
+  external_backend.m   generic template runner (M4)
 matlab/tests/
-  capture_golden_qoi.m writes golden_qoi.json for all 87 cases
-  golden_qoi.json      checked-in reference values (generated on a good tree)
-  test_golden_qoi.m    the regression gate
+  capture_golden_qoi.m           writes golden_qoi.json for all 87 cases
+  golden_qoi.json                checked-in reference values (M0)
+  test_golden_qoi.m              the regression gate (M0)
+  test_analytic_backend.m        prandtl_bearing vs PFEM p61 (M3)
+  test_external_backend.m        external Python solver end-to-end (M4)
+  test_all_analytic_oracles.m    9-row matrix, one per case type (M7)
+  test_stochastic_gate.m         fixed-seed histogram moments locked (M7)
+  test_physics_sanity.m          per-case-type monotonicity (M7)
+  verify_stochastic_backends.m   post-hoc numeric certificate for a live sweep
+benchmarks/analytic/
+  prandtl_bearing.yaml           (2+pi)*sigma_y                 plasticity Tresca
+  prandtl_terzaghi.yaml          c*Nc + 0.5*gamma*B*Ng          plasticity MC
+  bar_elongation.yaml            P*L/(A*E)                      elastic
+  ss_beam_eigen.yaml             (pi/L)^4 * EI/(rhoA)           eigenvalue
+  sdof_step.yaml                 2*F/k                          dynamic transient
+  terzaghi_1d.yaml               Uav(Tv) series                 consolidation
+  slab_heat_gen.yaml             Ts + qgen*L^2/(8k)             thermal
+  strip_seepage.yaml             h0 + N*L^2/(8k)                seepage
+  infinite_slope.yaml            c/(gamma*H*sin*cos) + tan(phi)/tan(beta)  slope_srf
+benchmarks/external/
+  prandtl.py + prandtl_input.tmpl + prandtl_external.yaml  Python-solver fixture (M4)
 ```
 
 ## 4. Milestones (each shippable, each gated by the golden test)
@@ -75,10 +92,14 @@ matlab/tests/
 | M3 | **Analytic oracle** (`prandtl_bearing`: `P_lim=(2+pi) sigma_y`) + cross-check vs PFEM p61 (assert < 1 %) | `a94a5d5` | analytic 514.16 vs PFEM 515: 0.16 % (< 1 %); 92/92 golden |
 | M4 | **Generic external backend** (input template + command + output-parse spec), validated on a small known-answer program | `bb72d11` | Python Prandtl solver: 4 assertions exact + 0.16 % cross-check; 92/92 golden |
 | M5 | **Surface in GUI/modes**; convert the stochastic solver/mesh guard to `b.non_sampleable(y)` | `4b7bab8` | 92/92 golden; GUI opens/closes cleanly |
-| M6 | **Docs**: update ARCHITECTURE.md, HANDOVER.md, this plan | (this commit) | handover stays current |
+| M6 | **Docs**: update ARCHITECTURE.md, HANDOVER.md, this plan | `2f41407` | handover stays current |
+| M7 | **Coverage extension**: 8 analytic models (one per PFEM case type), stochastic-mode regression gate, per-case-type physics-sanity suite, backend-persisted run directories | branch `phase3-complete-coverage` | oracle matrix 9/9, stochastic gate 2/2, monotonicity 20/20, golden 92/92 |
 
 After M3 there was a working two-backend pluggable system with an accuracy
-proof. M4 delivered the stretch goal (arbitrary codes plug in via YAML alone).
+proof. M4 delivered the stretch goal (arbitrary codes plug in via YAML
+alone). M7 made "complete" concrete by adding an independent oracle for
+every one of the 8 physical case types and locking the stochastic pipeline
+against future regressions.
 
 ## 5. The two guardrails, concretely
 
@@ -125,23 +146,19 @@ Order of operations when back on the workstation:
 3. run `capture_golden_qoi` once to generate `golden_qoi.json` (M0)
 4. proceed M1 -> M6, running `test_golden_qoi` after each behaviour-touching step
 
-## 8. Current status (this branch)
+## 8. Current status
 
-**Complete.** All milestones M0-M6 landed; the branch is ready to merge to
-`master`. Concrete artifacts:
+**M0-M7 complete.** The framework has an independent analytic oracle for
+every one of the 8 physical case types, the stochastic pipeline is
+regression-locked at fixed seed, and every future refactor is gated at
+four levels:
 
-- Backends: [matlab/backends/pfem_backend.m](../matlab/backends/pfem_backend.m),
-  [analytic_backend.m](../matlab/backends/analytic_backend.m),
-  [external_backend.m](../matlab/backends/external_backend.m),
-  [get_backend.m](../matlab/backends/get_backend.m)
-- Tests: [matlab/tests/capture_golden_qoi.m](../matlab/tests/capture_golden_qoi.m),
-  [test_golden_qoi.m](../matlab/tests/test_golden_qoi.m),
-  [test_analytic_backend.m](../matlab/tests/test_analytic_backend.m),
-  [test_external_backend.m](../matlab/tests/test_external_backend.m)
-- Golden reference: [matlab/tests/golden_qoi.json](../matlab/tests/golden_qoi.json)
-  (92 records, ~4.6 min per full pass)
-- Non-PFEM examples: [benchmarks/analytic/](../benchmarks/analytic/) and
-  [benchmarks/external/](../benchmarks/external/)
+| Gate | Locks | Runtime |
+|---|---|---|
+| `test_golden_qoi` (M0) | Per-run QoI value for 87 defaults + 5 override probes | ~5 min |
+| `test_all_analytic_oracles` (M7) | Each closed-form matches its own physics | <1 s |
+| `test_stochastic_gate` (M7) | Histogram mean/std/min/max on a 100-sample LHS sweep, fixed seed | ~2 s |
+| `test_physics_sanity` (M7) | Monotonicity direction of the QoI wrt each tunable, per case type | <1 s |
 
 Every legacy YAML in `benchmarks/pfem5/chap*/` still runs unmodified; the
 optional `runner:` key is absent on all 87 of them.

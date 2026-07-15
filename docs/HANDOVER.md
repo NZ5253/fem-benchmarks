@@ -346,7 +346,16 @@ fem-benchmarks/
 │   └── HANDOVER.md                      this file
 ├── benchmarks/
 │   ├── pfem5/chap{04..11}/*.yaml        87 benchmark specifications (PFEM)
-│   ├── analytic/prandtl_bearing.yaml    Phase 3 M3: closed-form oracle
+│   ├── analytic/                        Phase 3 M3+M7: 9 closed-form oracles
+│   │   ├── prandtl_bearing.yaml           (2+pi)*sigma_y            (Tresca)
+│   │   ├── prandtl_terzaghi.yaml          c*Nc + 0.5*gamma*B*Ng     (MC, Vesic)
+│   │   ├── bar_elongation.yaml            P*L/(A*E)                 (elastic)
+│   │   ├── ss_beam_eigen.yaml             (pi/L)^4*EI/(rhoA)        (eigenvalue)
+│   │   ├── sdof_step.yaml                 2*F/k                     (dynamic)
+│   │   ├── terzaghi_1d.yaml               Uav(Tv) series            (consolidation)
+│   │   ├── slab_heat_gen.yaml             Ts + qgen*L^2/(8k)        (thermal)
+│   │   ├── strip_seepage.yaml             h0 + N*L^2/(8k)           (seepage)
+│   │   └── infinite_slope.yaml            c/(gamma*H*sin*cos) + tan(phi)/tan(beta)  (slope)
 │   └── external/prandtl_external.yaml   Phase 3 M4: generic external solver
 ├── matlab/
 │   ├── pfem_sweep_gui.m                 main GUI entry point
@@ -357,7 +366,7 @@ fem-benchmarks/
 │   ├── backends/                        Phase 3 backends
 │   │   ├── get_backend.m                factory (reads y.runner.type)
 │   │   ├── pfem_backend.m               PFEM pipeline + non_sampleable list
-│   │   ├── analytic_backend.m           closed-form models (prandtl_bearing)
+│   │   ├── analytic_backend.m           9 closed-form oracles + run persistence
 │   │   └── external_backend.m           template + command + regex parse
 │   ├── utils/
 │   │   ├── pfem_yaml_load.m             YAML parser
@@ -379,7 +388,11 @@ fem-benchmarks/
 │       ├── golden_qoi.json              92-record reference (~4.6 min to regen)
 │       ├── test_golden_qoi.m            QoI regression gate (~5 min per pass)
 │       ├── test_analytic_backend.m      Phase 3 M3 cross-check
-│       └── test_external_backend.m      Phase 3 M4 end-to-end
+│       ├── test_external_backend.m      Phase 3 M4 end-to-end
+│       ├── test_all_analytic_oracles.m  Phase 3 M7 9-row oracle matrix (<1 s)
+│       ├── test_stochastic_gate.m       Phase 3 M7 seeded stochastic gate (~2 s)
+│       ├── test_physics_sanity.m        Phase 3 M7 monotonicity matrix (<1 s)
+│       └── verify_stochastic_backends.m post-hoc verifier for a live sweep
 ├── scripts/
 │   ├── generate_yamls_v2.py             YAML generator from Fortran source
 │   ├── pfem_build_chapter.sh            build one chapter
@@ -428,9 +441,14 @@ matlab -batch "addpath matlab matlab/utils matlab/tests; test_phase2_multi_case"
 matlab -nodesktop -nosplash -r "addpath matlab matlab/utils; pfem_sweep_gui"
 # Expected: window opens; click "Add YAML(s)" to load a case
 
-# 5. Phase 3 QoI regression (branch phase3-pluggable-runner or after merge):
+# 5. Phase 3 QoI regression (long, ~5 min):
 matlab -batch "addpath matlab matlab/utils matlab/tests matlab/backends; test_golden_qoi"
-# Expected: ~5 min, 92/92 passed
+# Expected: 92/92 passed
+
+# 6. Phase 3 M7 fast gates (all under 5 s total):
+matlab -batch "addpath matlab matlab/utils matlab/tests matlab/backends; \
+    test_all_analytic_oracles; test_stochastic_gate; test_physics_sanity"
+# Expected: oracle matrix 9/9, stochastic gate 2/2, monotonicity 20/20
 ```
 
 ---
