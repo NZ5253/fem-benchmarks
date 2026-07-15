@@ -26,7 +26,7 @@ function ok = test_physics_sanity()
       'prandtl_bearing.yaml',   'yield_stress',           2.0,   'up';
       % --- plasticity_load (MC) ---
       'prandtl_terzaghi.yaml',  'cohesion_c',             2.0,   'up';
-      'prandtl_terzaghi.yaml',  'friction_angle_phi',     1.5,   'up';
+      'prandtl_terzaghi.yaml',  'friction_angle_phi',     1.3,   'up';   % stays below Vesic Nq singularity at 45 deg
       'prandtl_terzaghi.yaml',  'footing_width_B',        2.0,   'up';
       % --- elastic_static ---
       'bar_elongation.yaml',    'force_P',                2.0,   'up';

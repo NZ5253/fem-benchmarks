@@ -82,14 +82,14 @@ function fig = pfem_plot_tornado(result, varargin)
          'FontSize', 11, 'Color', [0.10 0.10 0.10], 'Interpreter', 'none');
 
     set(ax, 'YTick', 1:n, 'YTickLabel', cellfun(@(s) strrep(s, '_', '\_'), names, 'UniformOutput', false));
-    set(ax, 'TickLabelInterpreter', 'latex');
+    set(ax, 'TickLabelInterpreter', 'none');
     ylim(ax, [0.4, n + 0.85]);
     if isempty(unit)
-        xlabel(ax, sprintf('%s', label), 'Interpreter', 'latex', 'FontSize', 14);
+        xlabel(ax, sprintf('%s', label), 'Interpreter', 'none', 'FontSize', 14);
     else
-        xlabel(ax, sprintf('%s [%s]', label, unit), 'Interpreter', 'latex', 'FontSize', 14);
+        xlabel(ax, sprintf('%s [%s]', label, unit), 'Interpreter', 'none', 'FontSize', 14);
     end
-    title(ax, ttl, 'Interpreter', 'latex', 'FontSize', 14);
+    title(ax, ttl, 'Interpreter', 'none', 'FontSize', 14);
     grid(ax, 'on');
     box(ax, 'on');
 

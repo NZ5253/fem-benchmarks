@@ -89,9 +89,10 @@ function q = eval_model(model, y, overrides)
     switch model
     case 'prandtl_bearing'
         sigma_y = fetch_param(y, overrides, 'yield_stress');
-        q.value = (2 + pi) * sigma_y;
         q.label = 'P_lim';
         q.unit  = fetch_unit(y, 'yield_stress', 'kPa');
+        if ~guard_positive(sigma_y, 'yield_stress'), return; end
+        q.value = (2 + pi) * sigma_y;
         q.ok    = true;
 
     case 'prandtl_terzaghi'
@@ -99,13 +100,19 @@ function q = eval_model(model, y, overrides)
         phi_d  = fetch_param(y, overrides, 'friction_angle_phi');
         gamma  = fetch_param(y, overrides, 'unit_weight_gamma');
         B      = fetch_param(y, overrides, 'footing_width_B');
+        q.label = 'q_ult';
+        q.unit  = 'kPa';
+        if ~(guard_nonneg(c, 'cohesion_c') && ...
+             guard_bounded(phi_d, 'friction_angle_phi', 0.1, 44.9) && ...
+             guard_positive(gamma, 'unit_weight_gamma') && ...
+             guard_positive(B, 'footing_width_B'))
+            return;
+        end
         phi    = phi_d * pi / 180;
         Nq     = exp(pi * tan(phi)) * tan(pi/4 + phi/2)^2;
         Nc     = (Nq - 1) * cot_safe(phi);
         Ng     = 2 * (Nq + 1) * tan(phi);
         q.value = c * Nc + 0.5 * gamma * B * Ng;
-        q.label = 'q_ult';
-        q.unit  = 'kPa';
         q.ok    = true;
 
     case 'bar_elongation'
@@ -113,39 +120,42 @@ function q = eval_model(model, y, overrides)
         L = fetch_param(y, overrides, 'length_L');
         A = fetch_param(y, overrides, 'area_A');
         E = fetch_param(y, overrides, 'youngs_modulus_E');
+        q.label = 'u_max'; q.unit = 'm';
+        if ~(guard_positive(L, 'length_L') && ...
+             guard_positive(A, 'area_A')   && ...
+             guard_positive(E, 'youngs_modulus_E')), return; end
         q.value = P * L / (A * E);
-        q.label = 'u_max';
-        q.unit  = 'm';
         q.ok    = true;
 
     case 'ss_beam_eigen'
         L    = fetch_param(y, overrides, 'length_L');
         EI   = fetch_param(y, overrides, 'stiffness_E_or_EI');
         rhoA = fetch_param(y, overrides, 'mass_per_length_rhoA');
+        q.label = 'omega^2'; q.unit = 'rad^2/s^2';
+        if ~(guard_positive(L, 'length_L') && ...
+             guard_positive(EI, 'stiffness_E_or_EI') && ...
+             guard_positive(rhoA, 'mass_per_length_rhoA')), return; end
         q.value = (pi/L)^4 * EI / rhoA;
-        q.label = 'omega^2';
-        q.unit  = 'rad^2/s^2';
         q.ok    = true;
 
     case 'sdof_step'
         F = fetch_param(y, overrides, 'force_F');
         k = fetch_param(y, overrides, 'stiffness_k');
-        q.value = 2 * F / k;   % undamped SDOF dynamic load factor = 2
-        q.label = 'u_peak';
-        q.unit  = 'm';
+        q.label = 'u_peak'; q.unit = 'm';
+        if ~guard_positive(k, 'stiffness_k'), return; end
+        q.value = 2 * F / k;
         q.ok    = true;
 
     case 'terzaghi_1d'
-        % Time factor Tv is dimensionless; Uav depends only on Tv.
         Tv = fetch_param(y, overrides, 'time_factor_Tv');
+        q.label = 'Uav_end'; q.unit = '';
+        if ~guard_bounded(Tv, 'time_factor_Tv', 0, 100), return; end
         Uav = 1;
         for m = 0:100
             M = (2*m + 1) * pi / 2;
             Uav = Uav - (2 / M^2) * exp(-M^2 * Tv);
         end
         q.value = Uav;
-        q.label = 'Uav_end';
-        q.unit  = '';   % dimensionless
         q.ok    = true;
 
     case 'slab_heat_gen'
@@ -153,9 +163,11 @@ function q = eval_model(model, y, overrides)
         qgen = fetch_param(y, overrides, 'heat_generation_qgen');
         L    = fetch_param(y, overrides, 'length_L');
         k    = fetch_param(y, overrides, 'conductivity_k');
+        q.label = 'T_max'; q.unit = 'K';
+        if ~(guard_positive(L, 'length_L') && ...
+             guard_positive(k, 'conductivity_k') && ...
+             guard_nonneg(qgen, 'heat_generation_qgen')), return; end
         q.value = Ts + qgen * L^2 / (8 * k);
-        q.label = 'T_max';
-        q.unit  = 'K';
         q.ok    = true;
 
     case 'strip_seepage'
@@ -163,9 +175,11 @@ function q = eval_model(model, y, overrides)
         N  = fetch_param(y, overrides, 'recharge_N');
         L  = fetch_param(y, overrides, 'length_L');
         k  = fetch_param(y, overrides, 'permeability_k_or_cv');
+        q.label = 'h_max'; q.unit = 'm';
+        if ~(guard_positive(L, 'length_L') && ...
+             guard_positive(k, 'permeability_k_or_cv') && ...
+             guard_nonneg(N, 'recharge_N')), return; end
         q.value = h0 + N * L^2 / (8 * k);
-        q.label = 'h_max';
-        q.unit  = 'm';
         q.ok    = true;
 
     case 'infinite_slope'
@@ -174,16 +188,38 @@ function q = eval_model(model, y, overrides)
         gamma = fetch_param(y, overrides, 'unit_weight_gamma');
         H     = fetch_param(y, overrides, 'height_H');
         b_d   = fetch_param(y, overrides, 'slope_angle_beta_deg');
+        q.label = 'FS'; q.unit = '';
+        if ~(guard_nonneg(c, 'cohesion_c') && ...
+             guard_bounded(phi_d, 'friction_angle_phi', 0, 89.9) && ...
+             guard_positive(gamma, 'unit_weight_gamma') && ...
+             guard_positive(H, 'height_H') && ...
+             guard_bounded(b_d, 'slope_angle_beta_deg', 0.5, 89.5))
+            return;
+        end
         phi = phi_d * pi / 180;
         b   = b_d   * pi / 180;
         q.value = c / (gamma * H * sin(b) * cos(b)) + tan(phi) / tan(b);
-        q.label = 'FS';
-        q.unit  = '';
         q.ok    = true;
 
     otherwise
         error('analytic_backend: unknown model "%s"', model);
     end
+end
+
+
+function tf = guard_positive(v, name)
+    tf = isfinite(v) && v > 0;
+    if ~tf, warning('analytic_backend: %s must be > 0 (got %g)', name, v); end
+end
+
+function tf = guard_nonneg(v, name)
+    tf = isfinite(v) && v >= 0;
+    if ~tf, warning('analytic_backend: %s must be >= 0 (got %g)', name, v); end
+end
+
+function tf = guard_bounded(v, name, lo, hi)
+    tf = isfinite(v) && v >= lo && v <= hi;
+    if ~tf, warning('analytic_backend: %s must be in [%g, %g] (got %g)', name, lo, hi, v); end
 end
 
 

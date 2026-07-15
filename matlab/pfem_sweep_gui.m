@@ -1149,16 +1149,18 @@ function cb_run_sensitivity(fig, param_tbl, log_ta, prog_lbl, res_tbl)
             append_log(log_ta, sprintf('  tornado plot ERROR: %s', ex.message));
         end
 
-        % Add summary row to results table.
+        % Add summary row to results table. Column layout:
+        %   1 checkbox | 2 Case | 3 Scenario | 4 Status | 5 QoI | 6 Time | 7 Run Dir
         nr = size(row_data, 1) + 1;
         row_data{nr, 1} = false;
         row_data{nr, 2} = case_name;
-        row_data{nr, 3} = sprintf('--- TORNADO k=%d ---', numel(specs));
-        row_data{nr, 4} = sprintf('%s base=%.3g', result.qoi_label, result.qoi_baseline);
-        if ~isempty(result.order)
+        row_data{nr, 3} = sprintf('tornado k=%d', numel(specs));
+        row_data{nr, 4} = ifelse(isnan(result.qoi_baseline), 'FAIL', 'OK');
+        if ~isempty(result.order) && ~isnan(result.qoi_baseline)
             j_top = result.order(1);
-            row_data{nr, 5} = sprintf('top: %s spread=%.3g', result.param_names{j_top}, ...
-                result.qoi_high(j_top) - result.qoi_low(j_top));
+            spread = result.qoi_high(j_top) - result.qoi_low(j_top);
+            row_data{nr, 5} = sprintf('%s base=%.3g  top=%s (spread=%.3g)', ...
+                result.qoi_label, result.qoi_baseline, result.param_names{j_top}, spread);
         else
             row_data{nr, 5} = '-';
         end
@@ -1184,11 +1186,15 @@ function plot_stochastic_gui(qvals, samples, param_names, mu_q, sigma_q, pf, bet
     d = fileparts(save_prefix);
     if ~isempty(d) && ~exist(d, 'dir'), mkdir(d); end
 
-    qoi_tex = strrep(qoi_label, '_', '\_');
+    % Titles / axis labels are plain identifier strings (may contain
+    % underscores like 'yield_stress' or carets like 'omega^2'). Render
+    % those with Interpreter='none' so LaTeX's picky syntax doesn't error;
+    % keep 'latex' only for the mu/sigma statistics annotation which is
+    % real math.
     if isempty(qoi_unit)
-        xlab = sprintf('%s', qoi_tex);
+        xlab = sprintf('%s', qoi_label);
     else
-        xlab = sprintf('%s [%s]', qoi_tex, qoi_unit);
+        xlab = sprintf('%s [%s]', qoi_label, qoi_unit);
     end
     is_fs = strcmpi(qoi_label, 'FS');
 
@@ -1213,10 +1219,10 @@ function plot_stochastic_gui(qvals, samples, param_names, mu_q, sigma_q, pf, bet
         yl = ylim(ax1);
         plot(ax1, [1 1], yl, 'k--', 'LineWidth', 2);
     end
-    xlabel(ax1, xlab, 'Interpreter', 'latex', 'FontSize', 18);
+    xlabel(ax1, xlab, 'Interpreter', 'none', 'FontSize', 18);
     ylabel(ax1, 'Probability Density', 'Interpreter', 'latex', 'FontSize', 18);
-    title(ax1, sprintf('%s --- %s distribution ($n=%d$)', ttl, qoi_tex, numel(qvals)), ...
-        'Interpreter', 'latex', 'FontSize', 14);
+    title(ax1, sprintf('%s -- %s distribution (n=%d)', ttl, qoi_label, numel(qvals)), ...
+        'Interpreter', 'none', 'FontSize', 14);
     if is_fs && ~isnan(pf)
         annotation(fig1, 'textbox', [0.58 0.68 0.38 0.22], ...
             'String', sprintf('$\\mu = %.3f$\n$\\sigma = %.3f$\n$P_f = %.2f\\%%$\n$\\beta = %.2f$', ...
@@ -1247,9 +1253,9 @@ function plot_stochastic_gui(qvals, samples, param_names, mu_q, sigma_q, pf, bet
             plot(ax2, 1, pf, 'ro', 'MarkerSize', 12, 'MarkerFaceColor', 'r');
         end
     end
-    xlabel(ax2, xlab, 'Interpreter', 'latex', 'FontSize', 18);
-    ylabel(ax2, sprintf('$P(%s \\leq x)$', qoi_tex), 'Interpreter', 'latex', 'FontSize', 18);
-    title(ax2, sprintf('%s --- CDF', ttl), 'Interpreter', 'latex', 'FontSize', 14);
+    xlabel(ax2, xlab, 'Interpreter', 'none', 'FontSize', 18);
+    ylabel(ax2, sprintf('P(%s <= x)', qoi_label), 'Interpreter', 'none', 'FontSize', 18);
+    title(ax2, sprintf('%s -- CDF', ttl), 'Interpreter', 'none', 'FontSize', 14);
     box(ax2, 'on'); grid(ax2, 'on');
     try exportgraphics(fig2, sprintf('%s_%s_cdf.pdf', save_prefix, safe_label), 'ContentType','vector','BackgroundColor','white'); catch, end
     print(fig2, sprintf('%s_%s_cdf.png', save_prefix, safe_label), '-dpng', '-r250');
@@ -1263,10 +1269,10 @@ function plot_stochastic_gui(qvals, samples, param_names, mu_q, sigma_q, pf, bet
             hold(ax_k, 'on');
             plot(ax_k, xlim(ax_k), [1 1], 'k--', 'LineWidth', 2);
         end
-        xlabel(ax_k, strrep(param_names{k},'_','\_'), 'Interpreter', 'latex', 'FontSize', 18);
-        ylabel(ax_k, xlab, 'Interpreter', 'latex', 'FontSize', 18);
-        title(ax_k, sprintf('%s --- %s vs %s', ttl, strrep(param_names{k},'_','\_'), qoi_tex), ...
-            'Interpreter', 'latex', 'FontSize', 14);
+        xlabel(ax_k, param_names{k}, 'Interpreter', 'none', 'FontSize', 18);
+        ylabel(ax_k, xlab, 'Interpreter', 'none', 'FontSize', 18);
+        title(ax_k, sprintf('%s -- %s vs %s', ttl, param_names{k}, qoi_label), ...
+            'Interpreter', 'none', 'FontSize', 14);
         box(ax_k, 'on'); grid(ax_k, 'on');
         try exportgraphics(fig_k, sprintf('%s_%s_scatter_%s.pdf', save_prefix, safe_label, param_names{k}), ...
                 'ContentType','vector','BackgroundColor','white'); catch, end
