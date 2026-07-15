@@ -23,7 +23,11 @@ function pfem_sweep_gui()
     close all;
     delete(findall(0, 'Type', 'figure'));
 
-    repo_root  = fullfile(getenv('HOME'), 'projects', 'fem-benchmarks');
+    % Derive repo_root from THIS file's location — the file lives at
+    % <repo>/matlab/pfem_sweep_gui.m, so ../.. is the repo root. Avoids
+    % baking in a hardcoded path (~/projects vs ~/Projects, or a checkout
+    % elsewhere) that silently breaks pfem_ensure_built.
+    repo_root  = fileparts(fileparts(mfilename('fullpath')));
     pfem_root  = fullfile(repo_root, 'pfem');
     bench_root = fullfile(repo_root, 'benchmarks', 'pfem5');
     addpath(genpath(fullfile(repo_root, 'matlab')));
