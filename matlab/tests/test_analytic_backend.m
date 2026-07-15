@@ -48,5 +48,34 @@ function ok = test_analytic_backend()
     fprintf('=========================================================\n');
     fprintf('  M3 accuracy proof PASSED\n');
     fprintf('=========================================================\n\n');
+
+    % ---------------------------------------------------------------------
+    % Sensitivity through pfem_sensitivity_oat exercises b.extract_qoi
+    % across baseline + low + high runs; this proves the M5-followup patch
+    % (dispatching QoI extraction through the backend) actually works for
+    % a non-PFEM YAML.
+    % ---------------------------------------------------------------------
+    fprintf('=== M5-followup: sensitivity on analytic backend ==========\n');
+    addpath(fullfile(repo_root, 'matlab', 'utils'));
+    specs = struct('name', 'yield_stress', 'dist', 'uniform', ...
+                   'mu', 100, 'cov', 0, 'bounds', [80, 120]);
+    r = pfem_sensitivity_oat(repo_root, pfem_root, yaml_analytic, specs, ...
+                             'Verbose', false);
+    fprintf('  baseline (mean)  P_lim = %.4f  (expect %.4f)\n', ...
+        r.qoi_baseline, (2 + pi) * 100);
+    fprintf('  -1 sigma  (80)   P_lim = %.4f  (expect %.4f)\n', ...
+        r.qoi_low(1),  (2 + pi) * 80);
+    fprintf('  +1 sigma (120)   P_lim = %.4f  (expect %.4f)\n', ...
+        r.qoi_high(1), (2 + pi) * 120);
+    assert(abs(r.qoi_baseline - (2 + pi) * 100) < 1e-9, ...
+        'sensitivity baseline drift');
+    assert(abs(r.qoi_low(1)  - (2 + pi) * 80)  < 1e-9, ...
+        'sensitivity low drift');
+    assert(abs(r.qoi_high(1) - (2 + pi) * 120) < 1e-9, ...
+        'sensitivity high drift');
+    assert(strcmp(r.qoi_label, 'P_lim'), 'label lost: %s', r.qoi_label);
+    fprintf('=========================================================\n');
+    fprintf('  M5-followup sensitivity via b.extract_qoi PASSED\n');
+    fprintf('=========================================================\n\n');
     ok = true;
 end

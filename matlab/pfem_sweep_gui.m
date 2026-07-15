@@ -860,22 +860,26 @@ function cb_run_stochastic(fig, param_tbl, log_ta, prog_lbl, res_tbl, n_samples,
             append_log(log_ta, sprintf('  %s: %.4g (fixed)', fn{k}, fixed.(fn{k})));
         end
 
-        % Build binary
+        % Build binary (only for the PFEM backend; other backends have no
+        % Fortran to compile).
         try
             y_tmp     = pfem_yaml_load(yaml_path);
-            program   = y_tmp.authors.source.program;
-            chap      = sprintf('chap%02d', y_tmp.authors.source.chapter);
+            b         = get_backend(y_tmp);
             case_type = pfem_detect_case_type(y_tmp);
         catch ex
             append_log(log_ta, sprintf('  YAML error: %s', ex.message));
             continue;
         end
-        prog_lbl.Text = sprintf('Building %s...', program); drawnow;
-        if ~pfem_ensure_built(st.repo_root, st.pfem_root, program, chap)
-            append_log(log_ta, sprintf('  Build failed for %s', program));
-            continue;
+        if strcmp(b.name, 'pfem')
+            program = y_tmp.authors.source.program;
+            chap    = sprintf('chap%02d', y_tmp.authors.source.chapter);
+            prog_lbl.Text = sprintf('Building %s...', program); drawnow;
+            if ~pfem_ensure_built(st.repo_root, st.pfem_root, program, chap)
+                append_log(log_ta, sprintf('  Build failed for %s', program));
+                continue;
+            end
         end
-        append_log(log_ta, sprintf('  case type: %s', case_type));
+        append_log(log_ta, sprintf('  backend: %s   case type: %s', b.name, case_type));
 
         qoi_vec      = NaN(n_samples, 1);
         qoi_label    = 'QoI';
@@ -911,18 +915,20 @@ function cb_run_stochastic(fig, param_tbl, log_ta, prog_lbl, res_tbl, n_samples,
                 status_vec(si) = status;
 
                 if status == 0
-                    q = pfem_extract_qoi(out, case_type);
+                    q = b.extract_qoi(out, case_type);
                     qoi_vec(si) = q.value;
                     if q.ok
                         qoi_label = q.label;
                         qoi_unit  = q.unit;
                     end
+                    dt = 0;
+                    if isfield(out, 'elapsed_sec'), dt = out.elapsed_sec; end
                     if isempty(qoi_unit)
                         append_log(log_ta, sprintf('    OK  %s=%.4g  t=%.1fs', ...
-                            qoi_label, q.value, out.elapsed_sec));
+                            qoi_label, q.value, dt));
                     else
                         append_log(log_ta, sprintf('    OK  %s=%.4g %s  t=%.1fs', ...
-                            qoi_label, q.value, qoi_unit, out.elapsed_sec));
+                            qoi_label, q.value, qoi_unit, dt));
                     end
                 else
                     append_log(log_ta, sprintf('    FAILED (exit %d)', status));

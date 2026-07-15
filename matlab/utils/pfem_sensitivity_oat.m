@@ -60,8 +60,10 @@ function result = pfem_sensitivity_oat(repo_root, pfem_root, yaml_path, specs, v
         'case_type', '');
     if k == 0, return; end
 
+    addpath(fullfile(repo_root, 'matlab', 'backends'));
     y = pfem_yaml_load(yaml_path);
     case_type = pfem_detect_case_type(y);
+    b = get_backend(y);              % backend-dispatched QoI extraction
     result.case_type = case_type;
 
     names = cell(k, 1);
@@ -80,7 +82,7 @@ function result = pfem_sensitivity_oat(repo_root, pfem_root, yaml_path, specs, v
         if verbose, fprintf('FAILED (status=%d)\n', status); end
         return;
     end
-    q0 = pfem_extract_qoi(out, case_type);
+    q0 = b.extract_qoi(out, case_type);
     if ~q0.ok
         if verbose, fprintf('extraction failed\n'); end
         return;
@@ -106,7 +108,7 @@ function result = pfem_sensitivity_oat(repo_root, pfem_root, yaml_path, specs, v
             try
                 [status_j, out_j] = pfem_run_from_yaml(repo_root, pfem_root, yaml_path, ov);
                 if status_j == 0
-                    qj = pfem_extract_qoi(out_j, case_type);
+                    qj = b.extract_qoi(out_j, case_type);
                     if qj.ok
                         if strcmp(tag{1}, 'lo')
                             result.qoi_low(j) = qj.value;
