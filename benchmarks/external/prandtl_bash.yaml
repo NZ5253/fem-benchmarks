@@ -1,0 +1,30 @@
+id: external_prandtl_bash
+title: "Prandtl bearing capacity (bash + awk external solver)"
+purpose: >
+  Proves the external backend is language-agnostic. The solver is a
+  10-line POSIX shell script (prandtl.sh) that extracts yield_stress
+  via awk and prints P_lim = (2 + pi) * yield_stress using awk's
+  atan2 for pi. Zero language runtime dependencies (no Python).
+  Numerically identical to prandtl_external.yaml.
+authors:
+  created_by: Naeem
+runner:
+  type: external
+  input_template: prandtl_bash_input.tmpl
+  input_file: input.txt
+  command: "bash {yaml_dir}/prandtl.sh {input_file} {output_file}"
+  cwd: repo_root
+  output_file: result.txt
+  output_parse:
+    pattern: 'P_lim\s*=\s*([+-]?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)'
+    group: 1
+  output:
+    label: P_lim
+    unit: kPa
+tunable_parameters:
+  - name: yield_stress
+    current_value: 100.0
+    type: real
+    unit: kPa
+    description: "Tresca yield stress; matches PFEM p61 sigma_y default."
+    suggested_range: [50.0, 500.0]
