@@ -1,0 +1,38 @@
+id: analytic_strip_seepage
+title: "Strip aquifer with uniform recharge"
+purpose: >
+  Closed-form h_max = h0 + N * L^2 / (8 k) for a 1-D confined-thickness
+  aquifer of length L between two constant-head boundaries at h0, with
+  uniform recharge rate N. Peaks at midspan. Seepage oracle. Defaults
+  give h_max = 10 + 1e-6*(1000)^2/(8*1e-3) = 10.125 m.
+authors:
+  created_by: Naeem
+  reference: "Bear, Dynamics of Fluids in Porous Media"
+runner:
+  type: analytic
+  model: strip_seepage
+tunable_parameters:
+  - name: boundary_head_h0
+    current_value: 10.0
+    type: real
+    unit: m
+    description: "Constant head at both boundaries."
+    suggested_range: [0.0, 100.0]
+  - name: recharge_N
+    current_value: 1.0e-6
+    type: real
+    unit: m/s
+    description: "Uniform recharge rate."
+    suggested_range: [0.0, 1.0e-4]
+  - name: length_L
+    current_value: 1000.0
+    type: real
+    unit: m
+    description: "Distance between boundaries."
+    suggested_range: [10.0, 1.0e4]
+  - name: permeability_k_or_cv
+    current_value: 1.0e-3
+    type: real
+    unit: m/s
+    description: "Hydraulic conductivity."
+    suggested_range: [1.0e-8, 1.0e-1]

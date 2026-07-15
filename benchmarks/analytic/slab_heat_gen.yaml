@@ -1,0 +1,37 @@
+id: analytic_slab_heat_gen
+title: "Slab with internal heat generation, both surfaces isothermal"
+purpose: >
+  Closed-form T_max = T_s + qgen * L^2 / (8 k) for a symmetric slab
+  under uniform volumetric heat generation, both surfaces held at T_s.
+  Thermal oracle. Defaults give T_max = 300 + 1e5*(0.1)^2/(8*10) = 312.5 K.
+authors:
+  created_by: Naeem
+  reference: "Incropera & DeWitt, Fundamentals of Heat and Mass Transfer, chapter 3"
+runner:
+  type: analytic
+  model: slab_heat_gen
+tunable_parameters:
+  - name: surface_temp_Ts
+    current_value: 300.0
+    type: real
+    unit: K
+    description: "Surface (Dirichlet) temperature on both faces."
+    suggested_range: [200.0, 1500.0]
+  - name: heat_generation_qgen
+    current_value: 1.0e5
+    type: real
+    unit: W/m^3
+    description: "Volumetric heat generation rate."
+    suggested_range: [0.0, 1.0e8]
+  - name: length_L
+    current_value: 0.1
+    type: real
+    unit: m
+    description: "Slab thickness (full)."
+    suggested_range: [0.001, 1.0]
+  - name: conductivity_k
+    current_value: 10.0
+    type: real
+    unit: W/(m*K)
+    description: "Thermal conductivity."
+    suggested_range: [0.01, 500.0]

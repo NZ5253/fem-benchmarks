@@ -1,0 +1,37 @@
+id: analytic_bar_elongation
+title: "Axial bar elongation (elastic)"
+purpose: >
+  Closed-form u = P L / (A E) for a prismatic bar in uniaxial tension.
+  Elastic-static oracle for the framework's elastic case type. Defaults
+  give u = 1e-3 m (1 mm) for a mild-steel 1 m x 1e-4 m^2 bar under 20 kN.
+authors:
+  created_by: Naeem
+  reference: "Timoshenko & Goodier, Theory of Elasticity"
+runner:
+  type: analytic
+  model: bar_elongation
+tunable_parameters:
+  - name: force_P
+    current_value: 2.0e4
+    type: real
+    unit: N
+    description: "Axial tensile force."
+    suggested_range: [1.0e3, 2.0e5]
+  - name: length_L
+    current_value: 1.0
+    type: real
+    unit: m
+    description: "Bar length."
+    suggested_range: [0.1, 10.0]
+  - name: area_A
+    current_value: 1.0e-4
+    type: real
+    unit: m^2
+    description: "Cross-sectional area."
+    suggested_range: [1.0e-6, 1.0e-2]
+  - name: youngs_modulus_E
+    current_value: 2.0e11
+    type: real
+    unit: Pa
+    description: "Young's modulus (mild steel default)."
+    suggested_range: [1.0e10, 4.0e11]

@@ -1,0 +1,32 @@
+id: analytic_ss_beam_eigen
+title: "Simply-supported beam first eigenvalue"
+purpose: >
+  Closed-form omega^2 = (pi/L)^4 * EI / (rho A) for the fundamental mode
+  of a simply-supported Euler-Bernoulli beam. Eigenvalue oracle. Defaults
+  give omega^2 = (pi/4)^4 / 12 ~= 0.031 rad^2/s^2 (matches the SI unit-
+  free case used in PFEM chap10 p101 up to boundary conditions).
+authors:
+  created_by: Naeem
+  reference: "Rao, Mechanical Vibrations, Section 8.5"
+runner:
+  type: analytic
+  model: ss_beam_eigen
+tunable_parameters:
+  - name: length_L
+    current_value: 4.0
+    type: real
+    unit: m
+    description: "Beam length."
+    suggested_range: [0.5, 20.0]
+  - name: stiffness_E_or_EI
+    current_value: 0.08333
+    type: real
+    unit: N*m^2
+    description: "Flexural rigidity EI (matches PFEM p101 default)."
+    suggested_range: [1.0e-3, 1.0e6]
+  - name: mass_per_length_rhoA
+    current_value: 1.0
+    type: real
+    unit: kg/m
+    description: "Mass per unit length rho*A (matches PFEM p101 default)."
+    suggested_range: [1.0e-3, 1.0e3]

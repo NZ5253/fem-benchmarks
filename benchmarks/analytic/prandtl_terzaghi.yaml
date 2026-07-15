@@ -1,0 +1,43 @@
+id: analytic_prandtl_terzaghi
+title: "Mohr-Coulomb bearing capacity (Prandtl-Terzaghi, Vesic factors)"
+purpose: >
+  Closed-form q_ult = c*Nc + 0.5*gamma*B*Ng for a rough strip footing on
+  a surface layer of Mohr-Coulomb soil (surcharge = 0). Uses Vesic
+  bearing-capacity factors:
+    Nq = exp(pi tan phi) tan^2(pi/4 + phi/2)
+    Nc = (Nq - 1) cot(phi)
+    Ng = 2 (Nq + 1) tan(phi)
+  A second plasticity oracle alongside prandtl_bearing to cover the
+  drained (frictional) case. Defaults c = 10 kPa, phi = 30 deg,
+  gamma = 20 kN/m^3, B = 1 m give q_ult ~= 507 kPa.
+authors:
+  created_by: Naeem
+  reference: "Vesic (1973), Bowles (1996), Foundation Analysis and Design"
+runner:
+  type: analytic
+  model: prandtl_terzaghi
+tunable_parameters:
+  - name: cohesion_c
+    current_value: 10.0
+    type: real
+    unit: kPa
+    description: "Effective cohesion."
+    suggested_range: [0.0, 200.0]
+  - name: friction_angle_phi
+    current_value: 30.0
+    type: real
+    unit: deg
+    description: "Effective friction angle."
+    suggested_range: [1.0, 45.0]
+  - name: unit_weight_gamma
+    current_value: 20.0
+    type: real
+    unit: kN/m^3
+    description: "Effective unit weight below footing."
+    suggested_range: [10.0, 25.0]
+  - name: footing_width_B
+    current_value: 1.0
+    type: real
+    unit: m
+    description: "Footing width."
+    suggested_range: [0.3, 10.0]

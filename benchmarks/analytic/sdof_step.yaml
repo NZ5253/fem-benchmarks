@@ -1,0 +1,26 @@
+id: analytic_sdof_step
+title: "SDOF undamped step response peak"
+purpose: >
+  Closed-form u_peak = 2 * F / k for an undamped single-degree-of-freedom
+  system subjected to a suddenly applied constant force (dynamic load
+  factor = 2). Dynamic-transient oracle. Defaults give u_peak = 0.02 m
+  for F = 1000 N, k = 1e5 N/m.
+authors:
+  created_by: Naeem
+  reference: "Chopra, Dynamics of Structures, chapter 6"
+runner:
+  type: analytic
+  model: sdof_step
+tunable_parameters:
+  - name: force_F
+    current_value: 1000.0
+    type: real
+    unit: N
+    description: "Suddenly applied constant force."
+    suggested_range: [10.0, 1.0e5]
+  - name: stiffness_k
+    current_value: 1.0e5
+    type: real
+    unit: N/m
+    description: "Spring stiffness."
+    suggested_range: [1.0e2, 1.0e8]

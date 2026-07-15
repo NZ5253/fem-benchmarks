@@ -1,0 +1,20 @@
+id: analytic_terzaghi_1d
+title: "Terzaghi 1-D consolidation Uav at time Tv"
+purpose: >
+  Closed-form Uav(Tv) = 1 - sum_{m=0..inf} (2/M^2) exp(-M^2 * Tv), with
+  M = (2m+1) pi / 2 (series truncated at 100 terms). Consolidation
+  oracle. Defaults Tv = 0.2 give Uav ~= 0.504, matching the standard
+  half-consolidation reference.
+authors:
+  created_by: Naeem
+  reference: "Terzaghi (1943), Theoretical Soil Mechanics; also Craig, chapter 7"
+runner:
+  type: analytic
+  model: terzaghi_1d
+tunable_parameters:
+  - name: time_factor_Tv
+    current_value: 0.2
+    type: real
+    unit: ""
+    description: "Dimensionless time factor Tv = cv*t/H^2 (drainage-path H)."
+    suggested_range: [0.001, 5.0]

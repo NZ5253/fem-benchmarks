@@ -1,0 +1,44 @@
+id: analytic_infinite_slope
+title: "Infinite planar slope factor of safety (drained)"
+purpose: >
+  Closed-form FS = c / (gamma H sin b cos b) + tan(phi) / tan(b) for a
+  drained infinite planar slope. Slope-stability oracle. Defaults
+  (c = 5 kPa, phi = 25 deg, gamma = 20 kN/m^3, H = 5 m, beta = 20 deg)
+  give FS = 5/(20*5*sin(20)*cos(20)) + tan(25)/tan(20) ~= 1.44.
+authors:
+  created_by: Naeem
+  reference: "Duncan & Wright, Soil Strength and Slope Stability, chapter 6"
+runner:
+  type: analytic
+  model: infinite_slope
+tunable_parameters:
+  - name: cohesion_c
+    current_value: 5.0
+    type: real
+    unit: kPa
+    description: "Effective cohesion."
+    suggested_range: [0.0, 100.0]
+  - name: friction_angle_phi
+    current_value: 25.0
+    type: real
+    unit: deg
+    description: "Effective friction angle."
+    suggested_range: [0.0, 45.0]
+  - name: unit_weight_gamma
+    current_value: 20.0
+    type: real
+    unit: kN/m^3
+    description: "Total unit weight."
+    suggested_range: [10.0, 25.0]
+  - name: height_H
+    current_value: 5.0
+    type: real
+    unit: m
+    description: "Depth to failure plane (measured vertically)."
+    suggested_range: [1.0, 20.0]
+  - name: slope_angle_beta_deg
+    current_value: 20.0
+    type: real
+    unit: deg
+    description: "Slope inclination beta."
+    suggested_range: [5.0, 45.0]
