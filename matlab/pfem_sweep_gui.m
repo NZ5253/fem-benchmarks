@@ -67,7 +67,7 @@ function pfem_sweep_gui()
     % Cases panel
     cp = spanel(r1, 'Cases', 1, 1);
     cg = uigridlayout(cp, [3, 1]);
-    cg.RowHeight = {'1x', 28, 28};  cg.ColumnWidth = {'1x'};
+    cg.RowHeight = {'1x', 28, 28, 28};  cg.ColumnWidth = {'1x'};
     cg.Padding = [4 4 4 4];  cg.RowSpacing = 3;
     cg.BackgroundColor = [0.10 0.10 0.12];
 
@@ -78,6 +78,20 @@ function pfem_sweep_gui()
 
     btn_add = sbtn(cg, '+ Add YAML(s)', [0.16 0.32 0.54], 2, 1);
     btn_rem = sbtn(cg, '- Remove Selected', [0.40 0.12 0.12], 3, 1);
+
+    % One-click preset loader: skips the "click Add three times, navigate
+    % to three different folders" workflow. Selecting a preset loads the
+    % corresponding YAMLs and refreshes the parameter table.
+    dd_preset = uidropdown(cg, ...
+        'Items', {'Load preset ...', ...
+                  'Prandtl demo (PFEM + analytic + external)', ...
+                  'All analytic oracles (9)', ...
+                  'One PFEM per case type (8)', ...
+                  'Analytic + External Prandtl (fast, no PFEM)'}, ...
+        'Value', 'Load preset ...', ...
+        'BackgroundColor', [0.12 0.28 0.42], ...
+        'FontColor', [0.90 0.90 0.90], 'FontSize', 10);
+    dd_preset.Layout.Row = 4; dd_preset.Layout.Column = 1;
 
     % Parameters panel
     pp = spanel(r1, 'Tunable Parameters — enable, enter values, see suggested ranges', 1, 2);
@@ -225,6 +239,7 @@ function pfem_sweep_gui()
     %% ── Wire callbacks ──────────────────────────────────────────────────────
     btn_add.ButtonPushedFcn     = @(~,~) cb_add_cases(fig, case_lb, param_tbl);
     btn_rem.ButtonPushedFcn     = @(~,~) cb_remove_cases(fig, case_lb, param_tbl);
+    dd_preset.ValueChangedFcn   = @(src,~) cb_load_preset(src, fig, case_lb, param_tbl);
     sweep_dd.ValueChangedFcn    = @(~,~) on_mode_change(sweep_dd, count_lbl, lhs_cb, btn_corr);
     btn_fill.ButtonPushedFcn    = @(~,~) cb_fill_ranges(fig, param_tbl, count_lbl, sweep_dd);
     btn_minus.ButtonPushedFcn   = @(~,~) adj_count(count_lbl, -1, sweep_dd);
@@ -257,6 +272,66 @@ function cb_add_cases(fig, case_lb, param_tbl)
         fp = fullfile(fpath, fnames{k});
         if ~ismember(fp, st.yaml_paths)
             st.yaml_paths{end+1} = fp;
+        end
+    end
+    setappdata(fig, 'state', st);
+    refresh_cases(case_lb, st.yaml_paths);
+    refresh_params(fig, param_tbl);
+end
+
+
+function cb_load_preset(src, fig, case_lb, param_tbl)
+% One-click loader for common YAML combinations. Adds the preset's paths
+% to the app-state yaml_paths (deduped) and refreshes the case list and
+% parameter table. Resets the dropdown to its placeholder after loading
+% so the same preset can be re-picked.
+    choice = char(src.Value);
+    src.Value = 'Load preset ...';   % reset for next click
+    st = getappdata(fig, 'state');
+    repo = st.repo_root;
+
+    switch choice
+        case 'Prandtl demo (PFEM + analytic + external)'
+            paths = { ...
+                'benchmarks/pfem5/chap06/p61.yaml', ...
+                'benchmarks/analytic/prandtl_bearing.yaml', ...
+                'benchmarks/external/prandtl_external.yaml' };
+        case 'All analytic oracles (9)'
+            paths = { ...
+                'benchmarks/analytic/prandtl_bearing.yaml', ...
+                'benchmarks/analytic/prandtl_terzaghi.yaml', ...
+                'benchmarks/analytic/bar_elongation.yaml', ...
+                'benchmarks/analytic/ss_beam_eigen.yaml', ...
+                'benchmarks/analytic/sdof_step.yaml', ...
+                'benchmarks/analytic/terzaghi_1d.yaml', ...
+                'benchmarks/analytic/slab_heat_gen.yaml', ...
+                'benchmarks/analytic/strip_seepage.yaml', ...
+                'benchmarks/analytic/infinite_slope.yaml' };
+        case 'One PFEM per case type (8)'
+            paths = { ...
+                'benchmarks/pfem5/chap06/p61.yaml',   ...  % plasticity_load
+                'benchmarks/pfem5/chap06/p612.yaml',  ...  % slope_srf
+                'benchmarks/pfem5/chap05/p51_3.yaml', ...  % elastic_static
+                'benchmarks/pfem5/chap07/p71_1.yaml', ...  % seepage_steady
+                'benchmarks/pfem5/chap08/p81_5.yaml', ...  % consolidation
+                'benchmarks/pfem5/chap10/p101.yaml',  ...  % eigenvalue
+                'benchmarks/pfem5/chap11/p111.yaml',  ...  % dynamic_transient
+                'benchmarks/pfem5/chap08/p811.yaml'   ...  % thermal
+            };
+        case 'Analytic + External Prandtl (fast, no PFEM)'
+            paths = { ...
+                'benchmarks/analytic/prandtl_bearing.yaml', ...
+                'benchmarks/external/prandtl_external.yaml' };
+        otherwise
+            return;
+    end
+
+    added = 0;
+    for i = 1:numel(paths)
+        fp = fullfile(repo, paths{i});
+        if exist(fp, 'file') && ~ismember(fp, st.yaml_paths)
+            st.yaml_paths{end+1} = fp;
+            added = added + 1;
         end
     end
     setappdata(fig, 'state', st);
