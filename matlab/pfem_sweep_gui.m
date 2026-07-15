@@ -1461,8 +1461,11 @@ function refresh_params(fig, param_tbl)
     for k = 1:numel(st.yaml_paths)
         try
             y    = pfem_yaml_load(st.yaml_paths{k});
-            chap = num2str(y.authors.source.chapter);
-            tp   = y.tunable_parameters;
+            chap = yaml_chapter_label(y, st.yaml_paths{k});
+            if ~isfield(y, 'tunable_parameters') || isempty(y.tunable_parameters)
+                continue;
+            end
+            tp = y.tunable_parameters;
             for ti = 1:numel(tp)
                 p  = tp{ti};
                 nm = p.name;
@@ -1524,6 +1527,22 @@ function refresh_params(fig, param_tbl)
         data{i,5} = strjoin(e.chaps, ', ');
     end
     param_tbl.Data = data;
+end
+
+
+function s = yaml_chapter_label(y, yaml_path)
+% Column label for the "Chapters" column. PFEM YAMLs have
+% y.authors.source.chapter; non-PFEM YAMLs (analytic, external) do not.
+% Fall back to the immediate parent directory ("analytic", "external", ...).
+    s = '';
+    if isstruct(y) && isfield(y, 'authors') && isstruct(y.authors) ...
+            && isfield(y.authors, 'source') && isstruct(y.authors.source) ...
+            && isfield(y.authors.source, 'chapter')
+        s = num2str(y.authors.source.chapter);
+        return;
+    end
+    [d, ~] = fileparts(yaml_path);
+    [~, s] = fileparts(d);
 end
 
 
