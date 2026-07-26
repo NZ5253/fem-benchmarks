@@ -1,4 +1,17 @@
-# Phase 3 Plan — Pluggable Runner Interface
+<p align="center">
+  <img src="figures/tudortmund_logo.svg" alt="Technische Universität Dortmund" height="60">
+  &nbsp;&nbsp;&nbsp;&nbsp;
+  <img src="figures/cre_logo.png" alt="Chair for Reliability Engineering (CRE)" height="60">
+</p>
+
+<h1 align="center">Phase 3 Plan — Pluggable Runner Interface</h1>
+
+<p align="center">
+  <sub>Historical planning document · Every milestone shipped in v1.0-phase3-complete<br>
+  Companion to <a href="HANDOVER.md">HANDOVER.md</a> · <a href="ARCHITECTURE.md">ARCHITECTURE.md</a></sub>
+</p>
+
+---
 
 **Author**: Naeem Zainuddin
 **Status**: COMPLETE. Original scope M0-M6 landed on `master` (`2f41407`);
@@ -162,3 +175,11 @@ four levels:
 
 Every legacy YAML in `benchmarks/pfem5/chap*/` still runs unmodified; the
 optional `runner:` key is absent on all 87 of them.
+
+---
+
+<p align="center"><sub>
+  <a href="https://github.com/NZ5253/fem-benchmarks">github.com/NZ5253/fem-benchmarks</a> ·
+  <a href="https://github.com/NZ5253/fem-benchmarks/releases/tag/v1.0-phase3-complete"><code>v1.0-phase3-complete</code></a> ·
+  Naeem Zainuddin, Technische Universität Dortmund
+</sub></p>

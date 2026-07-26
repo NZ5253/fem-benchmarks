@@ -1,4 +1,17 @@
-# Adding a new backend
+<p align="center">
+  <img src="figures/tudortmund_logo.svg" alt="Technische Universität Dortmund" height="60">
+  &nbsp;&nbsp;&nbsp;&nbsp;
+  <img src="figures/cre_logo.png" alt="Chair for Reliability Engineering (CRE)" height="60">
+</p>
+
+<h1 align="center">Adding a new backend</h1>
+
+<p align="center">
+  <sub>Contributor tutorial · ~30 minutes if the solver already exists<br>
+  Companion to <a href="HANDOVER.md">HANDOVER.md</a> · <a href="ARCHITECTURE.md">ARCHITECTURE.md</a> · <a href="adding_an_oracle.md">adding_an_oracle.md</a></sub>
+</p>
+
+---
 
 A backend teaches the framework how to run *one kind* of solver end-to-end
 (PFEM, an analytic formula, a Python subprocess, an Abaqus job, ...). Phase 3
@@ -140,3 +153,11 @@ plotting / cache helpers work.
 - `analytic_backend.m` is the reference implementation for an in-process
   backend.
 - `external_backend.m` shows how to shell out to any executable.
+
+---
+
+<p align="center"><sub>
+  <a href="https://github.com/NZ5253/fem-benchmarks">github.com/NZ5253/fem-benchmarks</a> ·
+  Companion to <a href="HANDOVER.md">HANDOVER.md</a> ·
+  Naeem Zainuddin, Technische Universität Dortmund
+</sub></p>

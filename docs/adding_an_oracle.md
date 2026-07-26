@@ -1,4 +1,17 @@
-# Adding a new analytic oracle
+<p align="center">
+  <img src="figures/tudortmund_logo.svg" alt="Technische Universität Dortmund" height="60">
+  &nbsp;&nbsp;&nbsp;&nbsp;
+  <img src="figures/cre_logo.png" alt="Chair for Reliability Engineering (CRE)" height="60">
+</p>
+
+<h1 align="center">Adding a new analytic oracle</h1>
+
+<p align="center">
+  <sub>Contributor tutorial · ~15 minutes per new formula<br>
+  Companion to <a href="HANDOVER.md">HANDOVER.md</a> · <a href="ARCHITECTURE.md">ARCHITECTURE.md</a> · <a href="adding_a_backend.md">adding_a_backend.md</a></sub>
+</p>
+
+---
 
 An oracle is a closed-form solution the framework uses as an independent
 reference against PFEM (or against another backend). Phase 3 ships 9 of them
@@ -133,3 +146,11 @@ but under Monte Carlo, sensitivity, and correlated sampling.
 - Existing oracles for shape: [`analytic_backend.m` `eval_model` switch](../matlab/backends/analytic_backend.m)
 - Existing YAML pattern: any file under [`benchmarks/analytic/`](../benchmarks/analytic/)
 - Test row templates: [`test_all_analytic_oracles.m`](../matlab/tests/test_all_analytic_oracles.m) and [`test_physics_sanity.m`](../matlab/tests/test_physics_sanity.m)
+
+---
+
+<p align="center"><sub>
+  <a href="https://github.com/NZ5253/fem-benchmarks">github.com/NZ5253/fem-benchmarks</a> ·
+  Companion to <a href="HANDOVER.md">HANDOVER.md</a> ·
+  Naeem Zainuddin, Technische Universität Dortmund
+</sub></p>
