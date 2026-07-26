@@ -1,575 +1,437 @@
-# FEM Benchmarks Guide
+<p align="center">
+  <img src="../presentation/abc/tudortmund.png" alt="Technische Universität Dortmund" height="60">
+  &nbsp;&nbsp;&nbsp;&nbsp;
+  <img src="../presentation/abc/cre.png" alt="Chair for Computing in Engineering" height="60">
+</p>
 
-Complete guide for working with the PFEM benchmark catalogue.
+<h1 align="center">fem-benchmarks — Usage Guide</h1>
 
-> New to the project? Read [docs/ARCHITECTURE.md](ARCHITECTURE.md) first for
-> the end-to-end flow and how the files connect, then come back here for the
-> task-by-task how-to. For the MATLAB function reference see
-> [matlab/README.md](../matlab/README.md).
-
-## Table of Contents
-
-1. [Quick Start](#quick-start)
-2. [Generating YAML Files](#generating-yaml-files)
-3. [Running Benchmarks](#running-benchmarks)
-4. [MATLAB Integration](#matlab-integration)
-5. [Token-Based Patching](#token-based-patching)
-6. [Validation](#validation)
-7. [Repository Structure](#repository-structure)
+<p align="center">
+  <sub>Practical guide to running the framework · GUI + MATLAB API + Python + report generation<br>
+  Companion to <a href="HANDOVER.md">HANDOVER.md</a> · <a href="ARCHITECTURE.md">ARCHITECTURE.md</a></sub>
+</p>
 
 ---
 
-## Quick Start
+## Table of contents
 
-### Prerequisites
+- [1. Quick start (5 min)](#1-quick-start-5-min)
+- [2. Prerequisites and install](#2-prerequisites-and-install)
+- [3. Regenerating YAMLs](#3-regenerating-yamls)
+- [4. Running from the command line](#4-running-from-the-command-line)
+- [5. GUI walkthrough](#5-gui-walkthrough)
+- [6. MATLAB API](#6-matlab-api)
+- [7. HTML report generator](#7-html-report-generator)
+- [8. Test harness](#8-test-harness)
+- [9. Adding new content](#9-adding-new-content)
+- [10. Troubleshooting](#10-troubleshooting)
+
+---
+
+## 1. Quick start (5 min)
 
 ```bash
-# Python dependencies
+git clone https://github.com/NZ5253/fem-benchmarks.git
+cd fem-benchmarks
 pip install pyyaml
-
-# Verify PFEM source location (default)
-ls ~/projects/fem-benchmarks/pfem/source/
+# put PFEM source at pfem/ (see HANDOVER §12.3)
+scripts/pfem_build_chapter.sh ./pfem chap06
+python3 scripts/run_all_tests.py                      # → 87/87
+matlab -nodesktop -nosplash \
+    -r "addpath matlab matlab/utils matlab/backends; pfem_sweep_gui"
 ```
 
-### Basic Workflow
+In the GUI:
+
+1. **Load preset ...** → **Prandtl demo (PFEM + analytic + external)**
+2. Mode → **Stochastic (distributions)**, sample count 30
+3. **Fill Ranges**, uncheck everything except `yield_stress`
+4. **Run All**
+
+Three overlapping P_lim distributions appear; PFEM matches the two closed-
+form backends to 0.16 %.
+
+---
+
+## 2. Prerequisites and install
+
+### System packages (Debian / Ubuntu)
 
 ```bash
-# 1. Generate YAMLs for a chapter
-python3 scripts/generate_yamls_v2.py --chapter chap05
+sudo apt install gfortran make python3 python3-pip \
+                 libarpack2t64 libarpack2-dev liblapack-dev libblas-dev
+pip install pyyaml
+```
 
-# 2. Or generate all chapters at once
+MATLAB R2022b or newer (verified on R2025b).
+
+### PFEM source
+
+The Fortran source is gitignored (licensed textbook code). Two restore
+options:
+
+- **From USB backup** (fastest, patches applied):
+  `cp -r "/media/<user>/USB Drive/fem-benchmarks-cleaned-*/pfem" ./`
+- **Fresh download** from http://www.pfem.org.uk/ then apply patches:
+  ```bash
+  for p in scripts/pfem_patches/*.patch; do
+      (cd pfem && patch -p1 < "../$p")
+  done
+  cp scripts/pfem_patches/*.f03 pfem/source/library/misc/
+  ```
+
+Details: [HANDOVER §12](HANDOVER.md#12-setup-on-a-fresh-system).
+
+---
+
+## 3. Regenerating YAMLs
+
+Rarely needed — the 87 YAMLs are checked in. But if the Fortran source or
+`.dat` files change:
+
+```bash
+# Single chapter
+python3 scripts/generate_yamls_v2.py --chapter chap06
+
+# Single case
+python3 scripts/generate_yamls_v2.py --chapter chap06 --case p61
+
+# All 87 cases at once
 python3 scripts/generate_yamls_v2.py --all-chapters
 
-# 3. Validate generated files
-python3 scripts/verify_yamls.py benchmarks/pfem5/chap05/*.yaml
+# Preview only (no write)
+python3 scripts/generate_yamls_v2.py --chapter chap06 --dry-run
 
-# 4. Commit changes
-git add benchmarks/pfem5/
-git commit -m "Add YAML benchmarks"
-git push
+# Validate
+python3 scripts/verify_yamls.py benchmarks/pfem5/chap*/*.yaml
 ```
 
 ---
 
-## Generating YAML Files
+## 4. Running from the command line
 
-### Overview
-
-The `generate_yamls_v2.py` script creates YAML benchmark files with **token-based patch coordinates**:
-- Tokenizes `.dat` files preserving position information
-- Extracts READ(10,*) statements (including Fortran `&` continuations) from source
-- Detects tunable parameters with their token indices — see table below
-- Generates structured YAML with `global_token_index` for each tunable
-
-### Detected Tunable Parameter Types
-
-| Category | Parameters detected |
-|----------|-------------------|
-| Elastic | E (Young's modulus), ν (Poisson's ratio) |
-| Plasticity | yield_stress σ_y (von Mises) |
-| Mohr-Coulomb | friction_angle_phi, cohesion_c, dilation_angle_psi, unit_weight_gamma, earth_pressure_coeff_k0 |
-| Two-material | fill: E/ν/c/φ/ψ/γ; embankment: E/ν/c/φ/ψ/γ (p69-style) |
-| Flow | permeability_kx/ky, conductivity_kx/ky, dynamic_viscosity |
-| Dynamics | density_rho, dtim, nstep, theta, beta, gamma, fm, fk, dr, omega |
-| Eigenvalue | nmodes, nev, ncv, maxitr |
-| Solver | tol (convergence), limit (max iters), cg_tol, cg_limit |
-| Loading | incs (load increments), presc (prescribed increment) |
-| Consolidation | bulk_modulus_ke, initial_effective_stress (cons), k0 |
-| Mesh | nels/nxe, nye (with topology-change warning) |
-
-### Key Features
-
-- **Token indexing**: Each tunable has a `global_token_index` for direct patching
-- **Source-aware detection**: Walks READ statements in source order using a symbol table
-- **Continuation handling**: Fortran `&` multi-line READs joined before parsing
-- **All tokens stored**: Complete token list in `inputs.all_tokens` for verification
-
-### Usage
-
-**Generate single case:**
-```bash
-python3 scripts/generate_yamls_v2.py --chapter chap05 --case p54_1
-```
-
-**Generate all cases in a chapter:**
-```bash
-python3 scripts/generate_yamls_v2.py --chapter chap05
-```
-
-**Preview without generating:**
-```bash
-python3 scripts/generate_yamls_v2.py --chapter chap05 --dry-run
-```
-
-### Command Options
-
-```
---chapter CHAP      Chapter to process (e.g., chap05)
---case CASE         Specific case (optional, default: all cases)
---all-chapters      Process all chapters 4-11 at once
---pfem-root PATH    PFEM source directory (default: ~/projects/fem-benchmarks/pfem)
---dry-run           Preview only
-```
-
-### Generate All Chapters
-
-Process all 87 cases across chapters 4-11 with one command:
+### Every PFEM binary
 
 ```bash
-python3 scripts/generate_yamls_v2.py --all-chapters
+python3 scripts/run_all_tests.py
+# → 87/87 passed
 ```
 
-### YAML Structure
-
-Each generated YAML includes:
-
-- **id, title, purpose** - Identification
-- **authors** - Source info, created_by: "Naeem"
-- **code** - Language, source file, READ statements with line numbers
-- **fem** - Dimension, formulation, DOF, element type
-- **analysis** - Physics, type, regime
-- **units** - Unit system notes
-- **tunable_parameters** - Parameters for studies (E, nu, loads, mesh)
-- **input_schema** - Field descriptions for each READ statement
-- **inputs** - Parsed .dat values by record
-- **outputs** - Expected output files
-- **how_to_run** - Linux and MATLAB commands
-- **notes** - Usage notes
-
----
-
-## Running Benchmarks
-
-### Build and Execute
-
-Use the build script to compile and run cases:
+### One case, from a shell
 
 ```bash
-scripts/pfem_build_and_run.sh ~/projects/fem-benchmarks/pfem chap05 p51 p51_3 --rebuild
+scripts/pfem_build_and_run.sh ./pfem chap06 p61 p61 --rebuild
+# builds if needed, runs p61 with dataset p61, saves outputs
 ```
 
-This will:
-1. Build PFEM library modules
-2. Compile the specific program
-3. Run with the specified dataset
-4. Output results to executable/chap05/
+### From MATLAB, single case
 
-### Manual Execution
-
-```bash
-cd ~/projects/fem-benchmarks/pfem/executable/chap05
-printf "p51_3\n" | ../../build/bin/p51
-```
-
-### Batch Build
-
-Build all programs for a chapter at once:
-
-```bash
-# Build all chap04 programs
-./scripts/pfem_build_chapter.sh ~/projects/fem-benchmarks/pfem chap04
-
-# Force rebuild
-./scripts/pfem_build_chapter.sh ~/projects/fem-benchmarks/pfem chap04 --rebuild
+```matlab
+addpath matlab matlab/utils matlab/backends;
+[status, out] = pfem_run_from_yaml(pwd, fullfile(pwd, 'pfem'), ...
+    'benchmarks/pfem5/chap06/p61.yaml', ...
+    struct('yield_stress', 150));
+% status = 0 on success
+% out.run_dir has all files
 ```
 
 ---
 
-## MATLAB Integration
+## 5. GUI walkthrough
 
-### Single Case Execution
-
-```matlab
-pfem_root = '~/projects/fem-benchmarks/pfem';
-[status, outputs] = pfem_runner(pfem_root, 'chap05', 'p51', 'p51_3');
-```
-
-Returns:
-- `status`: 0 = success, 1 = failure
-- `outputs`: struct with result file paths and contents
-
-### Parameter Discovery
-
-Use `pfem_show_tunables` to see available parameters for any case:
+Launch:
 
 ```matlab
-tunables = pfem_show_tunables('benchmarks/pfem5/chap05/p51_4.yaml');
+addpath matlab matlab/utils matlab/backends;
+pfem_sweep_gui
 ```
 
-Output:
-```
-============================================================
-Tunable Parameters for: p51_4
-Program: p51 | Chapter: 5
-============================================================
+<p align="center">
+  <img src="../presentation/abc/gui.png" alt="PFEM Sweep Studio" width="820">
+</p>
 
-NAME                       TOKEN          CURRENT      TYPE  SUGGESTED RANGE
---------------------------------------------------------------------------------
-youngs_modulus_E               9            1.0e6      real  [1.00e+04, 1.00e+12]
-poisson_ratio_nu              10              0.3      real  [0.00e+00, 4.90e-01]
-nels_or_nxe                    3                8       int  -
+### The five panels
+
+| Panel | Contents |
+|---|---|
+| **Cases** (left) | Multi-select list of loaded YAMLs. Add / Remove / **Load preset ...** dropdown |
+| **Tunable Parameters** (centre-top) | Union of every loaded case's tunables — enable / values / range / chapters |
+| **Toolbar** (below params) | Mode dropdown · Fill Ranges · sample count ± · LHS toggle · Corr… · Preview Scenarios |
+| **Log** (centre-bottom) | Per-case run progress with backend and case-type headers |
+| **Results** (bottom) | One row per (case × scenario) — Case · Scenario · Status · QoI · Time · Run Dir |
+| **Run controls** (bottom-left) | Run All · Stop |
+| **Actions** (bottom-right) | Open Figures · Show Comparison · Clear Results |
+
+### Load preset dropdown
+
+Four one-click YAML combinations (added Jul 2026):
+
+| Preset | Loads | Best for |
+|---|---|---|
+| Prandtl demo (PFEM + analytic + external) | 3 YAMLs | The canonical three-way cross-check |
+| All analytic oracles (9) | 9 YAMLs | Full closed-form catalogue |
+| One PFEM per case type (8) | 8 YAMLs | Coverage sanity |
+| Analytic + External Prandtl (fast, no PFEM) | 2 YAMLs | Sub-second-per-sample smoke test |
+
+The dropdown resets after each load so you can stack presets (e.g.,
+"One PFEM per case type" + "All analytic oracles" = 17 cases in two clicks).
+
+### Sweep modes
+
+| Mode | Semantics | Typical use |
+|---|---|---|
+| **Lockstep** | Same-length arrays, parameters vary in parallel | Compare two or three explicit scenarios |
+| **Grid** | Cartesian product of arrays (capped at 500) | Full factorial parameter study |
+| **Stochastic** | Monte Carlo (LHS optional) from named distributions | Reliability, uncertainty quantification |
+| **Sensitivity** | OAT: 2k+1 runs per case | Identify the dominant parameter |
+
+### Fill Ranges
+
+Auto-populates every checked parameter's Values cell. Behaviour depends on
+the mode:
+
+- **Deterministic modes**: N log-spaced values from the parameter's
+  suggested range. Adjust N with the ± counter.
+- **Stochastic mode**: `lognormal(μ, COV)` with physics-based defaults
+  (see below). Sample count from the counter (default 50, range 10–500).
+
+Physics-based COVs used by Fill Ranges in stochastic mode:
+
+| Parameter family | Default COV |
+|---|---|
+| Strength (c, σ_y) | 0.40 |
+| Angles (φ, ψ) | 0.10 |
+| Stiffness (E, EI) | 0.30 |
+| Poisson ratio ν | 0.10 |
+| Unit weight γ | 0.05 |
+| Permeability k | 0.50 |
+
+Solver / mesh parameters (25 names — see
+`pfem_backend.non_sampleable`) are **skipped** by Fill Ranges because
+sampling them destabilises the Fortran solver.
+
+### Corr… button
+
+Opens a modal for entering pairwise rank correlations
+`(param_i, param_j, ρ)`. Applied via Iman-Conover restricted pairing at
+runtime. Verified for targets in `[-0.7, +0.5]` reproduced within 5 % on
+n = 500.
+
+### Recommended demo flow
+
+1. **Load preset ... → Prandtl demo (PFEM + analytic + external)**
+2. Mode → **Stochastic**, count → 30
+3. **Fill Ranges** → auto-fills yield_stress lognormal + PFEM's other
+   tunables
+4. **Uncheck** everything except `yield_stress` (so the three cases
+   receive matching draws)
+5. **Preview Scenarios** (optional) → the log lists the joint samples
+6. **Run All** → per-case blocks scroll:
+   ```
+   === Stochastic sweep: p61, 30 samples (LHS) ===
+     backend: pfem     case type: plasticity_load
+     [1/30] yield_stress=86.56    OK  P_lim=445 kPa  t=0.05s
+     ...
+   === Stochastic sweep: prandtl_bearing, 30 samples (LHS) ===
+     backend: analytic case type: unknown
+     [1/30] yield_stress=86.56    OK  P_lim=445      t=0.0s
+     ...
+   ```
+7. **Open Figures** on any OK row → 3 windows per case (histogram, CDF,
+   scatter). PFEM tracks the two analytic curves closely until PFEM's
+   load-step ceiling saturates.
+8. **generate_report** in a MATLAB prompt for a shareable HTML.
+
+### Sensitivity mode
+
+Same setup but with Mode → **Sensitivity (tornado)**. Each case gets
+`2k + 1` runs (mean, and `μ ± σ` per parameter). Result row:
+
+```
+p61   tornado k=3   OK   P_lim base=515 top=yield_stress (spread=215)
 ```
 
-### Parametric Studies — Single Case
+The full tornado bar chart pops up per case.
+
+---
+
+## 6. MATLAB API
+
+Every mode is scriptable if you prefer batch to the GUI.
+
+### Load and run a single case
 
 ```matlab
-overrides.youngs_modulus_E = 500;
-[status, out] = pfem_run_from_yaml(repo_root, pfem_root, yaml_path, overrides);
+addpath matlab matlab/utils matlab/backends;
+
+repo_root = pwd;
+pfem_root = fullfile(repo_root, 'pfem');
+yaml_path = 'benchmarks/pfem5/chap06/p61.yaml';
+
+[status, out] = pfem_run_from_yaml(repo_root, pfem_root, yaml_path, ...
+    struct('yield_stress', 150));
+
+y  = pfem_yaml_load(yaml_path);
+b  = get_backend(y);
+ct = pfem_detect_case_type(y);
+q  = b.extract_qoi(out, ct);
+fprintf('%s = %.4f %s\n', q.label, q.value, q.unit);
 ```
 
-Each run creates an isolated, self-contained folder:
-```
-runs/chap05/p51_4/E_500/
-    p51_4.dat          ← patched input
-    p51                ← compiled binary (chmod +x; re-runnable from shell)
-    p51_4.res  p51_4.msh  p51_4.dis  p51_4.vec
-    case.yaml          ← YAML snapshot
-    overrides.mat      ← saved overrides
-    run_info.txt       ← human-readable summary
-```
-
-When the PFEM book's pre-computed `.res` is absent (e.g. p63), the first
-override run automatically generates a baseline:
-```
-runs/chap06/p63/default/   ← created automatically on first p63 override run
-    p63.dat  p63  p63.res  run.log
-```
-Subsequent scenario runs compare against this cached baseline.
-
-### Parametric Studies — GUI (pfem_sweep_gui) — recommended
-
-`pfem_sweep_gui` is the graphical sweep studio.  No code editing required.
+### Latin Hypercube sample
 
 ```matlab
-pfem_sweep_gui()
+spec = struct('name', 'yield_stress', 'dist', 'lognormal', ...
+              'mu', 100, 'cov', 0.4, 'bounds', []);
+samples = pfem_lhs_sample(spec, 50, 'Seed', 42);
+% samples: 50 x 1 column with stratified marginals
 ```
 
-**Step-by-step:**
-
-1. Click **Add YAML(s)** and select any `.yaml` files from `benchmarks/pfem5/`
-   (multi-select supported; cases from different chapters can be mixed)
-2. The **Tunable Parameters** table auto-populates with the union of all tunables
-   across the loaded cases, with their suggested ranges
-3. Enter sweep values in the **Values** column (comma-separated, e.g. `50, 100, 200, 500`),
-   or click **Fill Ranges** to auto-fill N log-spaced values — adjust N with the `−`/`+` counter
-4. Select **Sweep mode**:
-   - **Lockstep**: all enabled parameters vary together step by step.
-     `yield_stress=[50,100]` + `youngs_modulus_E=[1e4,2e4]` produces 2 scenarios: (50,1e4) and (100,2e4).
-     Arrays must be the same length.
-   - **Grid**: Cartesian product of all enabled parameter arrays.
-     `yield_stress=[50,100]` + `youngs_modulus_E=[1e4,2e4]` produces 4 scenarios.
-     Capped at 500 combinations.
-   - **Stochastic (distributions)**: Monte Carlo with named distributions
-     (`lognormal(mu, COV)`, `normal(mu, COV)`, `truncnormal(mu, COV, lo, hi)`,
-     `uniform(lo, hi)`). The counter widget sets the sample count
-     (default 50, range 10 to 500, step 10). **Fill Ranges** auto-fills
-     `lognormal(mu, COV)` using each parameter's YAML default as `mu` and a
-     physics-based COV per parameter family. Solver and mesh parameters are
-     skipped because varying them stochastically destabilises the solver.
-5. Click **Preview Scenarios** to see the full list in the log before running
-6. Click **Run All**:
-   - Binaries are compiled automatically via `pfem_ensure_built` if missing
-   - Every case x every scenario runs; results table fills live
-   - Stop button interrupts cleanly at any time
-   - In stochastic mode, the GUI auto-detects each case's type via
-     `pfem_detect_case_type` and extracts the right Quantity of Interest via
-     `pfem_extract_qoi` (FS for slope, P_lim for plasticity, u_max for elastic,
-     etc.). Histograms, CDFs, and per-parameter scatter plots are saved per
-     case. For `slope_srf` cases the report also includes `P(failure)` and
-     reliability index `beta`.
-7. When the run finishes, click **Open Figures** to view comparison plots:
-   Load-Displacement, reference mesh, deformed shape, and displacement vectors
-8. Click **Print Comparison** to print text diff tables to the command window
-
-**Auto-build**: if `pfem/build/bin/<program>` is missing, `pfem_build_chapter.sh` is
-run automatically.  If build fails, that case is skipped; all others continue.
-
-**Cross-case parameters**: parameters not present in a given YAML (e.g. `yield_stress`
-in a flow case) are silently skipped — the same scenario set works across all cases.
-
-### Parametric Studies — Multi-Case × Multi-Parameter Sweep (NZ.m, scripted)
-
-`NZ.m` is the scripted sweep interface.  Edit the configuration
-section (yaml_paths + scenarios) and run it.
+### Correlated multi-parameter LHS
 
 ```matlab
-%% 1. Cases
-yaml_paths = {
-    fullfile(repo_root, 'benchmarks', 'pfem5', 'chap06', 'p61.yaml'),
-    fullfile(repo_root, 'benchmarks', 'pfem5', 'chap06', 'p63.yaml'),
-};
-
-%% 2. Scenarios — pfem_make_scenarios builds the struct array
-% Single parameter:
-scenarios = pfem_make_scenarios('yield_stress', [50, 100, 200, 500]);
-
-% Multiple parameters in lockstep (equal-length arrays):
-scenarios = pfem_make_scenarios( ...
-    'yield_stress',     [50,   100,  200,  500], ...
-    'youngs_modulus_E', [5e4,  1e5,  2e5,  1e5]);
-% → 4 scenarios, labels auto-generated: 'sy=50 E=5e4', 'sy=100 E=1e5', ...
-
-% Fully manual (custom labels):
-scenarios(1) = struct('label','soft', 'yield_stress', 50,  'youngs_modulus_E', 5e4);
-scenarios(2) = struct('label','hard', 'yield_stress', 500, 'youngs_modulus_E', 2e5);
+specs = struct('name', {'c', 'phi', 'E'}, ...
+               'dist', {'lognormal', 'truncnormal', 'lognormal'}, ...
+               'mu',   {60, 25, 1e5}, ...
+               'cov',  {0.40, 0.10, 0.30}, ...
+               'bounds', {[], [0, 45], []});
+R = [1.0 -0.5  0.3;
+    -0.5  1.0  0.0;
+     0.3  0.0  1.0];
+samples = pfem_lhs_sample(specs, 500, 'Seed', 42, 'Correlation', R);
 ```
 
-NZ.m runs every scenario for every case, then:
-1. Prints a text comparison table (original `.res` vs each scenario's `.res`)
-2. Opens 4 separate figure windows via `pfem_plot_sweep_summary`
-3. Saves `runs/<chap>/<case>/<case>_sweep_{res,msh,dis,vec}.png`
-
-Parameters not present in a given case's YAML are silently skipped, so the
-same scenario set can be applied to multiple cases without errors.
-
-### Result Comparison
+### Sensitivity OAT
 
 ```matlab
-% Single run — text table (Format A: per-node displacements + stresses)
-pfem_compare_results(out, 'plot', false);
-
-% Single run — Format B (load-step table, e.g. p61 von Mises)
-% Automatically detected; shows step / load / orig max|u| / mod max|u| table.
-pfem_compare_results(out, 'plot', false);
+specs = struct('name', {'yield_stress', 'youngs_modulus_E', 'poisson_ratio_nu'}, ...
+               'dist', {'lognormal', 'lognormal', 'truncnormal'}, ...
+               'mu',   {100, 1e5, 0.30}, ...
+               'cov',  {0.40, 0.30, 0.10}, ...
+               'bounds', {[], [], [0, 0.49]});
+r = pfem_sensitivity_oat(pwd, fullfile(pwd,'pfem'), ...
+    'benchmarks/pfem5/chap06/p61.yaml', specs);
+pfem_plot_tornado(r);
 ```
 
-### Sweep Visualisation
+### Full stochastic sweep
 
 ```matlab
-figs = pfem_plot_sweep_summary(results, sweep_param, yaml_path, ...
-    'Title', 'PFEM p61', ...
-    'Save',  fullfile(runs_dir, 'p61_sweep'));
-% Creates up to 4 figures depending on which outputs exist:
-%   figs.res  Load–Displacement summary + per-scenario curve
-%   figs.msh  Reference mesh panels (undeformed)
-%   figs.dis  Deformed shape panels
-%   figs.vec  Displacement vector panels
-% Saved as: p61_sweep_res.png  _msh.png  _dis.png  _vec.png
-```
-
-### Batch Chapter Runner
-
-```matlab
-results = pfem_run_chapter(repo_root, pfem_root, 'chap04');
+for i = 1:size(samples, 1)
+    ov.yield_stress = samples(i);
+    [~, out] = pfem_run_from_yaml(pwd, fullfile(pwd,'pfem'), yaml_path, ov);
+    q = b.extract_qoi(out, ct);
+    P_lim(i) = q.value;
+end
+histogram(P_lim);
 ```
 
 ---
 
-## Token-Based Patching
+## 7. HTML report generator
 
-The YAML files now include **token-based patch coordinates** for each tunable parameter. This enables generic patching across all PFEM chapters without hardcoded assumptions.
-
-### How It Works
-
-1. **Tokenization**: The `.dat` file is parsed into a flat list of tokens
-2. **Global Index**: Each tunable parameter stores its `global_token_index` (1-based position)
-3. **Patching**: The MATLAB patcher replaces tokens directly by index
-
-### YAML Structure
-
-```yaml
-tunable_parameters:
-  - name: youngs_modulus_E
-    global_token_index: 9     # Position in flat token list
-    line: 4                   # Original line number
-    type: real
-    description: "Young's modulus"
-    current_value: '1.0e6'
-    suggested_range: [1.0e4, 1.0e12]
-```
-
-### Using Overrides in MATLAB
+After any sweep, produce a single-file shareable report:
 
 ```matlab
-% Load YAML
-yaml_path = 'benchmarks/pfem5/chap05/p51_3.yaml';
+addpath matlab matlab/utils;
 
-% Define overrides (keyed by tunable name)
-overrides = struct();
-overrides.youngs_modulus_E = 2e6;     % Double the stiffness
-overrides.poisson_ratio_nu = 0.25;    % Change Poisson's ratio
+% Every sweep in the case directory
+p = generate_report('runs/chap06/p61');
+% → runs/chap06/p61/report.html (~3.6 MB for 11 sweeps)
 
-% Run with patching
-[status, out] = pfem_run_from_yaml(repo_root, pfem_root, yaml_path, overrides);
+% Latest sweep only, smaller
+p = generate_report('runs/chap06/p61', 'LatestOnly', true);
+% → ~900 KB
+
+% Custom output path
+p = generate_report('runs/chap06/p61', 'Out', '/tmp/p61_demo.html');
 ```
 
-### Benefits
+Fully self-contained — every PNG is embedded as base64. No external asset
+dependencies. Can be emailed, archived, or served directly.
 
-- **Generic**: Works for all chapters (4-11) without program-specific code
-- **Robust**: No assumptions about record structure or property ordering
-- **Traceable**: Token indices can be verified against the `.dat` file
+Structure:
 
-### Viewing Token Information
-
-Each YAML stores all tokens for reference:
-
-```yaml
-inputs:
-  all_tokens:
-    - "'plane'"
-    - "'quadrilateral'"
-    - '4'
-    - "'y'"
-    - '3'
-    # ... (token index = position in this list)
-```
+- `<h1>` case name + generation timestamp
+- Scenarios table (one row per subdirectory with run_info.txt status)
+- One `<h2>` section per sweep (grouped by mode + timestamp)
+- Every PNG in that sweep embedded and captioned
 
 ---
 
-## Validation
+## 8. Test harness
 
-### Verify YAML Files
+Fast tests (< 5 seconds combined):
 
-```bash
-# Single file
-python3 scripts/verify_yamls.py benchmarks/pfem5/chap05/p51_3.yaml
-
-# Multiple files
-python3 scripts/verify_yamls.py benchmarks/pfem5/chap05/*.yaml
-
-# All chapters
-python3 scripts/verify_yamls.py benchmarks/pfem5/**/*.yaml
+```matlab
+addpath matlab matlab/utils matlab/backends matlab/tests;
+test_all_analytic_oracles   %  9 / 9
+test_stochastic_gate        %  2 / 2 backends locked
+test_physics_sanity         % 20 / 20
+test_analytic_backend       % PFEM cross-check + sensitivity
+test_external_backend       % Python solver end-to-end
 ```
 
-Expected output:
-```
-✓ benchmarks/pfem5/chap05/p51_1.yaml
-✓ benchmarks/pfem5/chap05/p51_2.yaml
-...
-Valid: 13/13
-[SUCCESS] All YAML files are valid!
+Medium (~40 seconds):
+
+```matlab
+test_all_cases_stochastic   % 180 / 180 samples across 18 cases
+plot_analytic_vs_pfem       % correlation figure, r > 0.9 assertion
 ```
 
-### Validation Checks
+Slow (~5 min — the golden regression gate):
 
-The script verifies:
-- Valid YAML syntax
-- Required top-level keys present
-- Proper structure for nested sections
-- Source information available
-
----
-
-## Repository Structure
-
+```matlab
+test_golden_qoi             % 92 / 92 recorded QoI values unchanged
 ```
-fem-benchmarks/
-├── benchmarks/pfem5/      # YAML benchmark catalogue
-│   ├── chap04/           # 13 cases
-│   ├── chap05/           # 15 cases
-│   ├── chap06/           # 15 cases
-│   ├── chap07/           # 8 cases
-│   ├── chap08/           # 16 cases
-│   ├── chap09/           # 7 cases
-│   ├── chap10/           # 5 cases
-│   └── chap11/           # 8 cases (87 total)
-│
-├── scripts/
-│   ├── generate_yamls_v2.py        # YAML generator (token-based)
-│   ├── verify_yamls.py             # Validation tool
-│   ├── pfem_build_and_run.sh       # Build & run script
-│   └── pfem_build_chapter.sh       # Batch chapter build
-│
-├── matlab/
-│   ├── pfem_sweep_gui.m            # GUI sweep studio (multi-case × multi-param, auto-build)
-│   ├── pfem_runner.m               # Single case executor
-│   ├── pfem_run_from_yaml.m        # YAML-driven runner + auto-baseline generation
-│   ├── pfem_show_tunables.m        # Display available tunables
-│   ├── pfem_smart_sweep.m          # Auto-discovery parametric sweep
-│   ├── pfem_compare_results.m      # Comparison (Format A per-node + Format B load-step)
-│   ├── pfem_batch_figs.m           # Batch sweep figures for a whole chapter
-│   ├── pfem_run_chapter.m          # Batch chapter runner
-│   ├── NZ.m                        # Multi-case × multi-scenario sweep script
-│   └── utils/
-│       ├── pfem_yaml_load.m                # YAML loader
-│       ├── pfem_patch_dat_using_yaml.m     # Token-based .dat patcher
-│       ├── pfem_extract_coords.m           # Node coordinate extraction
-│       ├── pfem_make_scenarios.m           # Build scenario struct arrays
-│       ├── pfem_plot_sweep_summary.m       # Separate figures per output type
-│       └── pfem_ensure_built.m             # Auto-compile binary from source
-│
-├── docs/
-│   └── GUIDE.md                    # This file
-│
-└── README.md                        # Project overview
+
+Legacy (~3 min):
+
+```matlab
+test_phase2_multi_case      % Phase 2 sensitivity + LHS + correlation
+```
+
+Post-hoc verification on a live sweep directory:
+
+```matlab
+verify_stochastic_backends  % numeric certificate on runs/
 ```
 
 ---
 
-## Dataset Coverage
+## 9. Adding new content
 
-| Chapter | Programs | Cases | Topics |
-|---------|----------|-------|--------|
-| 4 | p41-p47   | 13 | 1D Problems |
-| 5 | p51-p57   | 15 | 2D / 3D Linear Elasticity |
-| 6 | p61-p69   | 15 | Material Nonlinearity (von Mises, Mohr-Coulomb, slope SRF) |
-| 7 | p71-p75   | 8  | Steady State Flow |
-| 8 | p81-p811  | 16 | Transient Problems |
-| 9 | p91-p96   | 7  | Coupled Problems (Biot, Navier-Stokes) |
-| 10 | p101-p104 | 5 | Eigenvalue Problems |
-| 11 | p111-p118 | 8 | Dynamics & Explicit Plasticity |
-| **Total** | | **87** | |
+- **New backend**: [adding_a_backend.md](adding_a_backend.md), ~30 min
+- **New analytic oracle**: [adding_an_oracle.md](adding_an_oracle.md), ~15 min
+- **New external solver**: copy the `prandtl_bash.yaml` /
+  `prandtl_external.yaml` pattern, ~15 min
+- **New case type**: see [ARCHITECTURE.md §10](ARCHITECTURE.md#10-extension-points),
+  ~1 h
+- **New sweep mode**: see [ARCHITECTURE.md §10](ARCHITECTURE.md#10-extension-points),
+  ~2 h
 
-(Case counts are per distinct dataset, not per program; several programs
-have multiple datasets. Verified count of `benchmarks/pfem5/chap*/*.yaml`.)
+Every extension should add at least one regression test to keep the
+four-level net comprehensive.
 
 ---
 
-## Tips & Best Practices
+## 10. Troubleshooting
 
-### For YAML Generation
+See [HANDOVER §20](HANDOVER.md#20-troubleshooting) for the full list. Most
+common:
 
-1. Always run validation after generating YAMLs
-2. Review line numbers in io_reads_from_unit10 match source code
-3. Verify parsed .dat values are correct
-4. Check tunable_parameters paths work with your use case
-
-### For Parametric Studies
-
-1. Start with small parameter ranges to test
-2. Use the tunable names from the YAML `tunable_parameters` block as override keys
-3. Drive sweeps through `pfem_sweep_gui` (GUI) or `NZ.m` / `pfem_stochastic_sweep`
-   (scripted); both funnel through `pfem_run_from_yaml`, which patches the `.dat`
-   by token index. Manual `.dat` editing is not needed.
-4. Never sweep solver or mesh parameters stochastically (tolerance, iteration
-   limit, time step, nxe/nye) — they destabilise the Fortran solver and are
-   skipped on purpose. See ARCHITECTURE.md gotcha S7.
-
-### For Version Control
-
-1. Generate YAMLs one chapter at a time
-2. Validate before committing
-3. Use descriptive commit messages
-4. Keep YAML files separate from PFEM source code
+| Symptom | Cause | Fix |
+|---|---|---|
+| GUI parameter table empty after loading YAMLs | MATLAB has old bytecode cached | Quit MATLAB entirely, relaunch, re-add |
+| "Build failed for p<N>" | `pfem_ensure_built` can't find binary | `scripts/pfem_build_chapter.sh ./pfem chap<N>` |
+| External backend prints commas | Non-English locale | `LC_ALL=C` (already set in `prandtl.sh`) |
+| Golden test fails on one case | Numeric drift (real regression or expected) | `git bisect run` or regenerate via `capture_golden_qoi` |
+| Batch job produces no output | `-batch` disables `uigetfile` | Inject state directly (see `full_gui_drive.m` pattern) |
 
 ---
 
-## Troubleshooting
-
-
-**Error: "Source file not found"**
-- Check PFEM root path with `--pfem-root` flag
-- Default: `~/projects/fem-benchmarks/pfem`
-
-**Error: "Template YAML not found"**
-- Ensure `benchmarks/pfem5/chap05/p54_1.yaml` exists
-- This file is the template for all generations
-
-**YAML validation fails**
-- Check YAML syntax with online validator
-- Ensure all required sections present
-- Verify proper indentation
-
----
-
-## References
-
-- Smith, I.M., Griffiths, D.V., & Margetts, L. (2014). *Programming the Finite Element Method* (5th ed.)
-- PFEM Website: http://www.pfem.org.uk/
-
----
-
-## Contact
-
-Repository: https://github.com/NZ5253/fem-benchmarks
-Author: Naeem
+<p align="center"><sub>
+  <a href="https://github.com/NZ5253/fem-benchmarks">github.com/NZ5253/fem-benchmarks</a> ·
+  Companion to <a href="HANDOVER.md">HANDOVER.md</a> ·
+  Naeem Zainuddin, Technische Universität Dortmund
+</sub></p>

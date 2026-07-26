@@ -1,158 +1,254 @@
-# Progress Update — Probabilistic Analysis on PFEM Benchmarks
+<p align="center">
+  <img src="../presentation/abc/tudortmund.png" alt="Technische Universität Dortmund" height="60">
+  &nbsp;&nbsp;&nbsp;&nbsp;
+  <img src="../presentation/abc/cre.png" alt="Chair for Computing in Engineering" height="60">
+</p>
 
-**Author**: Naeem Zainuddin
-**Repository**: github.com/NZ5253/fem-benchmarks
-**Period covered**: April–May 2026
-**Status**: Phase 1 and Phase 2 complete and verified across all 87 cases
+<h1 align="center">fem-benchmarks — Progress Report</h1>
+
+<p align="center">
+  <b>Probabilistic Analysis Framework for the PFEM 5<sup>th</sup>-Edition Benchmarks</b><br>
+  <sub>Author: <b>Naeem Zainuddin</b> · Technische Universität Dortmund<br>
+  Release: <a href="https://github.com/NZ5253/fem-benchmarks/releases/tag/v1.0-phase3-complete"><code>v1.0-phase3-complete</code></a><br>
+  Period covered: December 2025 – July 2026</sub>
+</p>
 
 ---
 
 ## TL;DR
 
-Before this work, the project ran deterministic parameter sweeps on individual benchmarks (one value at a time, or a small grid). Now the same benchmarks can be analysed probabilistically: Monte Carlo with named distributions, Latin Hypercube Sampling, correlated parameters (e.g. c-phi), and one-at-a-time sensitivity tornado plots. Output extraction works correctly across all 87 cases (8 distinct case types: slope stability, plasticity, elastic, seepage, consolidation, eigenvalue, dynamics, thermal), not just slope stability. The slope FS extraction matches the textbook (PFEM 5th ed., Figure 6.54) and the plastic limit load matches the Prandtl analytical bearing capacity within 0.2%.
+Before this work, running one PFEM benchmark meant editing a `.dat` file
+by hand and executing a Fortran binary. Now the same 87 benchmarks answer
+**probabilistic** questions through a graphical Sweep Studio supporting
+Monte Carlo, Latin Hypercube, correlated sampling and one-at-a-time
+sensitivity, backed by a **pluggable runner** that also drives closed-form
+analytic solutions and any external solver (Python, bash, or otherwise).
+Every future change is regression-gated at four independent levels.
+
+Latest verification snapshot:
+
+| Layer | Result |
+|---|---|
+| `run_all_tests.py` — all 87 PFEM Fortran binaries at defaults | **87 / 87** |
+| `test_golden_qoi` — QoI drift regression (92 records) | **92 / 92** |
+| `test_all_analytic_oracles` — closed-form correctness (9 rows) | **9 / 9** |
+| `test_stochastic_gate` — analytic + external at fixed seed | **2 / 2 backends locked** |
+| `test_physics_sanity` — QoI monotonicity direction (20 rows) | **20 / 20** |
+| `test_all_cases_stochastic` — broad 18-case Monte Carlo | **180 / 180** |
+| `plot_analytic_vs_pfem` — correlation figure | **r = 0.968** (off-plateau, 27 samples) |
+| Analytic vs PFEM p61 (Prandtl 514.16 vs 515) | **0.16 %** |
 
 ---
 
-## 1. Where we were (state at the start of this work)
+## 1. Starting state (December 2025)
 
-| Capability | Status before | Anchor commit |
+| Capability | Status | Anchor |
 |---|---|---|
-| 87 PFEM benchmarks build and run on Linux | working | `ddc154c` |
-| GUI sweep studio (`pfem_sweep_gui.m`) with Lockstep and Grid modes | working | `7ecdd12` |
-| Mesh, deformed shape, displacement vector visualisation | working | `851dcf0` |
-| Match book Figures 6.54 / 6.55 for the p612 slope | working | `1f4c8cc` |
-| Output extraction | **slope stability only** (SRF -> FS) | hardcoded for `srf max_disp iters` format |
-| Stochastic / probabilistic analysis | **none** | — |
-| Sensitivity analysis | **none** | — |
-| Per-case-type quantity-of-interest dispatcher | **none** | — |
+| 87 PFEM benchmarks compiling on Linux gfortran | working | end of foundation phase |
+| YAML catalogue with token-based `.dat` patching | working | ~30 commits |
+| Multi-case sweep GUI (Lockstep / Grid) | working | first GUI iteration |
+| Book Fig 6.54 / 6.55 match for the p612 slope | working | mesh + deformed-shape figures |
+| Per-case-type QoI extraction | **absent** | – |
+| Stochastic / probabilistic analysis | **absent** | – |
+| Sensitivity analysis | **absent** | – |
+| Pluggable runner | **absent** | – |
 
-In short: the project could run any of 87 benchmarks deterministically, but probabilistic analysis was not supported and the FS-style output extractor only made sense for ~8 slope cases (the other ~80 would silently return a load-step index or a time value mis-labelled as "FS").
+In short: any of the 87 benchmarks could be run deterministically, but
+probabilistic analysis was not supported and the output extractor only
+made sense for the ~8 slope cases (the other ~80 would silently return a
+load-step index labelled as "FS").
 
 ---
 
-## 2. What was built (this period)
+## 2. Phase 1 — Foundation for stochastic analysis (April 2026)
 
-Six commits, two phases. All commits authored solely by NZ5253; no third-party contributions.
+### 2.1 Multi-case QoI dispatcher
 
-### Phase 1 — Foundation: stochastic sampling and universal QoI
+Each of the 87 benchmarks is auto-classified into one of 8 case types
+from its YAML metadata. The correct physical output is then extracted
+from the `.res` file:
 
-| Commit | Change |
-|---|---|
-| `a9c45b0` | Add stochastic Monte Carlo sweep mode with per-case-type QoI extraction |
-| `0ad00a8` | Make QoI extraction work end-to-end on every case |
-
-**Phase 1.1 — Multi-case quantity-of-interest (QoI) dispatcher**
-
-Each of the 87 benchmarks is auto-classified into one of 8 case types from its YAML metadata. The correct physical output is then extracted from the `.res` file:
-
-| Case type | Cases | QoI extracted |
+| Case type | Cases | QoI |
 |---|---|---|
-| `slope_srf` | 8 (chap6 p64-p69, p612, p613) | Factor of Safety (last converged SRF) |
-| `plasticity_load` | 11 (chap6 p61-p63, p610, p611; chap4 p45; chap9 p96; chap11 p118) | Limit load at last converged step |
-| `elastic_static` | 25 (chap4, chap5) | Max nodal displacement |
-| `seepage_steady` | 6 (chap7) | Max total head |
-| `consolidation` | 16 (chap8 p81-p88; chap9 p91-p95) | Degree of consolidation at final time |
-| `eigenvalue` | 5 (chap10) | First eigenvalue |
-| `dynamic_transient` | 15 (chap4 p47, chap7 p73, chap8 dynamic, chap11) | Peak displacement |
-| `thermal` | 1 (chap8 p811) | Max temperature |
+| `slope_srf` | 8 (chap 6: p64–p69, p612, p613) | Factor of Safety |
+| `plasticity_load` | 11 (chap 6: p61–p63, p610, p611; chap 4: p45; chap 9: p96; chap 11: p118) | Limit load |
+| `elastic_static` | 25 (chap 4, chap 5) | Max nodal displacement |
+| `seepage_steady` | 6 (chap 7) | Max total head |
+| `consolidation` | 16 (chap 8: p81–p88; chap 9: p91–p95) | Degree of consolidation |
+| `eigenvalue` | 5 (chap 10) | ω² (with derived f₁ in Hz since 2026-05) |
+| `dynamic_transient` | 15 (chap 4: p47; chap 7: p73; chap 8: dynamic; chap 11) | Peak displacement |
+| `thermal` | 1 (chap 8: p811) | Max temperature |
 
-Several `.res` format quirks were discovered and fixed along the way: multi-block files (time history + depth profile), split tables where the t=0 row has fewer columns than t>0 rows (p95, p96), and headers with two-word labels like "dev stress". After fixes, **87 of 87 cases extract a meaningful QoI from their default-parameter run** (commit `0f25147`).
+Every one of 87 cases extracts a meaningful QoI from its default run.
 
-**Phase 1.2 — Stochastic Monte Carlo mode in the GUI**
+### 2.2 Stochastic Monte Carlo in the GUI
 
-A third entry was added to the sweep mode dropdown: "Stochastic (distributions)". The Values column of the parameters table now accepts distribution specifications:
+Added a third dropdown entry: "Stochastic (distributions)". The Values
+column now accepts named distributions:
 
 ```
-lognormal(60, 0.40)              mean and coefficient of variation
-normal(0.30, 0.10)               mean and COV
-truncnormal(0.30, 0.10, 0, 0.499)  mean, COV, low bound, high bound
-uniform(40, 80)                  low and high
+lognormal(60, 0.40)              # mean and COV
+normal(0.30, 0.10)               # mean and COV
+truncnormal(0.30, 0.10, 0, 0.499) # mean, COV, low bound, high bound
+uniform(40, 80)                  # low and high
 ```
 
-Fill Ranges auto-fills `lognormal(mu, COV)` from the YAML defaults using physics-based COV per parameter family (cohesion 40%, friction angle 10%, Young's modulus 30%, Poisson's ratio 10%, unit weight 5%, permeability 50%). Solver and mesh parameters (tolerance, iteration limit, time step, mesh size) are deliberately excluded — varying them stochastically would destabilise the Fortran solver.
+**Fill Ranges** auto-fills with physics-based COVs (c 0.40, φ 0.10,
+E 0.30, ν 0.10, γ 0.05, k 0.50). Solver / mesh parameters are excluded
+because sampling them destabilises the Fortran solver.
 
-The runner samples n joint realisations (counter widget, default 50, range 10-500), executes one PFEM run per sample with live GUI progress, extracts the QoI per sample, and saves histogram, CDF and per-parameter scatter plots as PDF + PNG. For slope-stability cases it additionally computes the probability of failure `P(FS < 1)` and the reliability index `beta = -sqrt(2) * erfinv(2*Pf - 1)`.
+Sample count widget (default 50, range 10–500), per-sample live log,
+per-parameter scatter, histogram, CDF. For slope cases: `P(FS < 1)` and
+reliability index `β = −√2 · erfinv(2·Pf − 1)`.
 
-Implementation uses base MATLAB only (no Statistics Toolbox needed). Distribution sampling uses `erfinv` for the standard-normal inverse CDF; truncated normal uses the inverse-CDF method.
+Base MATLAB only (no Statistics Toolbox).
 
-### Phase 2 — Variance reduction, correlation, sensitivity
+---
 
-| Commit | Change |
-|---|---|
-| `c6f5e57` | Add Latin Hypercube Sampling option to stochastic sweeps |
-| `7ee3e26` | Add correlated parameter sampling via Iman-Conover restricted pairing |
-| `c6c2c32` | Add sensitivity (one-at-a-time) analysis with tornado plots |
+## 3. Phase 2 — Variance reduction, correlation, sensitivity (May 2026)
 
-**Phase 2.1 — Latin Hypercube Sampling (LHS)**
+### 3.1 Latin Hypercube Sampling
 
-LHS partitions each parameter's CDF axis into n equal-probability bins, samples once per bin, and permutes each column independently. The result has the same number of simulations as plain Monte Carlo but guarantees full marginal coverage of every parameter.
+Stratified joint draw across all parameters; same number of simulations
+as IID Monte Carlo but full marginal coverage of every parameter.
 
-GUI integration: an "LHS" checkbox on the stochastic toolbar (on by default, only enabled in Stochastic mode). The per-case log line records the sampling method ("LHS" or "IID Monte Carlo") for reproducibility.
+GUI: "LHS" checkbox on the stochastic toolbar (default on).
 
-Variance reduction measured against plain Monte Carlo for the mean estimator of a lognormal(60, 0.40) target:
+Measured variance reduction for a lognormal(60, 0.40) mean estimator:
 
-| Sample count | LHS std of estimator | IID std of estimator | Reduction |
+| n | LHS std of estimator | IID std of estimator | Reduction |
 |---|---|---|---|
-| n = 25 | 0.754 | 4.915 | **6.5x** |
-| n = 50 | 0.535 | 3.420 | 6.4x |
-| n = 100 | 0.198 | 2.332 | 11.8x |
-| n = 200 | 0.113 | 1.579 | **14.0x** |
+| 25 | 0.754 | 4.915 | **6.5 ×** |
+| 50 | 0.535 | 3.420 | 6.4 × |
+| 100 | 0.198 | 2.332 | 11.8 × |
+| 200 | 0.113 | 1.579 | **14.0 ×** |
 
 Reference: McKay, Beckman, Conover (1979), *Technometrics* 21(2):239-245.
 
-**Phase 2.2 — Correlated parameter sampling**
+### 3.2 Iman–Conover correlated LHS
 
-Many soil parameters are correlated in practice (cohesion and friction angle are typically negatively correlated, around rho = -0.5). The Iman-Conover (1982) restricted-pairing method induces a target correlation matrix while keeping each parameter's LHS marginal exactly. The algorithm: Cholesky-factor the target correlation, generate a decorrelated normal reference matrix, apply the target factor, and permute the LHS columns to match the rank order of the reference.
+Many soil parameters are correlated in practice (c and φ typically
+negatively correlated, ρ ≈ −0.5). Iman–Conover (1982) restricted-pairing
+induces a target correlation while keeping each LHS marginal exactly.
 
-GUI integration: a "Corr..." button opens a modal dialog where pairs are entered as `(parameter 1, parameter 2, rho in [-1, 1])`. Names are matched against the active parameter table; pairs whose parameters are not enabled in the current case are skipped with a warning.
+GUI: **Corr…** button opens a modal for entering pairs
+`(param_i, param_j, ρ)`.
 
-Verification across n = 500 with two-parameter and three-parameter targets:
+Verification across n = 500:
 
-| Target rho | Observed rho | Marginal c (target 60, 24) | Marginal phi (target 25, 2.5) |
+| Target ρ | Observed ρ | Marginals (c: μ=60, σ=24) | Marginals (φ: μ=25, σ=2.5) |
 |---|---|---|---|
-| -0.70 | -0.654 | 60.16, 25.04 | 25.00, 2.51 |
-| -0.30 | -0.275 | 60.16, 25.04 | 25.00, 2.51 |
-| +0.00 | -0.002 | 60.16, 25.04 | 25.00, 2.51 |
+| −0.70 | −0.654 | 60.16, 25.04 | 25.00, 2.51 |
+| −0.30 | −0.275 | 60.16, 25.04 | 25.00, 2.51 |
+| +0.00 | −0.002 | 60.16, 25.04 | 25.00, 2.51 |
 | +0.50 | +0.494 | 60.16, 25.04 | 25.00, 2.51 |
 
-Three-parameter target `[1, -0.5, +0.3; -0.5, 1, -0.2; +0.3, -0.2, 1]` reproduced within 5% across n = 500.
+Three-parameter target
+`[1, −0.5, +0.3; −0.5, 1, −0.2; +0.3, −0.2, 1]` reproduced within 5 %
+across n = 500.
 
-**Phase 2.3 — Sensitivity (one-at-a-time, tornado plot)**
+### 3.3 Sensitivity (one-at-a-time, tornado plot)
 
-A fourth dropdown entry: "Sensitivity (tornado)". For each enabled parameter, the analysis runs PFEM at the parameter's mean - 1 sigma and mean + 1 sigma while all other parameters stay at their means. The bar chart (one row per parameter, sorted by absolute spread) shows which parameter drives the variance of the QoI most. For k parameters this costs 2k + 1 PFEM runs per case.
+Fourth dropdown entry: "Sensitivity (tornado)". For each enabled
+parameter runs PFEM at `μ ± 1σ` (lognormal: geometric ±σ so the lower
+value stays strictly positive at high COV). Cost: `2k + 1` PFEM runs
+per case for `k` parameters.
 
-Lognormal parameters use the geometric +/- 1 sigma (so the lower bound stays strictly positive even at high COV). Truncated normal and uniform honour their bounds.
+Verification on p612 (slope) with c, E, ν:
 
-Verification on p612 (slope stability) with c, E, nu:
-
-| Rank | Parameter | QoI at -1 sigma | QoI at +1 sigma | Spread |
+| Rank | Parameter | QoI at −1σ | QoI at +1σ | Spread |
 |---|---|---|---|---|
-| 1 | cohesion_c | FS = 1.00 | FS = 1.58 | 0.58 |
+| 1 | cohesion_c | FS = 1.00 | FS = 1.58 | **0.58** |
 | 2 | youngs_modulus_E | FS = 1.58 | FS = 1.58 | 0.00 |
 | 3 | poisson_ratio_nu | FS = 1.58 | FS = 1.58 | 0.00 |
 
-This is the expected ranking for a slope analysed by the strength-reduction method: only strength parameters (c, phi) affect the safety factor; stiffness (E, nu) only affects the pre-failure displacements.
+Exactly the textbook expectation for the strength-reduction method: only
+strength (c, φ) affects FS; stiffness (E, ν) only affects pre-failure
+displacement.
 
 ---
 
-## 3. Validation evidence
+## 4. Phase 3 — Pluggable runner (July 2026)
 
-### 3.1 Output values match textbook and analytical references
+Extracted the runner contract into a struct-of-function-handles interface
+so non-PFEM codes can plug into every mode of the framework. Every legacy
+YAML runs unchanged because the default backend is `pfem` when the
+optional `runner.type` key is absent.
 
-| Case | Baseline run gives | Reference | Match |
+### 4.1 M0-M6 milestones
+
+| # | Milestone | Commit | Gate result |
 |---|---|---|---|
-| p612 slope, c = 60, phi = 0 | FS = 1.58 | PFEM Figure 6.54 (book) | ✓ |
-| p61 strip footing, sigma_y = 100 | P_lim = 515 | Prandtl bearing capacity (2+pi) sigma_y = 514 | ✓ within 0.2% |
-| p611 triaxial, default | P_lim = 121 kPa (deviatoric stress at failure) | Triaxial undrained shear strength | sensible |
-| p81-p85 consolidation, final time | Uav near 1.0 | full consolidation reached | ✓ |
-| p101 simply-supported beam | lambda ratio scales linearly with EI | omega^2 ~ EI/rhoA from theory | ✓ exact |
+| M0 | Golden net (92 records) | `9d35e4f` | 92 / 92 baseline |
+| M1 | Extract `pfem_backend` | `84b00f8` | 92 / 92 golden |
+| M2 | `get_backend` factory + `runner.type` YAML key | `a9d085b` | 92 / 92 golden |
+| M3 | Analytic backend + Prandtl cross-check vs PFEM p61 | `a94a5d5` | 0.16 %, 92 / 92 golden |
+| M4 | Generic external backend + Python fixture | `bb72d11` | 4 exact assertions, 0.16 % cross-check, 92 / 92 golden |
+| M5 | Surface backends in GUI via `b.non_sampleable(y)` | `4b7bab8` | 92 / 92 golden, 0 GUI regressions |
+| M6 | Doc refresh | `2f41407` | – |
 
-### 3.2 87-case full extraction sweep
+### 4.2 M7 coverage extension
 
-Every YAML run at its default parameters, QoI extracted (commit `0f25147` summary):
+| # | Milestone | Commit | Gate result |
+|---|---|---|---|
+| M7a | 8 more analytic oracles cover every case type | `a393ffd` | 9 / 9 oracles |
+| M7b | `test_stochastic_gate` + `test_physics_sanity` | `4333e57` | 2 / 2 + 20 / 20 |
+| M7c | Docs reflect the coverage-complete state | `33f98a8` | – |
+| Polish | LaTeX-safe titles, sensitivity Status column, analytic input guards, correlation figure | `3b87787` | 0 GUI warnings, r > 0.9 asserted |
+| Broad | `test_all_cases_stochastic` — 18 cases × 10 samples | `8302e24` | 180 / 180 |
+| GUI | Preset loader | `da9ded8` | 4 / 4 presets load correct counts |
+| Ship | LICENSE, bash external, HTML report, tutorials | `b78f5f7` | tag `v1.0-phase3-complete` |
+
+### 4.3 Analytic oracle catalogue
+
+Every case type has an independent closed-form reference in
+`benchmarks/analytic/`:
+
+| Model | Formula | Case type |
+|---|---|---|
+| `prandtl_bearing` | `(2 + π) · σ_y` | plasticity (Tresca) |
+| `prandtl_terzaghi` | `c · Nc + 0.5 · γ · B · Nγ` (Vesic) | plasticity (MC) |
+| `bar_elongation` | `P · L / (A · E)` | elastic_static |
+| `ss_beam_eigen` | `(π/L)⁴ · EI / (ρA)` | eigenvalue |
+| `sdof_step` | `2 · F / k` (undamped DLF = 2) | dynamic_transient |
+| `terzaghi_1d` | `U_av(T_v) = 1 − Σ (2/M²) exp(−M²·T_v)` | consolidation |
+| `slab_heat_gen` | `T_s + qgen · L² / (8k)` | thermal |
+| `strip_seepage` | `h₀ + N · L² / (8k)` | seepage_steady |
+| `infinite_slope` | `c / (γH sinβ cosβ) + tan(φ)/tan(β)` | slope_srf |
+
+### 4.4 External solvers
+
+Two ship as fixtures:
+
+- **Python**: `benchmarks/external/prandtl.py` — 10-line solver, verified
+  end-to-end.
+- **bash / awk**: `benchmarks/external/prandtl.sh` — 10-line POSIX
+  script (with `LC_ALL=C` guard), verified identical to Python control to
+  1e-6.
+
+Two languages side-by-side proves the external backend is
+language-agnostic and needs no runtime dependencies beyond a POSIX shell.
+
+---
+
+## 5. Validation evidence
+
+### 5.1 Output values match textbook and analytical references
+
+| Case | Baseline QoI | Reference | Agreement |
+|---|---|---|---|
+| p612 slope, c = 60, φ = 0 | FS = 1.58 | PFEM Fig 6.54 | ✓ |
+| p61 strip footing, σ_y = 100 | P_lim = 515 | Prandtl `(2+π)·σ_y = 514.16` | **0.16 %** |
+| p611 triaxial, default | P_lim = 121 kPa (dev stress at failure) | Triaxial undrained shear | sensible |
+| p81–p85 consolidation, final time | Uav ≈ 1.0 | full consolidation reached | ✓ |
+| p101 simply-supported beam | ω² scales linearly with EI | `ω² ∼ EI / ρA` | ✓ exact |
+
+### 5.2 87-case full extraction sweep
+
+Every YAML run at defaults; QoI extracted:
 
 ```
-slope_srf          8 / 8     extracted successfully
+slope_srf          8 / 8    extracted successfully
 plasticity_load   11 / 11
 elastic_static    25 / 25
 seepage_steady     6 / 6
@@ -164,121 +260,141 @@ thermal            1 / 1
 Total            87 / 87
 ```
 
-### 3.3 Phase 2 multi-case spot check
+### 5.3 Broad per-case Monte Carlo (M7)
 
-LHS stochastic sweep with n = 10 samples per case, auto-discovered material parameters with lognormal(default_value, default_COV):
+`test_all_cases_stochastic` runs 10 LHS samples per case across 18
+representative cases (all 8 PFEM case types + 9 analytic + 1 external):
 
 ```
-slope_srf          7 / 8 cases all-samples-OK   (p69 had 7/10, embankment lift)
-plasticity_load   11 / 11
-elastic_static    24 / 25                       (p57 not run, slow heavy mesh)
-seepage_steady     6 / 6
-consolidation     16 / 16
-eigenvalue         5 / 5
-dynamic_transient 15 / 15
-thermal            1 / 1
-                  -------
-Total            85 / 87                        (two heavy cases deferred)
+PFEM (8 cases)      80 /  80 samples
+Analytic (9 cases)  90 /  90 samples
+External (1 case)   10 /  10 samples
+                    ---
+Total              180 / 180 samples in 42 s
 ```
 
-### 3.4 LHS variance reduction
+### 5.4 Analytic vs PFEM correlation
 
-Empirically measured (test_lhs.m): LHS reduces the estimator variance of the mean by 6.5x at n = 25 and 14x at n = 200 compared to independent Monte Carlo, with marginals matching the target distribution within 1% across lognormal, normal, truncated normal and uniform.
+50 LHS samples of `yield_stress ~ lognormal(100, 0.4)` evaluated by both
+`analytic_backend.prandtl_bearing` and PFEM p61:
 
-### 3.5 Correlation reproduction
+<p align="center">
+  <img src="../figures/analytic_vs_pfem_p61.png" alt="Analytic Prandtl vs PFEM p61" width="580">
+</p>
 
-For target correlations between -0.7 and +0.5, the observed rank correlation is reproduced within 5% across n = 500, with marginals preserved exactly (commit `7ee3e26`).
+- Pearson r on 27 off-plateau samples: **0.968**
+- Pearson r on all 50 samples: 0.806 (dragged down by the PFEM
+  load-step ceiling at ~515 kPa, a p61 discretisation limit not a
+  framework issue)
+- Hard `r > 0.9` assertion in `plot_analytic_vs_pfem.m`
 
-### 3.6 Sensitivity ranking matches physics
+### 5.5 Four-level regression net
 
-For the p612 slope with c, E, nu:
-- Cohesion dominates FS (spread 0.58)
-- Young's modulus and Poisson's ratio have zero impact on FS
+Since Phase 3 M7:
 
-For p61 (von Mises plasticity) with sigma_y, E, nu:
-- Yield stress dominates P_lim (spread 215)
-- E and nu have zero impact
+| Level | Test | Catches | Runtime |
+|---|---|---|---|
+| Per-run value | `test_golden_qoi` | Any of 92 QoI values drift | ~5 min |
+| Formula correctness | `test_all_analytic_oracles` | Closed-form transcription errors | <1 s |
+| Distribution dispatch | `test_stochastic_gate` | Sampling / factory / dispatch drift | ~2 s |
+| Physical scaling | `test_physics_sanity` | Sign flips in QoI wrt parameters | <1 s |
 
-For p101 (Bernoulli beam) with EI, rhoA:
-- Both matter, with the rhoA ratio inverted exactly as expected from `omega^2 ~ EI / rhoA` (rhoA at +1 sigma is 1.22x the mean, and the corresponding lambda is 1/1.22 = 0.82x the mean — measured ratio exactly 0.82).
+Every future refactor either passes all four or fails loudly with a
+specific diagnostic.
 
 ---
 
-## 4. How to see the results
+## 6. How to see the results
 
-### 4.1 Launching the GUI
+### 6.1 Cold-start GUI
 
-```matlab
-cd /path/to/fem-benchmarks/matlab
-pfem_sweep_gui
+```bash
+cd /path/to/fem-benchmarks
+matlab -nodesktop -nosplash \
+    -r "addpath matlab matlab/utils matlab/backends; pfem_sweep_gui"
 ```
 
 Workflow:
-1. **Add YAML(s)**: pick any benchmark(s) from `benchmarks/pfem5/`
-2. **Choose Mode**: Lockstep / Grid / Stochastic (distributions) / Sensitivity (tornado)
-3. **Fill Ranges** if Stochastic or Sensitivity (auto-fills distribution specs)
-4. **Run All**
 
-### 4.2 Pre-rendered example figures (already in the repo)
+1. **Load preset ... → Prandtl demo (PFEM + analytic + external)**
+2. Mode → **Stochastic**, count → 30
+3. **Fill Ranges**, uncheck all except `yield_stress`
+4. **Run All** — three per-case blocks scroll through the log
+5. **Open Figures** on any OK row
 
-Slope stability stochastic sweep on p612 (cohesion varied):
-- Histogram: `runs/chap06/p612/p612_stochastic_*_fs_hist.png`
-- CDF: `runs/chap06/p612/p612_stochastic_*_fs_cdf.png`
-- Scatter (parameter vs FS): `runs/chap06/p612/p612_stochastic_*_fs_scatter_cohesion_c.png`
+### 6.2 Batch regeneration
 
-Sensitivity tornado on p612 (c, E, nu):
-- `runs/chap06/p612/p612_tornado_3param_*.pdf`
+```bash
+# Fast gates (< 1 min total)
+matlab -batch "addpath matlab matlab/utils matlab/backends matlab/tests; \
+    test_all_analytic_oracles; test_stochastic_gate; test_physics_sanity; \
+    test_analytic_backend; test_external_backend; test_all_cases_stochastic"
 
-Deterministic sweep summary (the original capability, still works):
-- `runs/chap06/p612/p612_sweep_*_res.pdf` — SRF vs displacement matching book Fig. 6.54
-- `runs/chap06/p612/p612_sweep_*_ensi.pdf` — 3D deformed mesh matching book Fig. 6.55
+# Correlation figure
+matlab -batch "addpath matlab matlab/utils matlab/backends matlab/tests; \
+    plot_analytic_vs_pfem"
 
-### 4.3 Reproducing the validation
+# Golden regression gate (~5 min)
+matlab -batch "addpath matlab matlab/utils matlab/backends matlab/tests; \
+    test_golden_qoi"
+```
 
-The multi-case Phase 2 verification (Tests A through E in Section 3.6) is
-checked into the repository:
+### 6.3 Auto-generated HTML report
 
 ```matlab
-addpath matlab matlab/utils
-test_phase2_multi_case          % see matlab/tests/test_phase2_multi_case.m
+addpath matlab matlab/utils;
+generate_report('runs/chap06/p61');
+% → runs/chap06/p61/report.html (self-contained, embed-all-images)
 ```
-
-That single command runs sensitivity on p61, p101, p81_5; verifies LHS
-marginals for four distribution families; and verifies Iman-Conover
-correlated sampling for a 3x3 target matrix. Total runtime: about 3 minutes
-once binaries are built.
 
 ---
 
-## 5. Known limitations
+## 7. Known limitations
 
-| Item | Description | Severity |
-|---|---|---|
-| ~~p101 lambda label~~ | Resolved 2026-05-27. Relabel `lambda_1` → `omega^2` (with derived `f1` in Hz) in `qoi_eigenvalue`. Earlier note that the solver returned `1/omega^2` was a misdiagnosis: `bandred` + `bisect` on `M^(-1/2) K M^(-1/2)` yields `omega^2` directly, confirmed analytically against the cantilever first mode. | resolved |
-| Some elastic cases bound to BC | Cases like p51_3 set `u_max` from a prescribed displacement boundary, so `u_max` is invariant to material sampling. The extractor works; the chosen QoI just is not sensitive. Could be improved by allowing a user-specified probe node. | low — design choice |
-| p69 embankment lift | Custom output format with text lines like `Max displacement is X`. Extracts a final-lift max displacement, but only 7/10 LHS samples converge across the full c-phi-gamma range. | low — case-specific |
-| chap05 p56_1, p57 | Heavy mesh cases (250s per run) excluded from the n=10 LHS sweep timing. Extractor works; the bulk verification just skipped them. | low — runtime |
+Documented in [HANDOVER §18](HANDOVER.md#18-known-limitations); none are
+shipping-blockers.
 
----
-
-## 6. What is next (Phase 3+)
-
-Per the original roadmap:
-- **Phase 3**: pluggable runner interface so non-PFEM codes can plug into the same probabilistic / sensitivity framework (any code that reads an input file and writes an output file).
-- **Phase 4**: mesh-refinement sweeps (`nels`, `nye`) to study discretisation convergence.
-- Add user-selectable probe node for elastic cases so the QoI tracks an internal point rather than a boundary value.
+1. **BC-bound QoIs** on p51_3, p111, p811 — Dirichlet boundary
+   dominates the max/peak, so material sampling doesn't move the QoI. The
+   extractor is correct; the chosen QoI is just insensitive. Fixable with
+   a `qoi_probe_node` YAML feature (~2 h).
+2. **p69 embankment lift** — 7 of 10 samples converge. Fixable with
+   tighter solver tolerances.
+3. **Heavy meshes (p56_1, p57)** — 250 s per run; excluded from the
+   10-sample broad verification. Fixable with `parfor`.
+4. **Load-step ceiling on p61** — for yield_stress > ~100, PFEM saturates
+   at ~515 kPa. Fixable by raising `load_increments` in the YAML.
 
 ---
 
-## 7. Commit summary
+## 8. What is next
 
-```
-0f25147  Fix QoI extraction for split time-history blocks (p95, p96_1, p96_2)
-c6c2c32  Add sensitivity (one-at-a-time) analysis with tornado plots
-7ee3e26  Add correlated parameter sampling via Iman-Conover restricted pairing
-c6f5e57  Add Latin Hypercube Sampling option to stochastic sweeps
-0ad00a8  Make QoI extraction work end-to-end on every case
-a9c45b0  Add stochastic Monte Carlo sweep mode with per-case-type QoI extraction
-```
+Priority ordering per [HANDOVER §19](HANDOVER.md#19-future-work). Nothing
+here is required for the current release; each is independently useful
+when the specific need arises:
 
-All commits authored solely by NZ5253. The repository at github.com/NZ5253/fem-benchmarks is up to date on master.
+- **R1** `qoi_probe_node` YAML feature
+- **P1** `parfor` sample parallelisation (4–16× speedup)
+- **F1** Mesh-refinement / convergence-rate mode (Phase 4 headline)
+- **F3** FORM / SORM reliability method
+- **C1** Compiled C external example
+- **I3** Zenodo DOI for citation
+
+---
+
+## 9. Commit summary
+
+119 commits by NZ5253 (Dec 2025 – Jul 2026), all under the MIT-licensed
+framework code plus the pfem/ textbook exclusion.
+
+Full history: `git log --oneline` in the repo, or the browsable page
+https://github.com/NZ5253/fem-benchmarks/commits/master. Milestone
+commits are enumerated in [HANDOVER §17](HANDOVER.md#17-commit-history-highlights).
+
+---
+
+<p align="center"><sub>
+  <a href="https://github.com/NZ5253/fem-benchmarks">github.com/NZ5253/fem-benchmarks</a> ·
+  <a href="https://github.com/NZ5253/fem-benchmarks/releases/tag/v1.0-phase3-complete"><code>v1.0-phase3-complete</code></a> ·
+  Naeem Zainuddin, Technische Universität Dortmund
+</sub></p>

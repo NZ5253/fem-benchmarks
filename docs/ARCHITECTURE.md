@@ -1,499 +1,551 @@
-# Architecture and End-to-End Flow
+<p align="center">
+  <img src="../presentation/abc/tudortmund.png" alt="Technische Universität Dortmund" height="60">
+  &nbsp;&nbsp;&nbsp;&nbsp;
+  <img src="../presentation/abc/cre.png" alt="Chair for Computing in Engineering" height="60">
+</p>
 
-**Author**: Naeem Zainuddin
-**Last updated**: 2026-06-30
-**Purpose**: the single document that explains how the whole project fits
-together: the pipeline stages, how every file connects to the next, the
-exact call graph, the lifecycle of a run, the problems that were solved
-along the way, and what is deliberately left for later.
+<h1 align="center">fem-benchmarks — Architecture</h1>
 
-If you are new to this repository, read this file first, then follow the
-reading order in Section 1.
-
----
-
-## 0. What this project is (in one paragraph)
-
-"Programming the Finite Element Method" (PFEM, 5th ed., Smith / Griffiths /
-Margetts) ships 87 small Fortran FE programs across chapters 4-11. This
-repository (a) catalogues all 87 as machine-readable YAML, (b) builds the
-Fortran source on Linux gfortran with a documented set of small patches,
-and (c) wraps everything in a MATLAB layer that can run any case under
-deterministic sweeps, Monte Carlo / Latin Hypercube sampling, correlated
-sampling, and one-at-a-time sensitivity, then extract the physically
-meaningful Quantity of Interest (QoI) per case type. Everything is verified
-end to end: every case builds, runs, and returns a meaningful QoI.
+<p align="center">
+  <sub>Companion to <a href="HANDOVER.md">HANDOVER.md</a> · Focuses on <b>how the code fits together</b>.<br>
+  Read HANDOVER first for the what-and-why; this doc explains the where-and-how.</sub>
+</p>
 
 ---
 
-## 1. Documentation map and reading order
+## Table of contents
 
-Read in this order. Each entry says what the document is for and when to
-stop and go elsewhere.
-
-| # | Document | Read it to learn | When to read |
-|---|----------|------------------|--------------|
-| 1 | **docs/ARCHITECTURE.md** (this file) | How the pieces connect; the data flow; the call graph; problems solved; future work | First. Start here always. |
-| 2 | [docs/HANDOVER.md](HANDOVER.md) | How to set up a fresh machine; current git/sync state; the exact "what is done / what is pending" snapshot; project-specific gotchas | Second, when picking the project up on a new system |
-| 3 | [README.md](../README.md) | Top-level overview and the fastest possible quick start | Skim any time |
-| 4 | [docs/GUIDE.md](GUIDE.md) | Detailed how-to: generating YAML, building, running, patching, validation | When you need to *do* a specific task |
-| 5 | [matlab/README.md](../matlab/README.md) | Function-by-function reference for the MATLAB layer (signatures, examples, output folder layout) | When writing or calling MATLAB code |
-| 6 | [docs/PROGRESS.md](PROGRESS.md) | Supervisor-facing narrative of Phase 1 and Phase 2 with validation evidence and numbers | When you need the "why it is correct" evidence |
-| 7 | [scripts/pfem_patches/README.md](../scripts/pfem_patches/README.md) | The exact patches needed to compile the textbook source on Linux | When (re)building the Fortran source |
-
-The Fortran source under `pfem/` is **gitignored** (third-party, licensed).
-It is not in the repo; see HANDOVER Section 2.3 to restore it.
+- [1. One-paragraph summary](#1-one-paragraph-summary)
+- [2. Documentation map](#2-documentation-map)
+- [3. Runbook: zero to first result](#3-runbook-zero-to-first-result)
+- [4. The pipeline: five stages](#4-the-pipeline-five-stages)
+- [5. Data flow diagrams](#5-data-flow-diagrams)
+- [6. Call graph](#6-call-graph)
+- [7. Backend contract (Phase 3)](#7-backend-contract-phase-3)
+- [8. Case type registry](#8-case-type-registry)
+- [9. Challenges solved (register)](#9-challenges-solved-register)
+- [10. Extension points](#10-extension-points)
 
 ---
 
-## 1.5 Zero to first result (linear runbook)
+## 1. One-paragraph summary
 
-The single straight-line path from a fresh clone to seeing a figure. Each
-step says which document has the detail if you get stuck.
+`fem-benchmarks` takes the 87 stand-alone Fortran programs of the PFEM
+textbook and wraps them behind a **single MATLAB entry point**
+(`pfem_run_from_yaml`) that dispatches to one of three backends (`pfem`,
+`analytic`, `external`) selected by an optional YAML key. Every sweep
+mode — Lockstep, Grid, Stochastic (Monte Carlo + LHS + Iman–Conover),
+Sensitivity — funnels through the same dispatcher, so a new backend
+inherits every mode for free. Four regression gates (`test_golden_qoi`,
+`test_all_analytic_oracles`, `test_stochastic_gate`, `test_physics_sanity`)
+lock the current behaviour so any future refactor either matches or fails
+loudly.
+
+---
+
+## 2. Documentation map
+
+Read in order for a full picture; each doc has a single narrow job.
+
+1. **[HANDOVER.md](HANDOVER.md)** — start here. Everything: history,
+   setup, usage, verification, limitations, references.
+2. **This file** — technical architecture, call graph, extension points.
+3. **[GUIDE.md](GUIDE.md)** — operational usage guide (GUI + API).
+4. **[PROGRESS.md](PROGRESS.md)** — supervisor-facing summary of what was
+   built when.
+5. **[PHASE3_PLAN.md](PHASE3_PLAN.md)** — the plan for the pluggable-runner
+   phase, with every milestone marked done.
+6. **[adding_a_backend.md](adding_a_backend.md)** — how to add a new
+   backend (~30 min).
+7. **[adding_an_oracle.md](adding_an_oracle.md)** — how to add a new
+   analytic oracle (~15 min).
+
+---
+
+## 3. Runbook: zero to first result
+
+Assuming a fresh Debian/Ubuntu shell:
 
 ```bash
-# 0. Prerequisites (Linux) -- HANDOVER Section 2.1
+# 1. Prereqs
 sudo apt install gfortran make python3 python3-pip \
-                 libarpack2-dev liblapack-dev libblas-dev
+                 libarpack2t64 libarpack2-dev liblapack-dev libblas-dev
 pip install pyyaml
 
-# 1. Get the repo
+# 2. Clone
 git clone https://github.com/NZ5253/fem-benchmarks.git
 cd fem-benchmarks
 
-# 2. Restore the PFEM Fortran source into pfem/ (gitignored, licensed)
-#    Then apply the patches -- scripts/pfem_patches/README.md, HANDOVER 2.3
-#    (without the patches several cases SIGSEGV or fail to link)
+# 3. Restore pfem/ (see HANDOVER §12.3 for the two options)
 
-# 3. Build one chapter (also builds the shared library)
+# 4. Build one chapter to sanity-check the toolchain
 scripts/pfem_build_chapter.sh ./pfem chap06
 
-# 4. Smoke-test the whole catalogue (optional, ~3 min once built)
-python3 scripts/run_all_tests.py        # expect 87/87 PASSED
+# 5. Run every PFEM binary
+python3 scripts/run_all_tests.py       # → 87/87 passed
+
+# 6. Fast regression net
+matlab -batch "addpath matlab matlab/utils matlab/backends matlab/tests; \
+    test_all_analytic_oracles; test_stochastic_gate; test_physics_sanity"
+
+# 7. GUI
+matlab -nodesktop -nosplash \
+    -r "addpath matlab matlab/utils matlab/backends; pfem_sweep_gui"
 ```
 
-```matlab
-% 5. Run one case with an override and get artifacts -- matlab/README.md
-addpath matlab matlab/utils
-repo_root = pwd;  pfem_root = fullfile(repo_root, 'pfem');
-[status, out] = pfem_run_from_yaml(repo_root, pfem_root, ...
-    'benchmarks/pfem5/chap06/p61.yaml', struct('yield_stress', 200));
-% -> runs/chap06/p61/sy_200/  with p61.res, p61.msh, case.yaml, run_info.txt
-
-% 6. See it in the GUI (deterministic + stochastic + sensitivity) -- GUIDE.md
-pfem_sweep_gui
-%   Add YAML(s) -> pick p61.yaml -> Fill Ranges -> Run All -> Open Figures
-```
-
-That is the end-to-end thread. Stages 1-6 here map onto the five pipeline
-stages in Section 2 (build = stage 2, run = stage 3, GUI figures = stages 4-5).
+Total ~10 minutes on a laptop with the PFEM source in place.
 
 ---
 
-## 2. The pipeline: five stages
+## 4. The pipeline: five stages
 
-Everything in the repo is one of five stages. Data flows left to right.
+Every user path — CLI, MATLAB script, or GUI — goes through the same five
+stages. Only stage 3 (Run) has the backend dispatch; everything else is
+independent of which backend is chosen.
 
-```
-  (1) GENERATE          (2) BUILD            (3) RUN              (4) EXTRACT          (5) ANALYZE / PLOT
-  ────────────          ─────────            ───────              ───────────          ──────────────────
-  Fortran source   ┐                                                                  ┌ deterministic figs
-  + .dat files     ├─► YAML catalogue ─► compiled binary ─► .res/.msh/.dis/.vec ─► QoI value ─► histograms/CDF
-  (pfem/source)    ┘    (benchmarks/)      (pfem/build/bin)     (runs/.../)          (per type)   tornado plots
+### Stage 1 — Generate the YAML catalogue
 
-  scripts/             scripts/             matlab/              matlab/utils/        matlab/utils/
-  generate_yamls_v2.py pfem_build_*.sh      pfem_run_from_yaml.m pfem_extract_qoi.m   pfem_plot_*.m
-                       pfem_patches/        + pfem_sweep_gui.m   pfem_detect_case_type
-```
+**One-shot per PFEM case.** [`scripts/generate_yamls_v2.py`](../scripts/generate_yamls_v2.py):
 
-### Stage 1 — Generate the YAML catalogue (offline, Python)
+- Parses the Fortran source (`chap06/p61.f03`) for every `READ(10, *) ...`
+  statement (handling `&` continuations).
+- Tokenises the `.dat` file, preserving positional indices.
+- Detects tunable parameters using a symbol table + parameter-family
+  heuristic (E, ν, σ_y, c, φ, k, γ, dt, nels, ...).
+- Emits YAML at `benchmarks/pfem5/chap06/p61.yaml` with sections
+  `authors`, `code`, `fem`, `analysis`, `tunable_parameters`,
+  `input_schema`, `inputs`, `outputs`, `how_to_run`, `notes`.
 
-- **`scripts/generate_yamls_v2.py`** parses each `pfem/source/chapXX/pNN.f03`
-  program and its `.dat` data file. It walks the Fortran `READ(10,*)`
-  statements in source order using a symbol table, tokenises the `.dat`
-  file into a flat list, and writes `benchmarks/pfem5/chapXX/pNN.yaml`.
-  Each tunable parameter is recorded with a `global_token_index` (its
-  1-based position in the flat token list) so it can be patched later
-  without any program-specific code.
-- **`scripts/verify_yamls.py`** validates the generated YAML (syntax,
-  required keys, structure).
-- The tunable-detection logic (how `nprops`, `nodof`, scalar names map to
-  physical parameters) is documented in detail in the project memory and
-  in GUIDE.md Section "Generating YAML Files". This is the most intricate
-  Python code; treat the per-`nprops` classification table as the spec.
-
-Output of this stage: the `benchmarks/pfem5/chap*/p*.yaml` catalogue, which
-is the contract every downstream stage reads.
+Each `tunable_parameters[*]` records `global_token_index` so the runner
+can patch that token directly, no program-specific logic required.
 
 ### Stage 2 — Build the Fortran binaries
 
-- **`scripts/pfem_build_chapter.sh <pfem_root> <chapter>`** compiles the
-  PFEM library plus every program in a chapter into `pfem/build/bin/pNN`.
-  It auto-detects ARPACK/BLAS usage and links `-larpack -llapack -lblas`
-  when needed. The `misc/` library subdirectory is compiled by wildcard.
-- **`scripts/pfem_build_and_run.sh`** builds one program and runs it.
-- **`scripts/pfem_patches/`** holds the patches that make the textbook
-  source compile on Linux gfortran (missing `USE geom`, unallocated UMAT
-  arrays, a `system_clock` timer, a Lanczos eigensolver, an elastic UMAT
-  stub). Without these, several cases SIGSEGV or fail to link. See that
-  folder's README.
+**Once per chapter, after source changes.** [`scripts/pfem_build_chapter.sh`](../scripts/pfem_build_chapter.sh):
 
-Binaries are Linux ELF in `pfem/build/bin/`; the Windows `.exe` files under
-`pfem/executable/` are NOT used by the runner.
+- Walks `pfem/source/chap<N>/`, compiles every `p*.f03` with gfortran.
+- Applies the five patches under [`scripts/pfem_patches/`](../scripts/pfem_patches/)
+  as needed:
+  - `p42`, `p44`: missing `USE geom` → SIGSEGV in `formnf` without it
+  - `p57`: allocate UMAT arrays (statev, stran, drot, dfgrd0/1)
+  - new library files `elap_time.f03`, `umat_elastic.f03`, `lancz.f03`
+  - `p104` needs `-larpack` (via `libarpack2-dev`)
+- Binaries land at `pfem/build/bin/p<N>`.
 
-### Stage 3 — Run a case
+`pfem_ensure_built.m` invokes this script on demand from MATLAB whenever a
+binary is missing.
 
-- **`matlab/pfem_run_from_yaml.m`** is the single choke point every
-  higher-level tool funnels through. Since Phase 3 (M1-M2) it is a 30-line
-  dispatcher: it loads the YAML, asks `get_backend(y)` which backend to use,
-  and forwards the run.
-- **Backends** live in `matlab/backends/` and expose a common contract
-  (`b.name`, `b.run`, `b.extract_qoi`, `b.non_sampleable`). Three ship
-  today:
-  - `pfem_backend.m` — the historical PFEM pipeline (patch `.dat`, ensure
-    binary, run Fortran, cache baseline `.res`). Behaviour is byte-for-byte
-    identical to what used to live inline in `pfem_run_from_yaml.m`.
-  - `analytic_backend.m` — closed-form models (currently `prandtl_bearing`,
-    used as an independent oracle in `matlab/tests/test_analytic_backend.m`).
-  - `external_backend.m` — generic template runner (input template + shell
-    command + regex output-parse) for any code that reads a file and writes
-    a file; see `benchmarks/external/prandtl_external.yaml` for a Python
-    fixture.
-- The chosen backend is selected by an optional YAML key `runner.type`;
-  absence defaults to `pfem`, so every one of the 87 legacy YAMLs works
-  with zero edits.
-- For PFEM multi-case datasets the program name and the dataset name differ
-  (e.g. program `p41`, dataset `p41_1`); the backend handles this.
+### Stage 3 — Run a case (backend dispatch)
 
-### Stage 4 — Extract the Quantity of Interest
+**Every sample of every sweep.** [`matlab/pfem_run_from_yaml.m`](../matlab/pfem_run_from_yaml.m)
+is a 30-line dispatcher since Phase 3 M1:
 
-- **`matlab/utils/pfem_detect_case_type.m`** classifies a YAML into one of
-  8 case types from its metadata (chapter, program, physics, regime).
-- **`matlab/utils/pfem_extract_qoi.m`** dispatches on the case type to the
-  right extractor and returns `q.value`, `q.label`, `q.unit`, `q.ok`. This
-  is where all the `.res` file format quirks are handled (Section 6).
+```matlab
+function [status, out] = pfem_run_from_yaml(repo_root, pfem_root, yaml_path, overrides)
+    if nargin < 4, overrides = struct(); end
+    y   = pfem_yaml_load(yaml_path);
+    b   = get_backend(y);
+    ctx = struct('repo_root', repo_root, ...
+                 'pfem_root', pfem_root, ...
+                 'yaml_path', yaml_path);
+    [status, out] = b.run(ctx, y, overrides);
+end
+```
 
-### Stage 5 — Analyze and visualize
+[`get_backend`](../matlab/backends/get_backend.m) reads the optional YAML
+key `runner.type` and returns one of:
 
-- **Deterministic**: `matlab/utils/pfem_plot_sweep_summary.m` builds up to
-  four figure windows (load-displacement, reference mesh, deformed shape,
-  displacement vectors), using `pfem_extract_coords.m` for node coordinates
-  and `parse_pfem_ensi.m` for 3D EnSight output.
-- **Stochastic**: histogram, CDF, and per-parameter scatter plots; for
-  slope cases also `P(failure)` and reliability index `beta`.
-- **Sensitivity**: `matlab/utils/pfem_plot_tornado.m` draws the tornado bar
-  chart from `pfem_sensitivity_oat.m`.
+- [`pfem_backend`](../matlab/backends/pfem_backend.m) (default) —
+  copies `.dat` into `runs/<chap>/<case>/<key>/`, token-patches parameters,
+  ensures binary, runs it, caches baseline `.res`.
+- [`analytic_backend`](../matlab/backends/analytic_backend.m) — evaluates
+  a closed-form formula in MATLAB memory, persists `results.mat` and
+  `run_info.txt` for GUI compatibility.
+- [`external_backend`](../matlab/backends/external_backend.m) — writes a
+  substituted input file, shells out via `system()`, regex-parses the
+  output file.
+
+### Stage 4 — Extract the QoI
+
+**Immediately after each run.** `b.extract_qoi(out, case_type)`:
+
+- PFEM path: dispatches on `case_type` (from
+  [`pfem_detect_case_type.m`](../matlab/utils/pfem_detect_case_type.m)) to
+  one of eight per-type extractors in
+  [`pfem_extract_qoi.m`](../matlab/utils/pfem_extract_qoi.m).
+- Analytic / External path: passthrough returning `out.qoi` already
+  populated by the backend.
+
+Result struct: `{value, label, unit, ok}` (plus `f1` for eigenvalue).
+
+### Stage 5 — Analyse and report
+
+Sweep-mode-specific:
+
+- **Lockstep / Grid** → [`pfem_plot_sweep_summary.m`](../matlab/utils/pfem_plot_sweep_summary.m)
+  emits up to 7 figure windows per case: load–displacement, mesh,
+  deformed shape, displacement vectors, EnSight 3D (raw / progressive /
+  zones).
+- **Stochastic** → in-line histograms + CDFs + per-parameter scatter
+  written to `runs/<chap>/<case>/<case>_stochastic_<ts>_*`. Slope cases
+  additionally get `P(FS < 1)` and `β = −√2 · erfinv(2·Pf − 1)`.
+- **Sensitivity** → [`pfem_plot_tornado.m`](../matlab/utils/pfem_plot_tornado.m)
+  draws a horizontal bar chart from `pfem_sensitivity_oat` results.
+- **Report** → [`generate_report.m`](../matlab/utils/generate_report.m)
+  builds a self-contained HTML file with every PNG embedded as base64.
 
 ---
 
-## 3. Call graph: who calls whom
+## 5. Data flow diagrams
 
-This is the actual call structure (verified against the source). Indentation
-is "calls".
+### The dispatcher tree
+
+```mermaid
+flowchart TD
+    U["User (GUI / script / Python)"] --> R["pfem_run_from_yaml(repo, pfem_root, yaml, overrides)"]
+    R --> YL["pfem_yaml_load(yaml)"]
+    YL --> Y["y struct"]
+    Y --> GB["get_backend(y)"]
+    GB -- "runner absent or runner.type == pfem" --> PB["pfem_backend()"]
+    GB -- "runner.type == analytic" --> AB["analytic_backend()"]
+    GB -- "runner.type == external" --> EB["external_backend()"]
+    PB --> BR["b.run(ctx, y, overrides)"]
+    AB --> BR
+    EB --> BR
+    BR --> OUT["out struct: run_dir, case, files, [qoi]"]
+    OUT --> EX["b.extract_qoi(out, case_type)"]
+    EX --> Q["q: value, label, unit, ok"]
+```
+
+### The five-stage pipeline
+
+```mermaid
+flowchart LR
+    subgraph "Stage 1: Generate (one-shot)"
+        F1[Fortran .f03] --> G[generate_yamls_v2.py]
+        D1[textbook .dat] --> G
+        G --> Y1[benchmarks/pfem5/chap*/*.yaml]
+    end
+
+    subgraph "Stage 2: Build (per chapter)"
+        F1 --> B[pfem_build_chapter.sh]
+        PATCHES[scripts/pfem_patches/] --> B
+        B --> BIN[pfem/build/bin/p*]
+    end
+
+    subgraph "Stage 3: Run (per sample)"
+        Y1 --> DISP[pfem_run_from_yaml]
+        DISP --> BKND{get_backend}
+        BIN -.-> BKND
+        BKND --> OUT[out struct + run_dir/*]
+    end
+
+    subgraph "Stage 4: Extract"
+        OUT --> QOI[b.extract_qoi]
+        QOI --> Q[q.value, q.label, q.unit, q.ok]
+    end
+
+    subgraph "Stage 5: Report"
+        Q --> SW[Sweep aggregator]
+        SW --> HP[Histogram / CDF]
+        SW --> SC[Scatter per parameter]
+        SW --> TR[Tornado]
+        SW --> HR[generate_report.m → HTML]
+    end
+```
+
+### Lifecycle of a single stochastic sample (PFEM backend)
+
+```mermaid
+sequenceDiagram
+    participant GUI as pfem_sweep_gui
+    participant LHS as pfem_lhs_sample
+    participant DISP as pfem_run_from_yaml
+    participant FAC as get_backend
+    participant BE as pfem_backend
+    participant PATCH as pfem_patch_dat_using_yaml
+    participant FORT as p61 (Fortran)
+    participant EXT as pfem_extract_qoi
+
+    GUI->>LHS: draw joint sample (n=1)
+    LHS-->>GUI: overrides = {yield_stress: 100.5}
+    GUI->>DISP: pfem_run_from_yaml(..., overrides)
+    DISP->>FAC: get_backend(y)
+    FAC-->>DISP: pfem_backend instance
+    DISP->>BE: b.run(ctx, y, overrides)
+    BE->>PATCH: patch p61.dat with overrides
+    PATCH-->>BE: run_dir/p61.dat (patched)
+    BE->>FORT: printf "p61\n" | ./p61
+    FORT-->>BE: p61.res, p61.msh, p61.dis, p61.vec
+    BE-->>DISP: [status=0, out]
+    DISP-->>GUI: [status, out]
+    GUI->>EXT: b.extract_qoi(out, 'plasticity_load')
+    EXT-->>GUI: {value: 515, label: 'P_lim', unit: 'kPa', ok: true}
+    GUI->>GUI: append (yield_stress, P_lim) to sweep results
+```
+
+---
+
+## 6. Call graph
+
+Verified against the current source. Indentation = "calls".
 
 ```
-ENTRY POINTS (what a user launches)
+ENTRY POINTS
 │
-├── pfem_sweep_gui.m ........................ the GUI; all four modes
+├── pfem_sweep_gui.m ...................... GUI (four modes)
 │   │
-│   ├── pfem_yaml_load ....................... load YAML -> struct (every mode)
-│   ├── pfem_make_scenarios ................. Lockstep / Grid: build scenario list
-│   ├── pfem_lhs_sample ..................... Stochastic: Latin Hypercube + Iman-Conover
-│   ├── pfem_sample_distribution ............ Stochastic: IID draws (fallback / per-param)
-│   ├── pfem_sensitivity_oat ................ Sensitivity mode: 2k+1 runs
-│   │      └── pfem_run_from_yaml (per run)
-│   ├── pfem_ensure_built ................... auto-compile missing binary
-│   ├── pfem_run_from_yaml .................. THE run choke point (see below)
-│   ├── pfem_detect_case_type ............... Stochastic: classify case
-│   ├── pfem_extract_qoi .................... Stochastic: extract QoI per sample
-│   ├── pfem_plot_sweep_summary ............. deterministic figures
-│   └── pfem_plot_tornado ................... sensitivity figure
+│   ├── pfem_yaml_load ..................... load YAML → struct
+│   ├── get_backend ........................ backend factory
+│   ├── pfem_lhs_sample .................... Stochastic: LHS + Iman-Conover
+│   ├── pfem_sample_distribution ........... Stochastic: IID fallback
+│   ├── pfem_sensitivity_oat ............... Sensitivity: 2k+1 runs
+│   │   ├── pfem_run_from_yaml
+│   │   ├── get_backend
+│   │   └── b.extract_qoi
+│   ├── pfem_ensure_built .................. auto-build binary
+│   ├── pfem_run_from_yaml ................. THE run choke point
+│   ├── pfem_detect_case_type
+│   ├── b.extract_qoi (backend-dispatched since Phase 3)
+│   ├── plot_stochastic_gui ................ histogram + CDF + scatter
+│   ├── pfem_plot_sweep_summary
+│   └── pfem_plot_tornado
 │
-├── NZ.m .................................... scripted multi-case x multi-scenario sweep
+├── NZ.m .................................. scripted multi-case sweep
 │   ├── pfem_make_scenarios
 │   ├── pfem_ensure_built
 │   ├── pfem_run_from_yaml
-│   ├── pfem_compare_results ................ text diff table (Format A / B)
+│   ├── pfem_compare_results
 │   └── pfem_plot_sweep_summary
 │
-├── pfem_stochastic_sweep.m ................. scripted Monte Carlo (CLI-style)
-│   ├── pfem_sample_distribution
-│   └── pfem_run_from_yaml
+├── pfem_stochastic_sweep.m ............... scripted MC (CLI-style)
 │
-└── scripts/run_all_tests.py ................ Python smoke test; mirrors pfem_run_from_yaml
-                                              in Python and runs all 87 cases
+└── scripts/run_all_tests.py .............. Python smoke test (all 87)
 
 THE RUN CHOKE POINT (Phase 3: backend-dispatched)
 │
 pfem_run_from_yaml(repo_root, pfem_root, yaml_path, overrides)
-   ├── pfem_yaml_load ....................... parse YAML
-   ├── get_backend(y) ....................... reads y.runner.type, defaults to 'pfem'
-   └── b.run(ctx, y, overrides) ............. delegates to the chosen backend
+   ├── pfem_yaml_load(yaml_path)
+   ├── get_backend(y)
+   │      ├── runner absent / 'pfem'   → pfem_backend
+   │      ├── 'analytic'               → analytic_backend
+   │      └── 'external'               → external_backend
+   └── b.run(ctx, y, overrides)
           │
-          ├── pfem_backend       (default; runner.type absent or 'pfem')
-          │      ├── pfem_patch_dat_using_yaml ... token-based .dat patch
-          │      ├── pfem_ensure_built ........... compile binary if missing
-          │      │      └── (shells out to) pfem_build_chapter.sh
-          │      ├── system(printf dataset | ./prog) . run the Fortran binary
-          │      └── generate_baseline_run ....... cache unmodified .res if absent
+          ├── PFEM path (pfem_backend)
+          │      ├── pfem_patch_dat_using_yaml
+          │      ├── pfem_ensure_built
+          │      │      └── pfem_build_chapter.sh
+          │      ├── system("printf DATASET | ./PROG") → Fortran binary
+          │      └── generate_baseline_run (if book .res absent)
           │
-          ├── analytic_backend   (runner.type = 'analytic')
-          │      └── evaluates y.runner.model ('prandtl_bearing', ...)
+          ├── Analytic path (analytic_backend)
+          │      └── eval_model('prandtl_bearing' | ... | 'infinite_slope')
           │
-          └── external_backend   (runner.type = 'external')
-                 ├── template substitution (input file)
-                 ├── system(command)
-                 └── regexp parse of output file
+          └── External path (external_backend)
+                 ├── read + substitute input_template
+                 ├── system(runner.command)   → any executable
+                 └── regexp on output_file
 
-THE QoI DISPATCHER
+THE QoI DISPATCHER (PFEM backend only; analytic/external return out.qoi)
 │
-pfem_extract_qoi(out, case_type)   case_type from pfem_detect_case_type
-   ├── qoi_slope_srf ........... Factor of Safety (last converged SRF)
-   ├── qoi_plasticity_load ..... limit load at last converged step
-   ├── qoi_elastic_static ...... max nodal displacement
-   ├── qoi_seepage_steady ...... max total head
-   ├── qoi_consolidation ....... degree of consolidation at final time
-   ├── qoi_eigenvalue .......... omega^2 (smallest eig), derived f1 in Hz
-   ├── qoi_dynamic_transient ... peak displacement
-   ├── qoi_thermal ............. max temperature
-   └── qoi_generic_fallback .... widest numeric table fallback
-   (shared helpers: read_widest_numeric_table, read_blocks, header_is_time_axis,
-    find_header_tokens, identify_columns_from_tokens)
+pfem_extract_qoi(out, case_type)
+   ├── qoi_slope_srf ............... FS (last converged SRF)
+   ├── qoi_plasticity_load ......... P_lim
+   ├── qoi_elastic_static .......... u_max
+   ├── qoi_seepage_steady .......... h_max
+   ├── qoi_consolidation ........... Uav_end
+   ├── qoi_eigenvalue .............. omega^2 (+ derived f1 in Hz)
+   ├── qoi_dynamic_transient ....... u_peak
+   ├── qoi_thermal ................. T_max
+   └── qoi_generic_fallback ........ widest numeric table
 ```
 
-### Files NOT in the main pipeline (so you can ignore them)
+---
 
-A few files live in `matlab/` but are not part of the run/sweep flow above.
-They are labelled as such in their own headers; listed here so a newcomer
-does not mistake them for live code:
+## 7. Backend contract (Phase 3)
 
-| File | What it is |
-|------|-----------|
-| `pfem_parametric_sweep.m` | LEGACY. An older program-specific sweeper, superseded by `pfem_run_from_yaml` + the GUI/NZ.m. Kept for reference. |
-| `pfem_test_run.m` | DEV SCRATCH. Manual smoke check of load/run/patch. Not an automated test. |
-| `pfem_diagram_test.m` | DEV SCRATCH. Manual visual check of `pfem_diagram`. |
+The heart of the pluggable design. Every backend implements the same four
+fields:
 
-The one reproducible, automated test is
-`matlab/tests/test_phase2_multi_case.m` (see Section 10).
+```matlab
+b.name           = 'pfem' | 'analytic' | 'external' | <your_name>
+b.run            = @(ctx, y, overrides) -> [status, out]
+b.extract_qoi    = @(out, case_type)    -> qoi_struct
+b.non_sampleable = @(y)                 -> cell of param names to ban
+```
+
+Where:
+
+| Symbol | Contents |
+|---|---|
+| `ctx` | struct with `repo_root`, `pfem_root`, `yaml_path` |
+| `y` | loaded YAML struct |
+| `overrides` | struct `{param_name → value}` |
+| `status` | 0 on success, non-zero on failure |
+| `out` | struct with at least `run_dir`, `case`, `files` |
+| `qoi_struct` | `{value: double, label: char, unit: char, ok: bool}` |
+
+Rules:
+
+- `run` **must** create `out.run_dir` and populate `out.files` even on
+  failure, so the reporter can find something to show.
+- `extract_qoi` **must not** throw. Return `q.ok = false` and
+  `q.value = NaN` on any parse failure.
+- `non_sampleable` **must** be deterministic and cheap. Called once per
+  loaded YAML in the GUI to build the union ban list.
+
+For backends that produce the QoI directly (analytic, external), set
+`b.extract_qoi = @(out, ~) out.qoi;` and populate `out.qoi` inside `run`.
+
+Detailed tutorial: [adding_a_backend.md](adding_a_backend.md).
 
 ---
 
-## 4. Lifecycle of a single run (concrete walkthrough)
+## 8. Case type registry
 
-What happens when you run one case with overrides, e.g.
-`pfem_run_from_yaml(repo_root, pfem_root, 'benchmarks/pfem5/chap06/p61.yaml',
-struct('yield_stress', 200))`:
+`pfem_detect_case_type(y)` maps every YAML to exactly one of eight case
+types by chapter + program name, with fallback to
+`analysis.physics / analysis.regime`:
 
-1. **Load** the YAML (`pfem_yaml_load`) -> struct `y` with `program`,
-   `chap`, `dataset`, `tunable_parameters` (each with `global_token_index`),
-   `inputs.all_tokens`, `outputs`.
-2. **Make the run folder** `runs/<chap>/<case>/<param_key>/` (e.g.
-   `runs/chap06/p61/sy_200/`). The key is derived from the overrides.
-3. **Copy** the source `.dat` into the run folder.
-4. **Patch** (`pfem_patch_dat_using_yaml`): for each override, look up the
-   tunable's `global_token_index`, replace that token in the flat token
-   list, and rewrite the `.dat`. No program-specific logic; integer params
-   (e.g. `load_increments`) get special handling so dependent arrays such as
-   `qinc` are regenerated.
-5. **Ensure built** (`pfem_ensure_built`): if `pfem/build/bin/p61` is
-   missing, shell out to `pfem_build_chapter.sh`. It checks for the binary's
-   existence, not the script exit code (the chapter build may exit non-zero
-   because some *other* program failed).
-6. **Run**: copy the binary into the run folder, `chmod +x`, then
-   `printf "<dataset>\n" | ./p61`. PFEM reads `<dataset>.dat` and writes
-   `<dataset>.res` (and often `.msh`, `.dis`, `.vec`, or EnSight `.ensi.*`).
-7. **Baseline**: locate the book's pre-computed `.res` in
-   `pfem/executable/<chap>/`. If absent (e.g. p63), call
-   `generate_baseline_run` to run the case once unmodified and cache the
-   result in `runs/<chap>/<case>/default/`, so comparisons always have a
-   reference.
-8. **Record**: write `case.yaml`, `overrides.mat`, `run_info.txt`. Return
-   `(status, out)` where `out.run_dir`, `out.case`, `out.files` let the
-   caller find every artifact.
+| Case type | Chapter → programs | QoI | Extractor gotcha (§9) |
+|---|---|---|---|
+| `slope_srf` | 6 → p64-p69, p612, p613 | FS | Q5 (p69 free-text) |
+| `plasticity_load` | 4 → p45; 6 → p61-p63, p610, p611; 9 → p96; 11 → p118 | P_lim | Q2, Q3, Q4 |
+| `elastic_static` | 4 → p41-p46; 5 → all; 9 → p93-p95 | u_max | – |
+| `seepage_steady` | 7 → p71-p75 | h_max | Q1 |
+| `consolidation` | 8 → p81-p88; 9 → p91-p92 | Uav_end | Q1 |
+| `eigenvalue` | 10 → p101-p104 | omega^2 (f1 derived) | S8 (relabel done) |
+| `dynamic_transient` | 4 → p47; 7 → p73; 8 → p810 etc; 11 → all | u_peak | – |
+| `thermal` | 8 → p811 | T_max | – |
+| **Total** | | **87 cases** | |
 
-Result: a self-contained run folder you can re-run from a plain shell with
-`printf "p61\n" | ./p61`.
+Total per case-type × totals sum to 87 (verified in
+`test_golden_qoi.m`).
 
 ---
 
-## 5. Lifecycle of a stochastic sweep (GUI)
+## 9. Challenges solved (register)
 
-1. **Add YAML(s)** -> `pfem_yaml_load` -> the Tunable Parameters table is the
-   union of all loaded cases' tunables.
-2. **Mode = Stochastic** -> each Values cell holds a distribution spec:
-   `lognormal(mu, COV)`, `normal(mu, COV)`, `truncnormal(mu, COV, lo, hi)`,
-   `uniform(lo, hi)`. **Fill Ranges** auto-fills `lognormal(mu, COV)` from
-   the YAML default with a physics-based COV per family (c 0.40, phi 0.10,
-   E 0.30, nu 0.10, gamma 0.05, k 0.50). Solver and mesh parameters are
-   skipped: the guard now consults `b.non_sampleable(y)` on each loaded
-   case's backend (Phase 3 M5). PFEM contributes the historical 25-name
-   ban list; analytic / external contribute nothing.
-3. **Sample** `n` joint realisations: `pfem_lhs_sample` (Latin Hypercube,
-   default on; optional Iman-Conover correlation) or
-   `pfem_sample_distribution` (IID).
-4. For each sample: `pfem_run_from_yaml` -> `pfem_detect_case_type` ->
-   `pfem_extract_qoi`.
-5. **Report**: histogram, CDF, per-parameter scatter (PDF + PNG in
-   `runs/<chap>/<case>/<case>_stochastic_<ts>_*`). For `slope_srf`:
-   `P(FS < 1)` and `beta = -sqrt(2) * erfinv(2*Pf - 1)`.
-
-Sensitivity mode is the same wiring but uses `pfem_sensitivity_oat` (runs at
-`mu` and `mu +/- 1 sigma` per parameter, `2k+1` runs for `k` parameters) and
-`pfem_plot_tornado`.
-
----
-
-## 6. Challenges solved (register)
-
-Consolidated from the work to date. Each item is a real problem that cost
-time; keep this list so the next person does not rediscover them.
+Consolidated from the actual work; each entry is a real problem that cost
+time. Keep this list so the next person doesn't rediscover them.
 
 ### Build / Fortran (Stage 2)
-- **B1. `formnf` SIGSEGV (p42, p44)**: `formnf` takes assumed-shape arrays;
-  without `USE geom` providing the explicit interface, gfortran emits a bad
-  call. Fix: add `USE geom`. (`pfem_patches/`)
-- **B2. Unallocated UMAT arrays (p57)**: `statev`, `stran`, `drot`,
-  `dfgrd0/1` are declared ALLOCATABLE but never allocated in the textbook.
-  Fix: allocate them.
-- **B3. Missing timer / interface (p57)**: needs `elap_time()` with an
-  explicit interface under `IMPLICIT NONE`. Fix: new `elap_time.f03` (a
-  `system_clock` wrapper) plus an interface in `main_int.f03`.
-- **B4. Missing Lanczos solver (p103)**: `lancz1`/`lancz2` were in the 4th
-  edition library but dropped from the 5th. Fix: new `lancz.f03`.
-- **B5. ARPACK (p104)**: needs `libarpack2-dev`; the build script
-  auto-links it.
-- **B6. Wrong dataset for p56**: the executable `.dat` is a huge 20x60x40
-  mesh; the small `source/chap05/p56.dat` is the intended benchmark.
+
+- **B1. `formnf` SIGSEGV in p42, p44.** Assumed-shape arrays without
+  interface. Fix: `USE geom`. See `scripts/pfem_patches/`.
+- **B2. Unallocated UMAT arrays in p57.** Fix: allocate.
+- **B3. Missing timer / interface in p57.** Fix: `elap_time.f03` +
+  interface in `main_int.f03`.
+- **B4. Missing Lanczos in p103.** 4th-ed library routine dropped in 5th.
+  Fix: `lancz.f03`.
+- **B5. ARPACK in p104.** Needs `libarpack2-dev`; build script links it.
+- **B6. Wrong dataset for p56.** Textbook `.dat` is the small one; the
+  huge 20×60×40 mesh in `executable/` is a different benchmark.
 
 ### Run plumbing (Stage 3)
-- **R1. program != dataset**: multi-case programs (e.g. p41 with datasets
-  p41_1, p41_2) require running the program binary while feeding the dataset
-  name on stdin.
-- **R2. Build exit code is unreliable**: a chapter build can exit non-zero
-  because a *sibling* program failed. `pfem_ensure_built` checks for the
-  binary file instead.
-- **R3. Missing book `.res`**: some cases (e.g. p63) ship no precomputed
-  result. `generate_baseline_run` creates and caches one.
-- **R4. Integer parameter patching**: changing `load_increments` must
-  regenerate the dependent `qinc` increment array, not just swap one token.
+
+- **R1. program ≠ dataset.** Multi-case programs (p41 with datasets
+  p41_1, p41_2) run the program while feeding the dataset name on stdin.
+- **R2. Build exit code is unreliable.** A chapter build can exit
+  non-zero because a *sibling* program failed. `pfem_ensure_built` checks
+  for the binary file, not the exit code.
+- **R3. Missing book `.res`.** Some cases (e.g. p63) ship no precomputed
+  result. `generate_baseline_run` creates and caches one on first use.
+- **R4. Integer parameter patching.** Changing `load_increments`
+  regenerates the dependent `qinc` increment array; not a token swap.
 
 ### QoI extraction (Stage 4) — `.res` file quirks
-- **Q1. Multi-block files**: many `.res` files contain several numeric
-  blocks (time history + depth profile, per-node + summary).
-  `read_widest_numeric_table` / `read_blocks` pick the largest block tagged
+
+- **Q1. Multi-block files.** Time history + depth profile in one
+  file. `read_widest_numeric_table` picks the largest block tagged
   with a time-axis header.
-- **Q2. Split time-history blocks (p95, p96_1, p96_2)**: a 5-column row at
-  t=0 then 6-column rows for t>0 (an iteration-count column appears once
-  iterations start). The dominant-block picker was choosing the 1-row t=0
-  block; fixed to pick the largest time-tagged block.
-- **Q3. Multi-word headers (p611, p63)**: "dev stress", "pore press" must be
-  merged before tokenisation.
-- **Q4. p118**: 4 columns (time / load / x-disp / y-disp), no iterations
-  column.
-- **Q5. p69 embankment lift**: free-text output ("Max displacement is X")
-  handled by a regex fallback.
-- **Q6. MATLAB `\b` regex bug**: `regexp(s, '^\s*time\b', 'once')` returns 0
-  even when `s` starts with "time". Use `(\s|$)` after `^\s*`.
+- **Q2. Split time-history blocks (p95, p96_1, p96_2).** 5-column t=0 row
+  then 6-column t>0 rows. Fixed to pick the largest tagged block.
+- **Q3. Multi-word headers (p611, p63).** "dev stress", "pore press" need
+  merging before tokenisation.
+- **Q4. p118.** 4 columns (time / load / x-disp / y-disp), no iterations.
+- **Q5. p69 embankment lift.** Free-text output ("Max displacement is X")
+  handled by regex fallback.
+- **Q6. MATLAB `\b` regex bug.** `regexp(s, '^\s*time\b', 'once')`
+  returns 0 even when `s` starts with "time". Use `(\s|$)` after `^\s*`.
 
 ### Stochastic / sensitivity (Stage 5)
-- **S7. Never sample solver/mesh parameters**: sampling
-  `convergence_tolerance`, `iteration_limit`, `nels/nxe`, `time_step` etc.
-  causes Fortran integer-read crashes or solver divergence. Since Phase 3
-  M5 the ban list lives on the backend (`pfem_backend.non_sampleable`) and
-  is enforced by `is_non_sampleable(fig, pname)` in `pfem_sweep_gui`, which
-  unions each loaded case's list. Analytic and external backends contribute
-  an empty ban list. Do not weaken this guard.
-- **S8. Eigenvalue label (p101, resolved 2026-05-27)**: the chap10 solver
-  (`bandred` + `bisect` on `M^(-1/2) K M^(-1/2)`) returns `omega^2`
-  directly. An earlier note claiming it returned `1/omega^2` was a
-  misdiagnosis. The QoI is now labelled `omega^2` with a derived `f1` in Hz.
-- **S9. LHS marginals vs correlation**: Iman-Conover restricted pairing
-  induces the target rank correlation while preserving each LHS marginal
-  exactly. Verified for targets in `[-0.7, +0.5]` within 5%.
+
+- **S7. Never sample solver / mesh parameters.** Sampling
+  `convergence_tolerance`, `iteration_limit`, `nels/nxe`, `time_step`
+  etc. crashes Fortran (integer-read) or diverges the solver. Since
+  Phase 3 M5 the ban list lives on `pfem_backend.non_sampleable` and is
+  enforced by `is_non_sampleable(fig, pname)` in the GUI, which unions
+  each loaded case's list. Analytic and external contribute empty lists.
+- **S8. Eigenvalue label (p101, resolved 2026-05-27).** The chap10
+  `bandred` + `bisect` on `M^(-1/2) K M^(-1/2)` returns `omega^2`
+  directly. Earlier note claimed `1/omega^2`; that was a misdiagnosis.
+  QoI now labelled `omega^2` (unit `rad^2/s^2`) with derived `f1` in Hz.
+- **S9. LHS marginals vs correlation.** Iman-Conover restricted pairing
+  induces the target rank correlation while preserving each LHS
+  marginal exactly. Verified for targets in `[-0.7, +0.5]` within 5 %.
 
 ### MATLAB structural
-- **M10. Nested vs local functions**: nested functions require the outer
-  function to end with `end`. Prefer top-level local functions in the same
-  file.
-- **M11. Old `uitable`**: does not accept `FontColor`/`BackgroundColor`/
+
+- **M10. Nested vs local functions.** Nested functions require the outer
+  function to end with `end`. Prefer top-level local functions in the
+  same file.
+- **M11. Old uitable.** Doesn't accept `FontColor` / `BackgroundColor` /
   `RowName`; worked around.
+- **M12. Function bytecode cache.** MATLAB caches functions when first
+  invoked; editing the .m file doesn't reload. Symptom of "my fix didn't
+  work". Cure: `close all; clear functions;` or quit + relaunch.
+- **M13. `pfem_sweep_gui` hardcoded ~/projects/fem-benchmarks (lowercase)**
+  broke on `~/Projects/...` (uppercase). Since `f2a624b` the repo root is
+  auto-derived from `mfilename('fullpath')`.
+
+### Phase 3 pluggable-runner specifics
+
+- **P14. `refresh_params` dropped tunables silently.** Fetched
+  `y.authors.source.chapter` upfront; non-PFEM YAMLs don't have that
+  field, so the wrapping try/catch swallowed the whole YAML. Fixed in
+  `159aad8` with a defensive `yaml_chapter_label` helper.
+- **P15. Non-PFEM YAML crashed cb_run_stochastic at pre-build.** Fixed
+  in `dce6de5` by guarding the build step with `strcmp(b.name, 'pfem')`.
+- **P16. `out.elapsed_sec` was PFEM-specific.** Fixed in `2a302b8` with
+  defensive `isfield` check.
+- **P17. LaTeX interpreter chokes on `omega^2`, underscores in case
+  names.** Fixed in `3b87787` by switching titles/axis labels to
+  `Interpreter='none'` while keeping LaTeX only for the statistics
+  annotation.
+- **P18. Locale-dependent decimal separator broke external bash
+  solver.** German system printed `514,159` which the parser rejected.
+  Fixed in `b78f5f7` by forcing `LC_ALL=C` in `prandtl.sh`.
 
 ---
 
-## 7. Known limitations and future work (on hold)
+## 10. Extension points
 
-### Known limitations (work, but with caveats)
-1. **BC-bound QoIs**: some elastic / thermal cases (p51_3 `u_max`, p811
-   `T_max`) report a boundary-condition value that does not vary with
-   material sampling. The extractor is correct; the chosen QoI just is not
-   sensitive. Possible fix: a per-case `qoi_probe_node` YAML field so the
-   extractor tracks an internal point.
-2. **p69 embankment lift**: only 7 of 10 LHS samples converge across the
-   full c-phi-gamma range. The QoI extracts correctly when the solver
-   converges. Possible work: report convergence rate per case.
-3. **Heavy meshes (p56_1, p57)**: ~250 s per run; excluded from the n=10
-   LHS timing run. Extractor works; just slow.
+Concrete places where the framework was designed to be extended.
 
-### Future work (not started)
-- **Phase 4 — mesh-refinement sweeps** (`nxe`, `nye`) to study discretisation
-  convergence. Note this changes mesh topology, so it is excluded from the
-  current stochastic guard on purpose.
-- **Regression testing against reference outputs**: `run_all_tests.py`
-  currently checks run status only, not output values.
-- **3D-figure work smoke test**: the EnSight material-zone / deformed-mesh
-  rendering (commit `d279883`) is structurally complete but has not been
-  runtime-verified in MATLAB on the current system. Run `pfem_sweep_gui` on
-  p612 and a 2D structured case to confirm the figures render.
+| Extension | Where | Effort | Instructions |
+|---|---|---|---|
+| Add a new backend | `matlab/backends/<name>_backend.m` + case in `get_backend.m` | ~30 min | [adding_a_backend.md](adding_a_backend.md) |
+| Add a new analytic oracle | new `case` in `analytic_backend.m::eval_model` + YAML | ~15 min | [adding_an_oracle.md](adding_an_oracle.md) |
+| Add a new external solver | new `benchmarks/external/*.yaml` + solver executable + input template | ~15 min | Copy the `prandtl_bash.yaml` / `prandtl_external.yaml` pattern |
+| Add a new case type | new `case` in `pfem_detect_case_type.m` + new extractor in `pfem_extract_qoi.m` | ~1 h | Follow the `qoi_thermal` example (simplest extractor) |
+| Add a new sweep mode | new `case` in `pfem_sweep_gui.m` mode dropdown + new callback | ~2 h | Follow the sensitivity callback pattern |
+| Add a probe-node QoI | new YAML field `qoi_probe_node`, extend `pfem_extract_qoi.m` to prefer that node when present | ~2 h | See HANDOVER §18 item 1 (BC-bound QoIs) |
+| Add mesh-refinement sweep (Phase 4) | new sweep mode that bypasses `non_sampleable` for `nxe`/`nye` | ~half day | See HANDOVER §19 F1 |
 
-The authoritative, dated "what is done / pending / next" snapshot lives in
-[docs/HANDOVER.md](HANDOVER.md) Sections 3, 4 and 8.
+For every extension, add at minimum:
+
+- A regression test — either extend an existing one or write a new
+  `test_<name>.m`.
+- A monotonicity row in `test_physics_sanity.m` if a new tunable is
+  introduced.
+- A row in `test_all_cases_stochastic.m` if a new case is introduced.
 
 ---
 
-## 8. The 8 case types and their QoIs
-
-Case type is decided by `pfem_detect_case_type.m`; the QoI extractor for each
-lives in `pfem_extract_qoi.m`. Per-type case counts are best read from
-`pfem_detect_case_type.m` directly (they shift if a case is reclassified);
-the totals below sum to 87.
-
-| Case type | QoI | Physical meaning |
-|---|---|---|
-| `slope_srf` | FS | Factor of Safety (last converged strength-reduction factor) |
-| `plasticity_load` | P_lim | limit load at the last converged increment |
-| `elastic_static` | u_max | maximum nodal displacement |
-| `seepage_steady` | h_max | maximum total head |
-| `consolidation` | Uav_end | degree of consolidation at the final time |
-| `eigenvalue` | omega^2 | smallest eigenvalue (+ derived `f1` in Hz) |
-| `dynamic_transient` | u_peak | peak transient displacement |
-| `thermal` | T_max | maximum temperature |
-
----
-
-## 9. Chapter coverage (87 cases)
-
-| Chapter | Cases | Topic |
-|---|---|---|
-| chap04 | 13 | 1D problems, rods, beams, simple elasticity |
-| chap05 | 15 | 2D / 3D linear elasticity |
-| chap06 | 15 | material nonlinearity: von Mises, Mohr-Coulomb, slope stability (SRF) |
-| chap07 | 8 | steady-state flow (seepage) |
-| chap08 | 16 | transient: consolidation, thermal, dynamics |
-| chap09 | 7 | coupled problems (Biot, Navier-Stokes) |
-| chap10 | 5 | eigenvalue problems |
-| chap11 | 8 | dynamics and explicit plasticity |
-| **Total** | **87** | |
-
-(Verified count of `benchmarks/pfem5/chap*/*.yaml` on 2026-06-30.)
-
----
-
-## 10. Validation evidence (pointers)
-
-The numbers that show the catalogue is correct, not just runnable, are in
-[docs/PROGRESS.md](PROGRESS.md) Section 3. Highlights: p612 slope FS = 1.58
-matches book Fig. 6.54; p61 limit load 515 matches Prandtl `(2+pi) sigma_y`
-within 0.2%; p101 `omega^2 ~ 0.00382` matches the analytic cantilever first
-mode (0.00402) for a 5-element lumped-mass beam. The reproducible script is
-`matlab/tests/test_phase2_multi_case.m` (about 3 minutes once binaries are
-built).
+<p align="center"><sub>
+  <a href="https://github.com/NZ5253/fem-benchmarks">github.com/NZ5253/fem-benchmarks</a> ·
+  Companion to <a href="HANDOVER.md">HANDOVER.md</a> ·
+  Naeem Zainuddin, Technische Universität Dortmund
+</sub></p>
