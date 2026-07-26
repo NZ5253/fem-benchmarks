@@ -76,9 +76,11 @@ and external all producing the same P_lim distribution to within 0.16 %.
 | Document | Purpose |
 |---|---|
 | **[docs/HANDOVER.md](docs/HANDOVER.md)** | **Master handover.** Start here on any new system. |
+| [docs/SETUP.md](docs/SETUP.md) | Cross-platform install (Linux · Windows via WSL2 · macOS) |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Deep technical architecture with call graph |
 | [docs/GUIDE.md](docs/GUIDE.md) | Detailed usage guide (GUI + programmatic) |
 | [docs/PROGRESS.md](docs/PROGRESS.md) | Supervisor-facing progress report with validation evidence |
+| **[docs/ROADMAP.md](docs/ROADMAP.md)** | **What's next for the project.** Task A (solver isolation) · Task B (presentation) · Phase 4 backlog |
 | [docs/PHASE3_PLAN.md](docs/PHASE3_PLAN.md) | Phase 3 milestone plan (M0 through M7, all done) |
 | [docs/adding_a_backend.md](docs/adding_a_backend.md) | Contributor tutorial: add a new backend in ~30 min |
 | [docs/adding_an_oracle.md](docs/adding_an_oracle.md) | Contributor tutorial: add a new analytic oracle in ~15 min |

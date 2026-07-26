@@ -1040,48 +1040,60 @@ future-work item.
 
 ## 19. Future work
 
-Grouped by category, effort estimate S / M / L (< 1 h / half day / multi-day).
+**The complete, up-to-date roadmap lives in
+[docs/ROADMAP.md](ROADMAP.md).** It carries the two supervisor-priority
+tasks (Task A: solver isolation from book examples; Task B:
+comprehensive presentation) plus the full Phase 4 backlog with
+acceptance criteria and starting-point pointers for each item.
 
-### Robustness (worth doing now)
+Short summary here for the impatient reader:
 
-- **[R1]** `qoi_probe_node` YAML feature — unlocks 3–5 more PFEM cases (M)
-- **[R2]** Investigate 1 PFEM overshoot in `verify_stochastic_backends` (S)
-- **[R3]** p69 slope-lift convergence (M)
-- **[R4]** Sample-count widget consistency (S)
+### P0 — Supervisor-priority tasks (as of 2026-07-26)
 
-### Performance
+- **Task A — Solver isolation from book examples.** Investigate whether
+  PFEM's Fortran solver library can be decoupled from the geotechnical
+  book examples so that a NEW mechanics problem (any geometry) can be
+  assembled in MATLAB and solved via a PFEM library call. Reachable in
+  ~2 weeks: a proof-of-concept for one simple case (e.g., 1D bar) via
+  shared library, MEX, or file bridge. Not reachable: a general
+  framework covering every case type. Full spec + suggested approach
+  in [ROADMAP §2](ROADMAP.md#2-task-a--solver-isolation-from-book-examples).
+- **Task B — Comprehensive presentation.** Detailed deck covering
+  implementation process, main challenges, GUI design + usage, and how
+  everything ties to the repo docs. Slide-by-slide outline
+  in [ROADMAP §3](ROADMAP.md#3-task-b--comprehensive-project-presentation).
 
-- **[P1]** `parfor` sample parallelisation → 4–16× speedup (S)
-- **[P2]** Result caching by parameter hash (S)
-- **[P3]** Skip cases whose enabled parameters are all absent (S)
+### P1 — Phase 4 candidates
 
-### Phase 4 — mesh refinement
+- **[F1]** Mesh-refinement / convergence-rate mode (was Phase 4
+  headline before Task A took priority).
+- **[F2]** Sobol variance-decomposition indices.
+- **[F3]** FORM / SORM reliability method (aligned with the CRE's
+  research focus).
+- **[F4]** Multi-fidelity sampling.
+- **[F5]** Response-surface / GP surrogates.
+- **[F6]** Bayesian updating.
 
-- **[F1]** Mesh-refinement / convergence-rate mode (M)
-- **[F2]** Sobol variance-decomposition indices (M)
-- **[F3]** FORM / SORM reliability method (M)
-- **[F4]** Multi-fidelity sampling (analytic control variate) (L)
-- **[F5]** Response-surface / Gaussian-process surrogates (L)
-- **[F6]** Bayesian updating (posterior on parameters given data) (L)
+### P2 — Robustness / polish
 
-### Coverage
+- **[R1]** `qoi_probe_node` YAML feature — unlocks 3–5 more PFEM cases.
+- **[R2]** Investigate the 1 PFEM overshoot in
+  `verify_stochastic_backends`.
+- **[R3]** p69 slope-lift convergence.
+- **[P1]** `parfor` sample parallelisation.
+- **[P2]** Result caching by parameter hash.
 
-- **[C1]** Compiled C external example (S)
-- **[C2]** Julia external example (S)
-- **[C3]** More analytic oracles: buckling, radial flow, transient conduction (M)
+### P3 — Documentation + infrastructure
 
-### Infrastructure
+- **[D1]** Case-by-case guides for every PFEM YAML.
+- **[D2]** MATLAB live scripts demoing each sweep mode.
+- **[I1]** CI on GitHub Actions (deferred until a collaborator lands).
+- **[I2]** Docker container with MATLAB Runtime + pre-built PFEM.
+- **[I3]** Zenodo DOI for citation.
 
-- **[I1]** CI on GitHub Actions with matlab-actions (deferred until a
-  collaborator or paper depends on it) (S)
-- **[I2]** Docker container with MATLAB Runtime + pre-built PFEM (L)
-- **[I3]** Zenodo DOI for citation (S)
-- **[I4]** Auto-generated case-by-case guides for every YAML (L)
-
-### Research
-
-- **[X1]** Benchmark comparison paper vs other stochastic-FEM frameworks (L)
-- **[X2]** Convergence-rate tables per case type (once F1 lands) (M)
+Full details, effort estimates, acceptance criteria, and
+handoff-if-time-runs-out instructions in
+[ROADMAP.md](ROADMAP.md).
 
 ---
 
