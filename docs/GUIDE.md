@@ -1,7 +1,7 @@
 <p align="center">
-  <img src="../presentation/abc/tudortmund.png" alt="Technische Universität Dortmund" height="60">
+  <img src="figures/tudortmund_logo.svg" alt="Technische Universität Dortmund" height="60">
   &nbsp;&nbsp;&nbsp;&nbsp;
-  <img src="../presentation/abc/cre.png" alt="Chair for Computing in Engineering" height="60">
+  <img src="figures/cre_logo.png" alt="Chair for Reliability Engineering (CRE)" height="60">
 </p>
 
 <h1 align="center">fem-benchmarks — Usage Guide</h1>

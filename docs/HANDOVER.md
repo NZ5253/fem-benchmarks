@@ -1,7 +1,7 @@
 <p align="center">
-  <img src="../presentation/abc/tudortmund.png" alt="Technische Universität Dortmund" height="70">
+  <img src="figures/tudortmund_logo.svg" alt="Technische Universität Dortmund" height="70">
   &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
-  <img src="../presentation/abc/cre.png" alt="Chair for Computing in Engineering" height="70">
+  <img src="figures/cre_logo.png" alt="Chair for Reliability Engineering (CRE)" height="70">
 </p>
 
 <h1 align="center">fem-benchmarks — Handover</h1>
@@ -147,7 +147,7 @@ cases, with an audit trail — while leaving the textbook code untouched.
 
 ## 3. Development timeline
 
-Six phases, spread over Dec 2025 – Jul 2026, 119 commits by NZ5253.
+Six phases, spread over Dec 2025 – Jul 2026, 120+ commits by NZ5253.
 
 ```mermaid
 gantt
@@ -949,7 +949,7 @@ fem-benchmarks/
 
 ## 17. Commit history highlights
 
-119 commits total by NZ5253 (Dec 2025 – Jul 2026). Highlights only; use
+120+ commits total by NZ5253 (Dec 2025 – Jul 2026). Highlights only; use
 `git log --oneline` for the complete list.
 
 ### Foundation (up to 2026-03)

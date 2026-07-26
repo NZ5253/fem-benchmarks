@@ -1,7 +1,7 @@
 <p align="center">
-  <img src="../presentation/abc/tudortmund.png" alt="Technische Universität Dortmund" height="60">
+  <img src="figures/tudortmund_logo.svg" alt="Technische Universität Dortmund" height="60">
   &nbsp;&nbsp;&nbsp;&nbsp;
-  <img src="../presentation/abc/cre.png" alt="Chair for Computing in Engineering" height="60">
+  <img src="figures/cre_logo.png" alt="Chair for Reliability Engineering (CRE)" height="60">
 </p>
 
 <h1 align="center">fem-benchmarks — Progress Report</h1>
@@ -384,7 +384,7 @@ when the specific need arises:
 
 ## 9. Commit summary
 
-119 commits by NZ5253 (Dec 2025 – Jul 2026), all under the MIT-licensed
+120+ commits by NZ5253 (Dec 2025 – Jul 2026), all under the MIT-licensed
 framework code plus the pfem/ textbook exclusion.
 
 Full history: `git log --oneline` in the repo, or the browsable page
