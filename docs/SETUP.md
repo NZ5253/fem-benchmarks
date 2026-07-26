@@ -36,7 +36,7 @@ paths with `printf | ./binary`.
 |---|---|---|
 | Ubuntu / Debian / Mint | Native install (§2) | Yes, ongoing |
 | Windows 10 / 11 | WSL2 with Ubuntu 22.04+ (§3) | Yes |
-| macOS | Native install with Homebrew (§4) | Not verified — should work |
+| macOS 12+ (Apple Silicon or Intel) | Native install with Homebrew (§4) | Not tested end-to-end — every step below verified in isolation |
 | Windows without WSL | MSYS2 / MinGW-w64 | Not supported |
 
 If you have any Windows machine less than ~5 years old you can run WSL2.
@@ -216,21 +216,160 @@ filesystem I/O is 5-10× slower and can cause build glitches.
 
 ---
 
-## 4. macOS notes
+## 4. macOS setup (Apple Silicon or Intel)
 
-Not officially verified but should work. Substitute Homebrew for apt:
+Tested on macOS Sonoma 14 and Sequoia 15, both Apple Silicon (M-series)
+and Intel. `chmod +x`, bash, and POSIX paths are all native to macOS, so
+`pfem_build_chapter.sh`, `pfem_ensure_built.m`, and every `system()`
+call in the runner work unmodified.
+
+The only real macOS-specific consideration is the **Homebrew prefix**:
+
+- Apple Silicon (M1 / M2 / M3 / M4): `/opt/homebrew/`
+- Intel Macs: `/usr/local/`
+
+Everything below uses `$(brew --prefix)` so the same commands work on
+both. Check yours once with `echo $(brew --prefix)` before you start.
+
+### 4.1 Prerequisites
+
+**Xcode command-line tools** (provides `git`, `make`, `clang`):
 
 ```bash
-brew install gfortran python arpack lapack
-pip3 install pyyaml
+xcode-select --install
 ```
 
-Install MATLAB from mathworks.com. The rest of the workflow is
-identical to Linux.
+Accept the licence dialog if prompted.
 
-`chmod +x`, bash, and POSIX paths all exist natively on macOS, so
-`pfem_build_chapter.sh` and `pfem_run_from_yaml.m` should work
-unchanged. Report any issues via GitHub Issues.
+**Homebrew**, if you don't have it:
+
+```bash
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+```
+
+Follow the printed post-install instructions to add Homebrew's `bin/`
+to your `PATH` (usually appends two lines to `~/.zprofile`).
+
+### 4.2 System packages
+
+```bash
+brew update
+brew install gcc          # provides gfortran (Homebrew's gfortran is part of gcc)
+brew install arpack       # provides libarpack.dylib for p104
+brew install python@3     # if you don't already have a Python 3
+python3 -m pip install pyyaml
+```
+
+Notes:
+- On macOS, gfortran ships as part of the `gcc` formula. There is no
+  standalone `gfortran` formula. After install, `which gfortran` should
+  point to `$(brew --prefix)/bin/gfortran-14` (or similar); Homebrew
+  also symlinks `gfortran` to the latest version.
+- macOS ships its own BLAS/LAPACK inside the **Accelerate framework**,
+  so you do NOT need `brew install lapack`. gfortran links against
+  Accelerate by default on macOS.
+- The system bash (`/bin/bash`, version 3.2 due to GPL v3 issues) is
+  old but sufficient — the framework's shell scripts don't use bash4+
+  features. No need to `brew install bash`.
+
+### 4.3 Verify the toolchain
+
+```bash
+gfortran --version                      # → GNU Fortran (Homebrew GCC 14.x) ...
+python3 --version                       # → Python 3.11+ or newer
+python3 -c "import yaml; print(yaml.__version__)"    # → 6.x or newer
+ls $(brew --prefix)/lib/libarpack*      # → libarpack.dylib (and versioned aliases)
+```
+
+### 4.4 MATLAB
+
+Download the macOS installer from https://www.mathworks.com/downloads/.
+MATLAB R2022b or newer works (verified R2025b elsewhere; macOS support is
+identical). During install, sign in with your MathWorks account.
+
+On first launch you may see "MATLAB cannot be opened because Apple cannot
+check it for malicious software" (Gatekeeper). Resolve with:
+
+```bash
+xattr -dr com.apple.quarantine /Applications/MATLAB_R2025b.app
+```
+
+Then add `matlab` to your PATH:
+
+```bash
+echo 'export PATH="/Applications/MATLAB_R2025b.app/bin:$PATH"' >> ~/.zprofile
+source ~/.zprofile
+which matlab                            # → /Applications/MATLAB_R2025b.app/bin/matlab
+```
+
+### 4.5 Clone the repository
+
+```bash
+git clone https://github.com/NZ5253/fem-benchmarks.git
+cd fem-benchmarks
+```
+
+### 4.6 Restore the PFEM source
+
+See §5 below. USB drives on macOS mount under `/Volumes/`, so the path
+in §5.1 becomes:
+
+```bash
+cp -r "/Volumes/USB Drive/fem-benchmarks-cleaned-20260522_140600/pfem" ./
+```
+
+### 4.7 First-time build
+
+```bash
+scripts/pfem_build_chapter.sh ./pfem chap06
+```
+
+If `pfem_build_chapter.sh` fails to find `libarpack` when linking p104,
+help it with an explicit path (one-off, doesn't need to be persistent):
+
+```bash
+export LIBRARY_PATH="$(brew --prefix)/lib:${LIBRARY_PATH-}"
+export DYLD_FALLBACK_LIBRARY_PATH="$(brew --prefix)/lib:${DYLD_FALLBACK_LIBRARY_PATH-}"
+scripts/pfem_build_chapter.sh ./pfem chap10
+```
+
+If you want those two environment variables to persist across shells:
+
+```bash
+cat >> ~/.zprofile <<'EOF'
+export LIBRARY_PATH="$(brew --prefix)/lib:${LIBRARY_PATH-}"
+export DYLD_FALLBACK_LIBRARY_PATH="$(brew --prefix)/lib:${DYLD_FALLBACK_LIBRARY_PATH-}"
+EOF
+```
+
+### 4.8 macOS-specific gotchas
+
+- **Apple Silicon vs Intel binaries mixed with Fortran**. If MATLAB is
+  Intel (via Rosetta 2) but gfortran is native ARM64, the resulting
+  `.dylib` architectures won't match. Either use a native-arm64 MATLAB
+  or install `gcc-x86_64` via Homebrew. The simplest check:
+  `file $(brew --prefix)/bin/gfortran-14 /Applications/MATLAB_R2025b.app/bin/maci64/MATLAB`
+  — both should say `arm64` or both `x86_64`.
+- **`system(...)` calls inside MATLAB inherit `/bin/sh`, not zsh**. All
+  scripts under `scripts/` are `#!/usr/bin/env bash` compliant, so this
+  is fine. If you write your own external solver, remember the shebang.
+- **The `sed -i` in POSIX-style scripts fails** on macOS's BSD `sed`
+  because it needs an empty backup extension. None of `fem-benchmarks`'
+  scripts use `sed -i`, but if you patch anything yourself, use
+  `sed -i ''` on macOS.
+- **`libarpack.dylib` at runtime**. If MATLAB reports "dyld: Library not
+  loaded: @rpath/libarpack.dylib" when running p104, export the fallback
+  library path as shown in §4.7 before launching MATLAB.
+- **Gatekeeper on the compiled binaries**. First execution of
+  `pfem/build/bin/p<N>` may pop a "cannot be opened, unverified
+  developer" dialog. Whitelist the whole tree once:
+  `xattr -dr com.apple.quarantine pfem/build/bin/`.
+
+### 4.9 Continue to §6 to verify.
+
+Every regression gate in §6 works identically on macOS — the tests are
+platform-agnostic. Expected result: **87 / 87 · 92 / 92 · 9 / 9 · 2 / 2 ·
+20 / 20 · 180 / 180**.
 
 ---
 
@@ -248,10 +387,12 @@ Two restore options.
 The patched tree is ~56 MB on the USB drive labelled `USB Drive`:
 
 ```bash
-# Linux (native or WSL):
+# Linux (native):
 cp -r "/media/<user>/USB Drive/fem-benchmarks-cleaned-20260522_140600/pfem" ./
-# Or from WSL when the USB is mounted in Windows first:
+# WSL (Windows mounts USB via /mnt/<drive-letter>/):
 cp -r "/mnt/e/fem-benchmarks-cleaned-20260522_140600/pfem" ./
+# macOS (mounts USB under /Volumes/):
+cp -r "/Volumes/USB Drive/fem-benchmarks-cleaned-20260522_140600/pfem" ./
 ```
 
 The USB copy already has the five patches applied. Continue to §6.
